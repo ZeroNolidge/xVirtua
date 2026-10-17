@@ -1,13 +1,33 @@
 # PlainSpeak — Plan
 
-Status: **DRAFT, awaiting approval.** Nothing is built yet. Decisions marked **❓** need your call before (or during) the phase that uses them.
+Status: **Approved with changes (round 1).** Decisions marked **❓** are still open; ✅ marks decided items.
+
+## Decisions log
+
+| # | Decision (2026-10-17) |
+|---|---|
+| D1 | **Speech-to-text = OpenAI Realtime API in transcription-only mode** (you already use it and it captures jargon well). A Function mints a short-lived client secret, so the OpenAI key stays server-side. Deepgram/AssemblyAI stay as backups behind `SttProvider`. |
+| D2 | Residents **see numeric 0–100 scores** (for now), still with coaching-style copy. |
+| D3 | **Bench all three models** (Opus 5.5, Sonnet 5.5, Haiku 5.5) for the patient brain in Phase 3. You pick by feel. The model is a per-program setting. |
+| D4 | **Overall = equal 25% weights** across the four metrics. |
+| D5 | **You review** the jargon dictionary and the 6 seed scenarios before residents see them. Seed content ships as `draft` until you approve it. |
+| D6 | Check for understanding: **"Any questions?" = weak (partial credit); teach-back ("tell me in your own words…") = strong (full credit).** |
+| D7 | Data **may be used at CCC review.** The consent screen says so plainly. |
+| D8 | Retention: **audio 3 years, transcripts and scores 3 years** (both admin-configurable). |
+
+Still open, with defaults I'll use unless you say otherwise:
+- **Avatar path:** voice-first, Phase 8 bake-off, animated character as fallback.
+- **Faculty visibility:** all program faculty see all program residents.
+- **Session length:** 5–8 min target, soft cap at 12 min.
+- **ACGME export:** evidence only, no auto-suggested level.
+- **Jargon formula:** as in §4.
 
 ---
 
 ## 0. TL;DR
 
 - **Stack as specified:** React + TypeScript + Vite PWA, Firebase (Auth, Firestore, Storage, Functions v2), Claude API server-side only.
-- **Recommended vendors:** Deepgram Nova-3 Medical for streaming speech-to-text, Cartesia Sonic-3 for the patient voice (ElevenLabs as backup), and the **video avatar is deferred behind `PatientRenderer`** until a short bake-off passes.
+- **Vendors:** OpenAI Realtime (transcription-only) for streaming speech-to-text ✅, Cartesia Sonic-3 for the patient voice (ElevenLabs as backup), and the **video avatar is deferred behind `PatientRenderer`** until a short bake-off passes.
 - **⚠️ Avatar flag (you asked to be told before committing):** I found **no provider that documents on-demand control of discrete nonverbal actions** like "look away now" or "frown now." What exists:
   - **Anam** — "Director Notes": per-turn inline cue tags (e.g. `[worried]`, `[hesitant]`) plus an expressivity dial. Closest match to "scripted cues on demand." Gaze aversion is not documented.
   - **Tavus Phoenix-4** — 10+ controllable emotion states (sad, fear, etc.) steered through the LLM/prompt; no documented gesture/gaze API.
@@ -15,7 +35,7 @@ Status: **DRAFT, awaiting approval.** Nothing is built yet. Decisions marked **�
   - **Voice-side cues are fully controllable today** (long pause, quieter voice, slower rate, hesitant tone, "I guess…"). So the voice-only renderer will deliver most of the cue value on day one.
   - **Recommendation:** build voice-only end to end, then run a 1-week bake-off (Anam vs Tavus) against a fixed 5-cue test script before paying for video. A fallback worth considering: a **stylized animated character** (Rive/Lottie state machine) whose looks-away/frown/quiet states we control 100%, at near-zero per-minute cost and very on-brand for a Duolingo-like tone.
 - **No real patient data → no PHI.** A BAA is not legally required for the pilot, but resident audio is sensitive evaluative data, so I still prefer vendors that offer a BAA, no-training, and short/zero retention.
-- **Estimated cost:** about **$0.55 per session voice-only**, about **$1.75 with a live video avatar**. At 12 sessions/resident/month that's roughly **$7 voice-only / $21 with video** per resident per month (details in §9).
+- **Estimated cost:** about **$0.63 per session voice-only**, about **$1.83 with a live video avatar**. At 12 sessions/resident/month that's roughly **$8 voice-only / $22 with video** per resident per month (details in §9).
 
 ---
 
@@ -33,8 +53,8 @@ Status: **DRAFT, awaiting approval.** Nothing is built yet. Decisions marked **�
  │                          │  upload audio     │                                     │
  │ MediaRecorder (mic)  ────┼──────────────────►│                                     │
  │                          │                   │ Cloud Functions v2 (Node 22, TS)    │
- │ STT socket ──────────────┼──► Deepgram       │  • getSttToken  (short-lived token) │
- │   (short-lived token)    │                   │  • patientTurn  (streaming HTTP)    │
+ │ STT (WebRTC) ────────────┼──► OpenAI Realtime│  • getSttToken  (short-lived secret)│
+ │   (transcription only)   │                   │  • patientTurn  (streaming HTTP)    │
  │                          │  patientTurn      │      cue engine → Claude → TTS      │
  │ PatientRenderer ◄────────┼──────────────────►│  • endSession / scoreSession        │
  │   VoiceRenderer (v1)     │  audio stream     │  • invites, consent, exports        │
@@ -45,7 +65,7 @@ Status: **DRAFT, awaiting approval.** Nothing is built yet. Decisions marked **�
 
 **Key choices**
 
-- **API keys never reach the client.** The browser gets a short-lived (~60 s) STT token from a Function and streams mic audio straight to Deepgram for lowest latency. Claude and TTS are called only from Functions. Keys live in Secret Manager.
+- **API keys never reach the client.** The browser gets a short-lived OpenAI Realtime client secret from a Function and streams mic audio straight to OpenAI (WebRTC, transcription-only session; OpenAI's server-side voice detection marks end of turn) for lowest latency. OpenAI never generates the patient's words; Claude does. Claude and TTS are called only from Functions. Keys live in Secret Manager.
 - **One conversational turn:**
   1. STT reports end of the resident's utterance.
   2. The client posts the transcript to `patientTurn`.
@@ -102,7 +122,7 @@ interface PatientRenderer {
 
 | Collection | Key fields | Written by |
 |---|---|---|
-| `programs/{programId}` | name, timezone (default `America/New_York`), audioRetentionMonths (12), scoringWeights, currentRubricVersion | faculty (admin) |
+| `programs/{programId}` | name, timezone (default `America/New_York`), audioRetentionMonths (36), transcriptRetentionMonths (36), scoringWeights (equal), patientModel, currentRubricVersion | faculty (admin) |
 | `invites/{emailLower}` | programId, role, invitedBy, status, createdAt | faculty via Function |
 | `users/{uid}` | programId, role, displayName, email, consent `{version, acceptedAt}`, createdAt | Function (role/program); user (displayName only) |
 | `userProgress/{uid}` | xp, streak `{current, longest, lastDayLocal}`, badges[] `{id, earnedAt}`, scenariosCompleted[], cuesCaught | Functions only |
@@ -150,7 +170,7 @@ Rubric versioning:
   - Optional upgrade: a `beforeUserCreated` blocking function rejects uninvited emails before the account exists. This requires upgrading Firebase Auth to Identity Platform (free at our scale).
 - **Consent gate:**
   - The app routes to the consent screen until `users/{uid}.consent.version == CURRENT_CONSENT_VERSION`.
-  - The screen explains: audio and transcripts are recorded; who sees them (you, and faculty in your program); retention; and that this is practice, not formal evaluation (❓ wording, see §10).
+  - The screen explains: audio and transcripts are recorded; who sees them (you, and faculty in your program); retention (3 years); and that summaries **may be brought to Clinical Competency Committee review** (✅ D7).
   - Bumping the version re-prompts everyone.
 - **Rules principles:**
   - Default deny.
@@ -173,7 +193,7 @@ Runs in `scoreSession` (triggered at session end; can be re-run for a new rubric
    - `contextException.allowedIfExplained`: a term followed within ~12 words by an explanation marker ("which means", "that's when", "in other words") is shown as "nice — you explained it" and not penalized.
    - Proposed formula: `100 − 8 × unique unexplained terms − 2 × repeat uses`, floored at 0. ❓
    - UI: each flagged word with its plain swaps.
-   - STT is boosted with the dictionary as key terms, so jargon is transcribed correctly rather than mangled.
+   - The Realtime transcription `prompt` is seeded with the scenario's likely jargon terms, so they're transcribed correctly rather than mangled.
 2. **Logical clarity, 3. Empathy, 4. Cue responsiveness (Claude)**
    - One structured-output call (`claude-opus-5-5`, adaptive thinking, effort `high`, JSON schema via `output_config.format`).
    - Inputs:
@@ -187,12 +207,13 @@ Runs in `scoreSession` (triggered at session end; can be re-run for a new rubric
    - **Quote validation:** every quote must appear verbatim (after whitespace normalization) in the cited turn. If any quote doesn't, retry once; if it still fails, store the score marked `needsReview`.
    - **Cue proxies first:** a cue counts as "caught" if the resident's next turn addresses it (judged by Claude against the expected response). A steamroll is flagged when the patient asked a question and the resident's next turn didn't answer it.
    - The steamroll judgment is backed by a cheap deterministic hint: the next turn doesn't overlap the question's key nouns and runs more than 40 words.
-5. **Overall:** weighted mean, equal weights by default, configurable per program. ❓
+   - **Check for understanding (✅ D6):** "Any questions?" / "Does that make sense?" earns partial credit. Teach-back ("Can you tell me in your own words…") earns full credit. The rewrite suggests teach-back when it's missing.
+5. **Overall ✅:** equal 25% weights. Weights are stored per program so they can change later; scores record the weights used.
 6. **Feedback screen (coaching tone):**
    - Lead with one specific strength.
    - Then **one** focus area with a "try saying this instead" line.
    - Then details on tap.
-   - Copy is never "wrong"/"fail". ❓ whether residents see raw 0–100 (see §10).
+   - Copy is never "wrong"/"fail". Residents see numeric 0–100 scores (✅ D2).
 
 ---
 
@@ -260,14 +281,15 @@ Proposal: the export shows **evidence per thread**, not an auto-assigned level. 
 ## 7. Data, privacy, retention
 
 - All patients are fictional. The seed and editor UI say so, and the scenario editor warns against entering real patient details.
-- **Scheduled Function (daily):** deletes audio older than `program.audioRetentionMonths`, sets `session.audioPath = null`, and logs the deletion.
-  - Transcripts and scores are kept by default. ❓ Should transcripts also expire?
+- **Scheduled Function (daily) ✅ D8:**
+  - Deletes audio older than `program.audioRetentionMonths` (default 36), sets `session.audioPath = null`, and logs the deletion.
+  - Deletes transcripts (turns) and scores older than `program.transcriptRetentionMonths` (default 36). Only anonymous aggregate stats are kept, so cohort trends survive.
 - Claude: no training on API data by default; we'll request zero data retention for the org if available.
   - Opus 5.5 works under zero retention. Some newer "Covered Models" require 30-day retention, which is another reason to stay on Opus/Sonnet here.
 - BAAs (not required since there's no PHI, but nice to have):
   - Google Cloud's BAA covers Firestore, Cloud Storage and Cloud Functions.
   - Plain Firebase Auth isn't on the list; Identity Platform is. Irrelevant without PHI.
-  - Deepgram and AssemblyAI offer BAAs; ElevenLabs on higher tiers; Cartesia unconfirmed.
+  - OpenAI offers an API BAA (with zero-retention eligibility); Deepgram and AssemblyAI do too; ElevenLabs on higher tiers; Cartesia unconfirmed.
 
 ---
 
@@ -279,11 +301,12 @@ Prices are list or pay-as-you-go as reported in Sept–Oct 2026 sources. Many ar
 
 | Provider | Streaming latency | Cost/min | BAA | Notes |
 |---|---|---|---|---|
-| **Deepgram Nova-3 (Medical)** ✅ | ~300–500 ms (benchmarks disagree) | ~$0.0077 (Medical model may cost more — verify) | Yes | Medical vocabulary + key-term boosting means jargon gets transcribed accurately so we can flag it. Temporary browser tokens. |
+| **OpenAI Realtime (transcription-only)** ✅ D1 | low; streaming deltas + server voice detection | ~$0.017/min live (batch transcribe models ~$0.003–0.006) — verify on OpenAI's pricing page | Yes (API BAA) | Your team already uses it; captures jargon well. Ephemeral client secrets; WebRTC from the browser. Transcription prompt can be seeded with terms. |
+| Deepgram Nova-3 (Medical) | ~300–500 ms (benchmarks disagree) | ~$0.0077 (Medical model may cost more — verify) | Yes | Backup. Medical vocabulary + key-term boosting. Temporary browser tokens. |
 | AssemblyAI Universal Streaming | ~300 ms P50 (AssemblyAI-published benchmark) | ~$0.0075 | Yes | Strong alternative, slightly better WER in one benchmark. Key-term prompting. |
 | Browser Web Speech API | low | free | No | Inconsistent on iOS, no medical vocabulary. Dev fallback only. |
 
-**Pick:** Deepgram Nova-3 Medical behind `SttProvider`. Swap to AssemblyAI if the bench test favors it.
+**Pick:** OpenAI Realtime behind `SttProvider`. Deepgram/AssemblyAI remain swap-in backups.
 
 ### (b) Text-to-speech (patient voice)
 
@@ -319,19 +342,21 @@ Prices are list or pay-as-you-go as reported in Sept–Oct 2026 sources. Many ar
 
 | Item | Assumption | $/session |
 |---|---|---|
-| STT | 8 min × $0.0077 | 0.06 |
+| STT | OpenAI Realtime, 8 min × ~$0.017 | 0.14 |
 | TTS | ~2,700 chars × ~$50/1M | 0.14 |
 | Claude patient brain | Opus 5.5, effort low, cached system prompt; ~15 turns × ~$0.011 | 0.17 |
 | Claude scoring | Opus 5.5, effort high; ~7k in / ~6k out (incl. thinking) | 0.15 |
 | Firebase (Firestore, Storage ~2 MB/session, Functions) | pilot scale | ~0.02 |
-| **Voice-only total** | | **≈ $0.55** |
-| + Video avatar | 8 min × ~$0.15 | +1.20 → **≈ $1.75** |
+| **Voice-only total** | | **≈ $0.63** |
+| + Video avatar | 8 min × ~$0.15 | +1.20 → **≈ $1.83** |
 
-Per resident per month at 12 sessions: **≈ $7 voice-only, ≈ $21 with video**. The README will include a calculator table. Claude prices: Opus 5.5 $4 / $20 per M tokens in/out, $0.20 cached reads.
+Per resident per month at 12 sessions: **≈ $8 voice-only, ≈ $22 with video**. Using Haiku 5.5 for the patient brain would save ~$0.16/session. Three years of audio storage is negligible (~2 MB/session). The README will include a calculator table. Claude prices: Opus 5.5 $4 / $20 per M tokens in/out, $0.20 cached reads.
 
 ---
 
 ## 10. Open questions (clinical / pedagogical / product) ❓
+
+> Round 1 answered #1 (bench all three), #2 (numbers), #3 (equal weights), #4 partly (you review the list), #5 partly (any-questions weak / teach-back strong), #7 (you), #8 (3 years each), #10 (CCC use OK). See the Decisions log at the top. Remaining: #4 formula and exceptions, #5 order firmness, #6, #9, #11, #12.
 
 1. **Patient-brain model.** My default is Opus 5.5 at low effort for in-character quality. Sonnet 5.5 or Haiku 5.5 would cut latency and cost (Haiku: ~$0.01/session for the patient brain). Want me to bench all three and let you choose by feel?
 2. **Do residents see raw 0–100 numbers?** Or friendlier bands ("Getting there / Solid / Crushing it") with numbers only for faculty? Given the anxiety point, I lean toward bands plus a progress ring for residents and numbers for faculty.
@@ -360,11 +385,11 @@ Per resident per month at 12 sessions: **≈ $7 voice-only, ≈ $21 with video**
 | 0 | **Scaffold** | Vite React TS PWA (mobile-first shell, routing, design tokens), Firebase config, emulator suite, ESLint/Prettier/Vitest, CI, Functions TS workspace, Secret Manager wiring | `npm run dev` + emulators boot; lint/tests green |
 | 1 | **Auth, invites, roles, consent + security rules** | Email-link sign-in, invite claim → custom claims, consent screen, role-based routing, first rules + **rules test suite** | Sign in as invited/uninvited users in emulator; rules tests pass |
 | 2 | **Content: scenarios + jargon** | Scenario/version schema, 6 seed scenarios (draft for your clinical review), ~300-term jargon seed, scenario picker, briefing screen, **plain-word lookup** | Browse scenarios, open briefings, search the dictionary |
-| 3 | **Live conversation (voice-only)** | STT token + streaming, `patientTurn` (cue engine + Claude patient + TTS streaming), `VoiceRenderer`, recording + upload, server-written transcript, end session | Hold a full conversation on your phone; see cues fire; transcript and audio saved |
+| 3 | **Live conversation (voice-only)** | OpenAI Realtime client secret + streaming transcription, `patientTurn` (cue engine + Claude patient + TTS streaming), `VoiceRenderer`, recording + upload, server-written transcript, end session, **patient-model bench (Opus 5.5 / Sonnet 5.5 / Haiku 5.5: latency, cost, in-character quality)** | Hold a full conversation on your phone; see cues fire; transcript and audio saved; switch models in settings and compare |
 | 4 | **Scoring + feedback** | Deterministic jargon scorer (unit-tested), Claude rubric scoring with structured output + quote validation, rubric versioning, coaching-style results screen | Complete a session → results with quotes and rewrites; rescore with a new rubric version |
 | 5 | **Gamification** | XP, streaks (timezone-aware), badges, light celebration animations | Seed sessions across days → streak/badges update |
 | 6 | **Faculty** | Resident list, resident detail (trend chart, transcripts, audio, recurring jargon), cohort view, scenario editor (create/edit/duplicate/archive with versions), program settings, invites | Sign in as faculty; manage a scenario; review a resident |
-| 7 | **ACGME export + retention** | PDF/CSV export per resident by date range, audio-retention scheduled Function, audit log | Export for a demo resident; run retention with a short window in emulator |
+| 7 | **ACGME export + retention** | PDF/CSV export per resident by date range, audio + transcript retention scheduled Function (3-year defaults), audit log | Export for a demo resident; run retention with a short window in emulator |
 | 8 | **Video avatar bake-off + integration** | 5-cue test harness, Anam & Tavus renderers (or Rive fallback), pick one and wire it behind `PatientRenderer` | Watch the cue test videos; choose |
 | 9 | **Seed, docs, deploy** | Seed script (scenarios, jargon, demo faculty + 3 demo residents with realistic history), README (setup, env vars, deploy, cost calculator), production deploy checklist | Fresh clone → seed → demo walkthrough |
 
