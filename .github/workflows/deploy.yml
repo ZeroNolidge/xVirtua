@@ -8,6 +8,10 @@ on:
       project_id:
         description: 'Firebase project ID to deploy to (must match the key in FIREBASE_SERVICE_ACCOUNT)'
         required: true
+      only:
+        description: 'What to deploy (comma-separated)'
+        required: false
+        default: 'firestore,storage,functions,hosting'
       faculty_email:
         description: 'Optional: invite this email as the first faculty member'
         required: false
@@ -69,7 +73,9 @@ jobs:
         run: npm pkg delete "dependencies.@plainspeak/shared" -w functions
 
       - name: Deploy
-        run: npx firebase deploy --project "$PROJECT_ID" --only firestore,storage,functions,hosting --non-interactive --force
+        env:
+          ONLY: ${{ inputs.only }}
+        run: npx firebase deploy --project "$PROJECT_ID" --only "$ONLY" --non-interactive --force
 
       - name: Invite first faculty member
         if: ${{ inputs.faculty_email != '' }}
