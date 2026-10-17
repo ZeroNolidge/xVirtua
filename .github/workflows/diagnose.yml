@@ -1,0 +1,54 @@
+name: Diagnose
+
+# Read-only: prints recent function logs and the permissions that most often
+# break callable functions. Changes nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'Firebase project ID (must match the key)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Google credentials
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EXPECTED: ${{ inputs.project_id }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          PID=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).project_id)" "$RUNNER_TEMP/sa.json")
+          [ "$PID" = "$EXPECTED" ] || { echo "::error::key is for $PID"; exit 1; }
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+          echo "PROJECT_ID=$PID" >> "$GITHUB_ENV"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet
+      - name: Function logs (claimInvite and others)
+        continue-on-error: true
+        run: npx firebase functions:log --project "$PROJECT_ID" -n 80
+      - name: Who can call the functions (Cloud Run invoker)
+        continue-on-error: true
+        run: |
+          for f in claiminvite createinvite acceptconsent revokeinvite; do
+            echo "== $f"; gcloud run services get-iam-policy "$f" --region us-east1 --project "$PROJECT_ID" --format=json || true
+          done
+      - name: Roles held by the runtime service account
+        continue-on-error: true
+        run: |
+          NUM=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+          echo "Runtime SA: $NUM-compute@developer.gserviceaccount.com"
+          gcloud projects get-iam-policy "$PROJECT_ID" --flatten='bindings[].members' \
+            --filter="bindings.members:$NUM-compute@developer.gserviceaccount.com" --format='value(bindings.role)' || true
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
