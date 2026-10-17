@@ -8,7 +8,9 @@ import { REGION } from './config.js';
 import * as invites from './auth/invites.js';
 
 initializeApp();
-setGlobalOptions({ region: REGION, maxInstances: 10 });
+// invoker 'public': callable functions do their own auth checks; Cloud Run must
+// still let the browser reach them.
+setGlobalOptions({ region: REGION, maxInstances: 10, invoker: 'public' });
 
 const db = () => getFirestore();
 const auth = () => getAuth();

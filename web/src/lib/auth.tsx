@@ -52,7 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await user.getIdToken(true); // pick up new claims
         }
       })
-      .catch(() => setError('We couldn’t finish setting up your account. Please try again.'))
+      .catch((e: unknown) => {
+        const code = typeof e === 'object' && e && 'code' in e ? String(e.code) : 'unknown';
+        setError(`We couldn’t finish setting up your account. Please try again. (code: ${code})`);
+      })
       .finally(() => {
         claimingFor.current = null;
       });
