@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Phase 0 skeleton: deny everything by default.
+// Phase 1 adds per-collection rules (see PLAN.md §3). Role and program come
+// only from auth token claims, never from client-writable fields.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function role() { return request.auth.token.role; }
+    function programId() { return request.auth.token.programId; }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
