@@ -77,6 +77,21 @@ jobs:
           ONLY: ${{ inputs.only }}
         run: npx firebase deploy --project "$PROJECT_ID" --only "$ONLY" --non-interactive --force
 
+      - name: Allow the app to call callable functions
+        # Callables check auth themselves, but Cloud Run must let browser
+        # requests through. The Firebase CLI can skip this on updates.
+        if: ${{ contains(inputs.only, 'functions') }}
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
+          SERVICES=$(gcloud run services list --project "$PROJECT_ID" --region us-east1 \
+            --filter='metadata.labels.deployment-callable=true' --format='value(metadata.name)')
+          if [ -z "$SERVICES" ]; then echo "::error::No callable services found"; exit 1; fi
+          for s in $SERVICES; do
+            echo "Allowing public invoke: $s"
+            gcloud run services add-iam-policy-binding "$s" --project "$PROJECT_ID" --region us-east1 \
+              --member=allUsers --role=roles/run.invoker --quiet >/dev/null
+          done
+
       - name: Invite first faculty member
         if: ${{ inputs.faculty_email != '' }}
         env:
