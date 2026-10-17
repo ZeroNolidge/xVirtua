@@ -1,6 +1,6 @@
 node_modules/
-dist/
-lib/
+**/dist/
+/functions/lib/
 coverage/
 .emulator-data/
 *.log
@@ -11,3 +11,4 @@ functions/.secret.local
 functions/.runtime.local
 .firebase/
 .DS_Store
+*.tsbuildinfo
