@@ -1,0 +1,77 @@
+name: Deploy
+
+# Manual deploy to the Firebase project in the FIREBASE_SERVICE_ACCOUNT secret.
+# The project ID is read from the key file, so it can't target the wrong project.
+on:
+  workflow_dispatch:
+    inputs:
+      faculty_email:
+        description: 'Optional: invite this email as the first faculty member'
+        required: false
+        default: ''
+
+concurrency: deploy
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+
+      - name: Checks
+        run: |
+          npm run lint
+          npm run build
+          npm run typecheck
+          npm test
+          npm run test:rules
+          npm run test:functions
+
+      - name: Google credentials
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then echo "FIREBASE_SERVICE_ACCOUNT secret is missing"; exit 1; fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          PID=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).project_id)" "$RUNNER_TEMP/sa.json")
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+          echo "PROJECT_ID=$PID" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=$PID" >> "$GITHUB_ENV"
+          echo "Target project: $PID"
+
+      - name: Build web app with this project's config
+        run: |
+          node scripts/write-web-env.mjs
+          npm run build -w web
+
+      - name: Prepare functions for Cloud Build
+        # The shared package is bundled into functions/lib, so Cloud Build
+        # must not try to install it from npm.
+        run: npm pkg delete "dependencies.@plainspeak/shared" -w functions
+
+      - name: Deploy
+        run: npx firebase deploy --project "$PROJECT_ID" --only firestore,storage,functions,hosting --non-interactive --force
+
+      - name: Invite first faculty member
+        if: ${{ inputs.faculty_email != '' }}
+        env:
+          FACULTY_EMAIL: ${{ inputs.faculty_email }}
+        run: npx tsx scripts/bootstrap.ts --email "$FACULTY_EMAIL" --prod
+
+      - name: Summary
+        run: echo "### Deployed to https://$PROJECT_ID.web.app" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
