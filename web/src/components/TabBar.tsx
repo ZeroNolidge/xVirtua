@@ -1,13 +1,14 @@
 import { NavLink } from 'react-router-dom';
-
-const tabs = [
-  { to: '/', label: 'Practice' },
-  { to: '/lookup', label: 'Plain words' },
-  { to: '/progress', label: 'Progress' },
-  { to: '/faculty', label: 'Faculty' },
-];
+import { useAuth } from '../lib/auth';
 
 export function TabBar() {
+  const { claims } = useAuth();
+  const tabs = [
+    { to: '/', label: 'Practice' },
+    { to: '/lookup', label: 'Plain words' },
+    { to: '/progress', label: 'Progress' },
+    ...(claims?.role === 'faculty' ? [{ to: '/faculty', label: 'Faculty' }] : []),
+  ];
   return (
     <nav className="tabbar" aria-label="Main">
       {tabs.map((t) => (

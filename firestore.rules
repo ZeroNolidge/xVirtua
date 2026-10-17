@@ -1,14 +1,137 @@
 rules_version = '2';
 
-// Phase 0 skeleton: deny everything by default.
-// Phase 1 adds per-collection rules (see PLAN.md §3). Role and program come
-// only from auth token claims, never from client-writable fields.
+// PlainSpeak Firestore rules. See PLAN.md §3.
+//
+// Principles:
+//  - Default deny.
+//  - Role and program come ONLY from auth token claims (set by the server).
+//  - Server-owned data (sessions, turns, scores, progress, stats, invites,
+//    audit) is written only by Cloud Functions via the Admin SDK.
+//  - Residents read their own data; faculty read their program's data.
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function role() { return request.auth.token.role; }
-    function programId() { return request.auth.token.programId; }
 
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function hasClaims() {
+      return signedIn()
+        && request.auth.token.role in ['resident', 'faculty']
+        && request.auth.token.programId is string;
+    }
+    function isFaculty() { return hasClaims() && request.auth.token.role == 'faculty'; }
+    function inProgram(pid) { return hasClaims() && request.auth.token.programId == pid; }
+    function facultyOf(pid) { return isFaculty() && request.auth.token.programId == pid; }
+    function isSelf(uid) { return hasClaims() && request.auth.uid == uid; }
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    function intIn(v, lo, hi) { return v is int && v >= lo && v <= hi; }
+
+    function sessionData(sid) {
+      return get(/databases/$(database)/documents/sessions/$(sid)).data;
+    }
+    function canReadSession(s) { return isSelf(s.uid) || facultyOf(s.programId); }
+
+    function scenarioData(id) {
+      return get(/databases/$(database)/documents/scenarios/$(id)).data;
+    }
+    function canReadScenario(s) {
+      return inProgram(s.programId) && (s.status == 'active' || isFaculty());
+    }
+
+    // ---------- programs ----------
+    match /programs/{pid} {
+      allow read: if inProgram(pid);
+      allow update: if facultyOf(pid)
+        && onlyChanges(['name', 'timezone', 'audioRetentionMonths',
+                        'transcriptRetentionMonths', 'scoringWeights', 'patientModel'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.timezone is string
+        && intIn(request.resource.data.audioRetentionMonths, 1, 120)
+        && intIn(request.resource.data.transcriptRetentionMonths, 1, 120)
+        && request.resource.data.scoringWeights.keys().hasOnly(['jargon', 'clarity', 'empathy', 'cue'])
+        && request.resource.data.scoringWeights.keys().hasAll(['jargon', 'clarity', 'empathy', 'cue'])
+        && request.resource.data.scoringWeights.jargon is number
+        && request.resource.data.scoringWeights.clarity is number
+        && request.resource.data.scoringWeights.empathy is number
+        && request.resource.data.scoringWeights.cue is number
+        && request.resource.data.patientModel in
+             ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
+      allow create, delete: if false;
+    }
+
+    // ---------- invites (written by Functions) ----------
+    match /invites/{email} {
+      allow read: if facultyOf(resource.data.programId);
+      allow write: if false;
+    }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if isSelf(uid) || facultyOf(resource.data.programId);
+      // A user may change only their display name. Role, program and consent
+      // are server-owned.
+      allow update: if isSelf(uid)
+        && onlyChanges(['displayName'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80;
+      allow create, delete: if false;
+    }
+
+    match /userProgress/{uid} {
+      allow read: if isSelf(uid) || facultyOf(resource.data.programId);
+      allow write: if false;
+    }
+
+    match /userStats/{uid} {
+      allow read: if isSelf(uid) || facultyOf(resource.data.programId);
+      allow write: if false;
+    }
+
+    // ---------- sessions ----------
+    match /sessions/{sid} {
+      allow read: if canReadSession(resource.data);
+      allow write: if false;
+
+      match /turns/{turnId} {
+        allow read: if canReadSession(sessionData(sid));
+        allow write: if false;
+      }
+      match /scores/{rubricVersion} {
+        allow read: if canReadSession(sessionData(sid));
+        allow write: if false;
+      }
+    }
+
+    // ---------- scenarios (faculty editing arrives in Phase 6) ----------
+    match /scenarios/{id} {
+      allow read: if canReadScenario(resource.data);
+      allow write: if false;
+
+      match /versions/{v} {
+        allow read: if canReadScenario(scenarioData(id));
+        allow write: if false;
+      }
+    }
+
+    // ---------- jargon dictionary ----------
+    match /jargonTerms/{id} {
+      // programId == null means a global term shared by all programs.
+      allow read: if hasClaims()
+        && (resource.data.programId == null || inProgram(resource.data.programId));
+      allow write: if false;
+    }
+
+    // ---------- audit log ----------
+    match /auditLog/{id} {
+      allow read: if facultyOf(resource.data.programId);
+      allow write: if false;
+    }
+
+    // Everything else: deny.
     match /{document=**} {
       allow read, write: if false;
     }

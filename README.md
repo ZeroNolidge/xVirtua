@@ -3,7 +3,7 @@
 Practice app for family medicine residents: talk with an AI patient, get friendly coaching on plain
 language, empathy and responsiveness. See [PLAN.md](PLAN.md) for the full design.
 
-> Status: **Phase 0 (scaffold).** Full setup, deploy steps and the cost-per-resident estimate land in
+> Status: **Phase 1 (sign-in, invites, consent, security rules).** Full setup, deploy steps and the cost-per-resident estimate land in
 > Phase 9.
 
 ## Layout
@@ -28,6 +28,18 @@ npm run emulators   # Auth, Firestore, Storage, Functions + UI at http://localho
 npm run dev         # PWA at http://localhost:5173 (connects to emulators)
 ```
 
+### First sign-in (emulator)
+
+```bash
+npm run bootstrap -- --email you@example.org   # creates program "irmc" + your faculty invite
+```
+
+Open the app, enter that email, then open the sign-in link from the Emulator UI
+(http://localhost:4000 → Authentication). You'll see the consent screen, then the app. As
+faculty, use the **Faculty** tab to invite residents; Firebase emails them a sign-in link (in the
+emulator, links show up in the same place). Emails without an invite are turned away and their
+account is deleted.
+
 The project ID `demo-plainspeak` is a Firebase "demo" project: emulators run fully offline and
 can't touch any real cloud resources.
 
@@ -37,7 +49,8 @@ can't touch any real cloud resources.
 npm run lint
 npm run typecheck
 npm test            # unit tests (shared, functions, web)
-npm run test:rules  # security-rules tests in the emulator
+npm run test:rules      # security-rules tests in the emulator
+npm run test:functions  # invite/consent server logic against Auth + Firestore emulators
 ```
 
 ## Environment variables

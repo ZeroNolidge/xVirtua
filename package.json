@@ -21,7 +21,9 @@
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-plainspeak \"vitest run --config tests/rules/vitest.config.ts\"",
-    "emulators": "npm run build -w shared && npm run build -w functions && firebase emulators:start --project demo-plainspeak --import=.emulator-data --export-on-exit=.emulator-data"
+    "emulators": "npm run build -w shared && npm run build -w functions && firebase emulators:start --project demo-plainspeak --import=.emulator-data --export-on-exit=.emulator-data",
+    "test:functions": "firebase emulators:exec --only auth,firestore --project demo-plainspeak \"vitest run --config functions/vitest.integration.config.ts\"",
+    "bootstrap": "npm run build -w shared && tsx scripts/bootstrap.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -33,6 +35,7 @@
     "firebase-tools": "^15.34.0",
     "globals": "^17.13.0",
     "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
     "typescript": "~6.0",
     "typescript-eslint": "^8.71.2",
     "vitest": "^5.0.5"

@@ -120,3 +120,126 @@ p {
 .tabbar a.active {
   color: var(--primary);
 }
+.small {
+  font-size: 0.85rem;
+}
+.center {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 4px solid var(--border);
+  border-top-color: var(--primary);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 3s;
+  }
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+.field input,
+.field select {
+  min-height: var(--tap);
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 400;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+}
+.field input:focus-visible,
+.field select:focus-visible,
+.btn:focus-visible,
+.check input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn + .btn {
+  margin-top: 12px;
+}
+.btn-secondary {
+  background: var(--surface);
+  color: var(--primary);
+  border: 2px solid var(--primary);
+  box-shadow: none;
+}
+.btn-text {
+  background: none;
+  color: var(--text-muted);
+  box-shadow: none;
+  font-weight: 600;
+}
+.btn-inline {
+  width: auto;
+  min-height: 40px;
+  padding: 0 12px;
+}
+.error {
+  color: #c0392b;
+  font-weight: 600;
+}
+.ok {
+  color: var(--primary);
+  font-weight: 600;
+}
+.consent-list {
+  padding-left: 20px;
+  margin: 0 0 16px;
+}
+.consent-list li {
+  margin-bottom: 10px;
+}
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  font-weight: 600;
+  min-height: var(--tap);
+}
+.check input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--primary);
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  word-break: break-word;
+}
+.list li:first-child {
+  border-top: 0;
+}

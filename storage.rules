@@ -1,8 +1,40 @@
 rules_version = '2';
 
-// Phase 0 skeleton: deny everything by default. Phase 1/3 add audio rules.
+// PlainSpeak Storage rules. See PLAN.md §3.
+// Audio path: audio/{programId}/{uid}/{sessionId}/recording.{webm|m4a|mp4|ogg}
 service firebase.storage {
   match /b/{bucket}/o {
+    function hasClaims() {
+      return request.auth != null
+        && request.auth.token.role in ['resident', 'faculty']
+        && request.auth.token.programId is string;
+    }
+    function isOwner(pid, uid) {
+      return hasClaims() && request.auth.uid == uid && request.auth.token.programId == pid;
+    }
+    function facultyOf(pid) {
+      return hasClaims() && request.auth.token.role == 'faculty'
+        && request.auth.token.programId == pid;
+    }
+    match /audio/{pid}/{uid}/{sid}/{file} {
+      allow read: if isOwner(pid, uid) || facultyOf(pid);
+
+      // The owner uploads once, into their own folder only. We deliberately
+      // avoid a cross-service firestore.get() here (unreliable in the
+      // emulator, extra setup + a read per upload in production). Instead a
+      // Storage onFinalize Function (Phase 3) deletes any upload whose
+      // {sid} isn't a session owned by {uid} in {pid}.
+      allow create: if isOwner(pid, uid)
+        && resource == null
+        && sid.matches('[A-Za-z0-9_-]{1,64}')
+        && file.matches('recording\\.(webm|m4a|mp4|ogg)')
+        && request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+
+      // Deletion only by the server (retention job).
+      allow update, delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

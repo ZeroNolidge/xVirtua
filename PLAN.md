@@ -14,6 +14,9 @@ Status: **Approved with changes (round 1).** Decisions marked **❓** are still 
 | D6 | Check for understanding: **"Any questions?" = weak (partial credit); teach-back ("tell me in your own words…") = strong (full credit).** |
 | D7 | Data **may be used at CCC review.** The consent screen says so plainly. |
 | D8 | Retention: **audio 3 years, transcripts and scores 3 years** (both admin-configurable). |
+| D9 | **HIPAA/BAA not required** (all patients are fictional). Vendors are chosen on accuracy, latency and price; BAA columns below are informational only. |
+| D10 | Phase 3 includes a **transcription bake-off**: the same 10 jargon-heavy recordings through OpenAI Realtime, Deepgram Nova-3 and Soniox (~$0.002/min), comparing jargon caught, latency and cost. OpenAI stays the default unless another matches it. |
+| D11 | Defaults accepted: voice-first + Phase 8 avatar bake-off; all program faculty see all program residents; 5–8 min sessions, soft cap 12; ACGME export shows evidence only. |
 
 Still open, with defaults I'll use unless you say otherwise:
 - **Avatar path:** voice-first, Phase 8 bake-off, animated character as fallback.
@@ -178,7 +181,7 @@ Rubric versioning:
   - Residents: read their own `users`, `userProgress`, `userStats`, `sessions/**` and audio. Read active scenarios and jargon for their program. **No writes** except their own display name and consent acceptance; consent goes through a Function, so it's validated.
   - Faculty: read everything where `resource.data.programId == request.auth.token.programId`; write scenarios, jargon and program settings for their program.
   - Server-owned collections (sessions, turns, scores, progress, stats, audit) are written only via the Admin SDK. Rules deny all client writes.
-  - Storage path `audio/{programId}/{uid}/{sessionId}.{webm|m4a}`: the owner may create once (size ≤ 25 MB, `audio/*` content type, and the session must exist and belong to them, checked via `firestore.get`). Read is allowed to the owner or same-program faculty. No client deletes.
+  - Storage path `audio/{programId}/{uid}/{sessionId}/recording.{webm|m4a|mp4|ogg}`: the owner may create once (size ≤ 25 MB, `audio/*` content type, and the session must exist and belong to them, checked via `firestore.get`). Read is allowed to the owner or same-program faculty. No client deletes.
 - **Rules tests:** `@firebase/rules-unit-testing` against the emulator, run in CI. Every collection gets an allow/deny matrix (resident-self, resident-other, faculty-same-program, faculty-other-program, unauthenticated, forged-claims attempts).
 
 ---
