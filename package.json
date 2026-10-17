@@ -23,7 +23,8 @@
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-plainspeak \"vitest run --config tests/rules/vitest.config.ts\"",
     "emulators": "npm run build -w shared && npm run build -w functions && firebase emulators:start --project demo-plainspeak --import=.emulator-data --export-on-exit=.emulator-data",
     "test:functions": "firebase emulators:exec --only auth,firestore --project demo-plainspeak \"vitest run --config functions/vitest.integration.config.ts\"",
-    "bootstrap": "npm run build -w shared && tsx scripts/bootstrap.ts"
+    "bootstrap": "npm run build -w shared && tsx scripts/bootstrap.ts",
+    "seed": "npm run build -w shared && tsx scripts/seed-content.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -2,12 +2,13 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { TabBar } from './components/TabBar';
 import { useAuth } from './lib/auth';
 import { Home } from './pages/Home';
-import { Placeholder } from './pages/Placeholder';
 import { Login } from './pages/Login';
 import { FinishSignIn } from './pages/FinishSignIn';
 import { Consent } from './pages/Consent';
 import { Progress } from './pages/Progress';
 import { Invites } from './pages/faculty/Invites';
+import { Lookup } from './pages/Lookup';
+import { Briefing } from './pages/Briefing';
 import { Loading, NotInvited, SettingUp } from './pages/StatusScreens';
 
 export function App() {
@@ -48,7 +49,8 @@ function SignedInApp() {
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/lookup" element={<Placeholder title="Plain words" phase={2} />} />
+          <Route path="/lookup" element={<Lookup />} />
+          <Route path="/scenario/:id" element={<Briefing />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/faculty" element={isFaculty ? <Invites /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

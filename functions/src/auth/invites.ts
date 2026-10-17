@@ -3,14 +3,9 @@ import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 import { CONSENT_VERSION, type Role, type UserClaims } from '@plainspeak/shared';
+import { parse, requireFaculty, type Caller } from '../lib/callable.js';
 
-/** The verified caller of a callable function. */
-export interface Caller {
-  uid: string;
-  email?: string | undefined;
-  emailVerified?: boolean | undefined;
-  claims: Partial<UserClaims> & Record<string, unknown>;
-}
+export type { Caller } from '../lib/callable.js';
 
 export const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
@@ -21,21 +16,6 @@ const emailSchema = z
   .pipe(z.email())
   .refine((e) => e.length <= 254);
 const roleSchema = z.enum(['resident', 'faculty']);
-
-function requireFaculty(caller: Caller | null): { uid: string; programId: string } {
-  if (!caller) throw new HttpsError('unauthenticated', 'Please sign in.');
-  const { role, programId } = caller.claims;
-  if (role !== 'faculty' || typeof programId !== 'string') {
-    throw new HttpsError('permission-denied', 'Only faculty can manage invites.');
-  }
-  return { uid: caller.uid, programId };
-}
-
-function parse<T>(schema: z.ZodType<T>, data: unknown): T {
-  const r = schema.safeParse(data);
-  if (!r.success) throw new HttpsError('invalid-argument', 'Invalid request.');
-  return r.data;
-}
 
 /** Faculty invites a resident or another faculty member to their program. */
 export async function createInvite(

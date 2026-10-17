@@ -56,6 +56,7 @@ async function seed() {
     await setDoc(doc(db, 'sessions/sA/scores/2026-11-v1'), { overall: 70 });
     await setDoc(doc(db, 'scenarios/htn'), { programId: 'irmc', status: 'active', title: 'HTN' });
     await setDoc(doc(db, 'scenarios/htn/versions/1'), { title: 'HTN' });
+    await setDoc(doc(db, 'scenarios/htn/versions/1/private/script'), { hiddenConcern: 'secret' });
     await setDoc(doc(db, 'scenarios/draft1'), {
       programId: 'irmc',
       status: 'draft',
@@ -244,6 +245,35 @@ describe('scenarios', () => {
     await assertSucceeds(getDoc(doc(fs(a.facultyIrmc), 'scenarios/draft1')));
     await assertSucceeds(getDoc(doc(fs(a.facultyIrmc), 'scenarios/draft1/versions/1')));
     await assertFails(getDoc(doc(fs(a.facultyOther), 'scenarios/htn')));
+  });
+
+  it('the patient script is faculty-only, even for active scenarios', async () => {
+    await assertFails(getDoc(doc(fs(a.resA), 'scenarios/htn/versions/1/private/script')));
+    await assertSucceeds(getDoc(doc(fs(a.facultyIrmc), 'scenarios/htn/versions/1/private/script')));
+    await assertFails(getDoc(doc(fs(a.facultyOther), 'scenarios/htn/versions/1/private/script')));
+    await assertFails(
+      setDoc(doc(fs(a.facultyIrmc), 'scenarios/htn/versions/1/private/script'), {
+        hiddenConcern: 'x',
+      }),
+    );
+  });
+
+  it('residents can list active scenarios but not drafts', async () => {
+    const col = collection(fs(a.resA), 'scenarios');
+    await assertSucceeds(
+      getDocs(query(col, where('programId', '==', 'irmc'), where('status', '==', 'active'))),
+    );
+    await assertFails(getDocs(query(col, where('programId', '==', 'irmc'))));
+    await assertSucceeds(
+      getDocs(query(collection(fs(a.facultyIrmc), 'scenarios'), where('programId', '==', 'irmc'))),
+    );
+  });
+
+  it('jargon list queries work for global and program terms', async () => {
+    const col = collection(fs(a.resA), 'jargonTerms');
+    await assertSucceeds(getDocs(query(col, where('programId', '==', null))));
+    await assertSucceeds(getDocs(query(col, where('programId', '==', 'irmc'))));
+    await assertFails(getDocs(query(col, where('programId', '==', 'other'))));
   });
 
   it('no client writes yet', async () => {

@@ -1,5 +1,5 @@
 import { httpsCallable } from 'firebase/functions';
-import type { Role } from '@plainspeak/shared';
+import type { Role, ScenarioStatus } from '@plainspeak/shared';
 import { functions } from './firebase';
 
 type ClaimResult = { status: 'ok'; role: Role; programId: string } | { status: 'not_invited' };
@@ -9,6 +9,10 @@ export const api = {
   acceptConsent: httpsCallable<{ version: number }, void>(functions, 'acceptConsent'),
   createInvite: httpsCallable<{ email: string; role: Role }, { email: string; role: Role }>(functions, 'createInvite'),
   revokeInvite: httpsCallable<{ email: string }, void>(functions, 'revokeInvite'),
+  setScenarioStatus: httpsCallable<
+    { scenarioId: string; status: ScenarioStatus },
+    { scenarioId: string; status: ScenarioStatus }
+  >(functions, 'setScenarioStatus'),
 };
 
 /** Friendly text for Firebase errors. Never shows raw codes to users. */

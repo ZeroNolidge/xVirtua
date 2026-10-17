@@ -6,6 +6,7 @@ import { onCall, onRequest, type CallableRequest } from 'firebase-functions/v2/h
 import { RUBRIC_VERSION, CONSENT_VERSION } from '@plainspeak/shared';
 import { REGION } from './config.js';
 import * as invites from './auth/invites.js';
+import * as scenarios from './content/scenarios.js';
 
 initializeApp();
 // invoker 'public': callable functions do their own auth checks; Cloud Run must
@@ -36,3 +37,6 @@ export const createInvite = onCall((req) =>
 export const revokeInvite = onCall((req) => invites.revokeInvite(db(), callerOf(req), req.data));
 export const claimInvite = onCall((req) => invites.claimInvite(db(), auth(), callerOf(req)));
 export const acceptConsent = onCall((req) => invites.acceptConsent(db(), callerOf(req), req.data));
+export const setScenarioStatus = onCall((req) =>
+  scenarios.setScenarioStatus(db(), callerOf(req), req.data),
+);

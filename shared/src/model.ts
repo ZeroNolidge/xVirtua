@@ -55,18 +55,56 @@ export interface CueScriptEntry {
   expectedResidentResponse: string;
 }
 
-export interface ScenarioVersion {
+/** Public part of a scenario version: what the resident sees in the briefing. */
+export interface ScenarioBriefing {
   title: string;
   difficulty: Difficulty;
-  persona: { name: string; age: number; pronouns: string; background: string };
+  persona: { name: string; age: number; pronouns: string };
   reasonForVisit: string;
+  /** What the resident needs to explain. */
   residentTask: string;
+  /** Chart facts the resident would know walking in. */
+  residentFacts: string[];
+  learningObjectives: string[];
+  estimatedMinutes: number;
+}
+
+/**
+ * Private part: drives the AI patient. Readable by faculty and the server only
+ * (stored at scenarios/{id}/versions/{v}/private/script).
+ */
+export interface ScenarioScript {
+  background: string;
   healthLiteracy: HealthLiteracy;
   emotionalState: string;
   hiddenConcern: string;
-  learningObjectives: string[];
   openingLine: string;
+  /** Facts the patient knows and can share if asked. */
+  patientKnows: string[];
+  speakingStyle: string;
   cueScript: CueScriptEntry[];
+}
+
+export type ScenarioStatus = 'draft' | 'active' | 'archived';
+
+/** scenarios/{id}: summary for the picker. */
+export interface ScenarioDoc {
+  programId: string;
+  status: ScenarioStatus;
+  currentVersion: string;
+  title: string;
+  difficulty: Difficulty;
+  patientName: string;
+  patientAge: number;
+  reasonForVisit: string;
+  tags: string[];
+}
+
+export interface ScenarioSeed {
+  id: string;
+  tags: string[];
+  briefing: ScenarioBriefing;
+  script: ScenarioScript;
 }
 
 export interface Evidence {

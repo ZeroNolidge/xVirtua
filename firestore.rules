@@ -114,6 +114,13 @@ service cloud.firestore {
       match /versions/{v} {
         allow read: if canReadScenario(scenarioData(id));
         allow write: if false;
+
+        // The patient script (hidden concern, cue script) is never shown to
+        // residents: faculty of the program and the server only.
+        match /private/{docId} {
+          allow read: if facultyOf(scenarioData(id).programId);
+          allow write: if false;
+        }
       }
     }
 

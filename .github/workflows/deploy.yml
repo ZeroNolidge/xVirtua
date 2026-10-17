@@ -12,6 +12,10 @@ on:
         description: 'What to deploy (comma-separated)'
         required: false
         default: 'firestore,storage,functions,hosting'
+      seed_content:
+        description: 'Load seed scenarios (as drafts) and the jargon dictionary. Never overwrites edits.'
+        type: boolean
+        default: false
       faculty_email:
         description: 'Optional: invite this email as the first faculty member'
         required: false
@@ -91,6 +95,10 @@ jobs:
             gcloud run services add-iam-policy-binding "$s" --project "$PROJECT_ID" --region us-east1 \
               --member=allUsers --role=roles/run.invoker --quiet >/dev/null
           done
+
+      - name: Seed content
+        if: ${{ inputs.seed_content }}
+        run: npx tsx scripts/seed-content.ts --prod
 
       - name: Invite first faculty member
         if: ${{ inputs.faculty_email != '' }}
