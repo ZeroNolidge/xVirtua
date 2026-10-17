@@ -1,10 +1,13 @@
 name: Deploy
 
 # Manual deploy to the Firebase project in the FIREBASE_SERVICE_ACCOUNT secret.
-# The project ID is read from the key file, so it can't target the wrong project.
+# You must pass project_id, and it must match the key, or nothing is deployed.
 on:
   workflow_dispatch:
     inputs:
+      project_id:
+        description: 'Firebase project ID to deploy to (must match the key in FIREBASE_SERVICE_ACCOUNT)'
+        required: true
       faculty_email:
         description: 'Optional: invite this email as the first faculty member'
         required: false
@@ -29,18 +32,10 @@ jobs:
           java-version: 21
       - run: npm ci
 
-      - name: Checks
-        run: |
-          npm run lint
-          npm run build
-          npm run typecheck
-          npm test
-          npm run test:rules
-          npm run test:functions
-
       - name: Google credentials
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EXPECTED: ${{ inputs.project_id }}
         run: |
           if [ -z "$SA" ]; then echo "FIREBASE_SERVICE_ACCOUNT secret is missing"; exit 1; fi
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
@@ -49,6 +44,19 @@ jobs:
           echo "PROJECT_ID=$PID" >> "$GITHUB_ENV"
           echo "GOOGLE_CLOUD_PROJECT=$PID" >> "$GITHUB_ENV"
           echo "Target project: $PID"
+          if [ "$PID" != "$EXPECTED" ]; then
+            echo "::error::The key is for project '$PID', but you asked to deploy to '$EXPECTED'. Nothing was deployed."
+            exit 1
+          fi
+
+      - name: Checks
+        run: |
+          npm run lint
+          npm run build
+          npm run typecheck
+          npm test
+          npm run test:rules
+          npm run test:functions
 
       - name: Build web app with this project's config
         run: |
