@@ -17,6 +17,7 @@ vi.mock('firebase/firestore', () => ({
   doc: vi.fn(),
   updateDoc: vi.fn(),
 }));
+vi.mock('./lib/session', () => ({ sessionApi: {}, prewarmConversation: vi.fn() }));
 vi.mock('./lib/auth', () => ({
   useAuth: () => ({
     status: state.status,

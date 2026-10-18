@@ -14,6 +14,7 @@ import { SessionDone } from './pages/SessionDone';
 import { Loading, NotInvited, SettingUp } from './pages/StatusScreens';
 import { useEffect } from 'react';
 import { applyWaitingUpdate } from './lib/pwa';
+import { prewarmConversation } from './lib/session';
 
 export function App() {
   return (
@@ -52,6 +53,13 @@ function SignedInApp() {
   const { pathname } = useLocation();
   const inSession = /^\/session\/[^/]+$/.test(pathname);
   useEffect(applyWaitingUpdate, [pathname]);
+  // Wake the conversation servers on open and whenever the app comes back to the foreground.
+  useEffect(() => {
+    prewarmConversation();
+    const onVisible = () => document.visibilityState === 'visible' && prewarmConversation();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
   return (
     <>
       <main>

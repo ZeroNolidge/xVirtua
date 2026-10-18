@@ -23,13 +23,25 @@ export const sessionApi = {
   ),
 };
 
-const warmStart = httpsCallable<{ warmup: true }, unknown>(functions, 'startSession');
-const warmStt = httpsCallable<{ warmup: true }, unknown>(functions, 'getSttToken');
+const WARM_FUNCTIONS = ['startSession', 'getSttToken', 'patientTurn'] as const;
+let lastWarm = 0;
 
-/** Wakes up the conversation-start functions while the resident reads the briefing. */
+/**
+ * Wakes the conversation servers (they scale to zero when idle) so the first
+ * reply has no cold start. Sent on app open, briefing open and app resume;
+ * throttled to once every 2 minutes.
+ */
 export function prewarmConversation() {
-  void warmStart({ warmup: true }).catch(() => undefined);
-  void warmStt({ warmup: true }).catch(() => undefined);
+  if (Date.now() - lastWarm < 120_000) return;
+  lastWarm = Date.now();
+  for (const name of WARM_FUNCTIONS) {
+    void httpsCallable(functions, name)({ warmup: true }).catch(() => undefined);
+  }
+  void fetch(ttsUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ warmup: true }),
+  }).catch(() => undefined);
 }
 
 function ttsUrl(): string {

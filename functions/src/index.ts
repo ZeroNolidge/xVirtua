@@ -39,6 +39,9 @@ export const health = onRequest((_req, res) => {
   res.json({ ok: true, rubricVersion: RUBRIC_VERSION, consentVersion: CONSENT_VERSION });
 });
 
+/** A `{ warmup: true }` call just starts the container (sent when the app opens). */
+const isWarmup = (data: unknown) => typeof data === 'object' && data !== null && 'warmup' in data;
+
 // ----- accounts -----
 export const createInvite = onCall((req) =>
   invites.createInvite(db(), auth(), callerOf(req), req.data),
@@ -53,9 +56,6 @@ export const setScenarioStatus = onCall((req) =>
 );
 
 // ----- live conversation -----
-/** A `{ warmup: true }` call just starts the container (sent when a briefing opens). */
-const isWarmup = (data: unknown) => typeof data === 'object' && data !== null && 'warmup' in data;
-
 export const startSession = onCall((req) =>
   isWarmup(req.data) ? { warm: true } : session.startSession(db(), callerOf(req), req.data),
 );
@@ -65,9 +65,10 @@ let brain: PatientBrain | null = null;
 const useFakeBrain = () =>
   process.env.FUNCTIONS_EMULATOR === 'true' && !process.env.ANTHROPIC_API_KEY;
 export const patientTurn = onCall(
-  // minInstances 1: kept warm so the first reply in a conversation has no cold start.
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: '512MiB', minInstances: 1 },
+  // Scales to zero when idle; the app sends a warm-up call when it opens.
+  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: '512MiB' },
   (req) => {
+    if (isWarmup(req.data)) return { warm: true };
     brain ??= useFakeBrain() ? new FakeBrain() : new ClaudeBrain(ANTHROPIC_API_KEY.value());
     return session.patientTurn(db(), callerOf(req), req.data, brain);
   },
