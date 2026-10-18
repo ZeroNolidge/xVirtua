@@ -63,6 +63,27 @@ export const initialCueState = (): CueState => ({
   patientReplies: 0,
 });
 
+const STOP = new Set(
+  'that this have will with from just like what when your they them then than about there their been were really going want dont'.split(
+    ' ',
+  ),
+);
+const keyWords = (t: string) => tokenize(t).filter((w) => w.length > 3 && !STOP.has(w));
+
+/**
+ * True if the patient has already said what this cue would say (most of the
+ * line's key words appear in one earlier patient reply), e.g. the patient
+ * brought up their dad's stroke on their own before the trigger word came up.
+ */
+export function cueAlreadyCovered(cue: CueScriptEntry, patientSaid: string[]): boolean {
+  const want = [...new Set(keyWords(cue.performance.say))];
+  if (want.length < 2) return false;
+  return patientSaid.some((said) => {
+    const have = new Set(keyWords(said));
+    return want.filter((w) => have.has(w)).length / want.length >= 0.6;
+  });
+}
+
 export interface CueDecision {
   cue: CueScriptEntry | null;
   next: CueState;
@@ -80,6 +101,8 @@ export function decideCue(
   state: CueState,
   residentText: string,
   matcher: JargonMatcher,
+  /** The patient's earlier replies, so a cue never repeats what they already said. */
+  patientSaid: string[] = [],
 ): CueDecision {
   const words = wordCount(residentText);
   const jargonCount = matcher.find(residentText).filter((h) => !h.explained).length;
@@ -88,8 +111,9 @@ export function decideCue(
   const replyNumber = state.patientReplies + 1;
 
   let cue: CueScriptEntry | null = null;
+  const fired = { ...state.fired };
   for (const c of script) {
-    if ((state.fired[c.id] ?? 0) >= c.maxFires) continue;
+    if ((fired[c.id] ?? 0) >= c.maxFires) continue;
     const t = c.trigger;
     const hit =
       (t.type === 'resident_turn_words_gt' && words > t.value) ||
@@ -97,13 +121,16 @@ export function decideCue(
       (t.type === 'turn_index' && replyNumber >= t.value) ||
       (t.type === 'topic_mentioned' && t.topics.some((topic) => mentions(residentText, topic))) ||
       (t.type === 'no_understanding_check_for_turns' && turnsWithoutCheck >= t.value);
-    if (hit) {
-      cue = c;
-      break;
+    if (!hit) continue;
+    if (cueAlreadyCovered(c, patientSaid)) {
+      // Already said it unprompted: count it as used and don't repeat it.
+      fired[c.id] = c.maxFires;
+      continue;
     }
+    cue = c;
+    break;
   }
 
-  const fired = { ...state.fired };
   if (cue) fired[cue.id] = (fired[cue.id] ?? 0) + 1;
   return {
     cue,

@@ -221,6 +221,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
   // A typed reply sent while the patient is still answering waits here.
   const [queued, setQueued] = useState<string | null>(null);
   const queuedRef = useRef<string | null>(null);
+  const queuedSourceRef = useRef<'voice' | 'typed'>('typed');
   const sendTurnRef = useRef<((text: string, source: 'voice' | 'typed') => Promise<void>) | null>(
     null,
   );
@@ -237,7 +238,9 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
       setQueued(null);
       // The resident had already answered, so there was no pause on their side.
       timing.current.typingStartAt = timing.current.patientDoneAt;
-      window.setTimeout(() => void sendTurnRef.current?.(next, 'typed'), 0);
+      const source = queuedSourceRef.current;
+      queuedSourceRef.current = 'typed';
+      window.setTimeout(() => void sendTurnRef.current?.(next, source), 0);
     }
   }, [setPhase]);
 
@@ -269,8 +272,9 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
       if (!text.trim() || phaseRef.current === 'ending' || !r) return;
       addBubble({ key: `r${Date.now()}`, who: 'resident', text });
       setPartial('');
+      // Keep listening while the patient thinks: anything said now is held and
+      // sent when they finish. The mic mutes only once the patient's voice plays.
       setPhase('thinking');
-      stt.current?.setMuted(true);
 
       const tm = timing.current;
       const now = performance.now();
@@ -295,6 +299,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
       const p = new ReplyPlayer(r, (sentence) => {
         if (!shown) {
           shown = true;
+          stt.current?.setMuted(true);
           setPhase('patient');
           addBubble({ key, who: 'patient', text: sentence, nonverbal: meta?.nonverbal });
         } else {
@@ -378,11 +383,19 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     p.text = [];
     p.tStart = null;
     setPartial('');
-    if (text) void sendTurn(text, 'voice', tStart);
+    if (!text) return;
+    if (phaseRef.current === 'listening') return void sendTurn(text, 'voice', tStart);
+    // The patient is still answering: hold it and send it when they finish.
+    const combined = queuedRef.current ? `${queuedRef.current} ${text}` : text;
+    queuedRef.current = combined;
+    queuedSourceRef.current = 'voice';
+    setQueued(combined);
   }, [sendTurn, cancelAutoSend]);
 
   const scheduleFlush = useCallback(() => {
     cancelAutoSend();
+    // Spoken while the patient thinks: hold it right away (sent when they finish).
+    if (phaseRef.current !== 'listening') return flushVoice();
     if (sendModeRef.current === 'tap') return;
     const ms = endOfTurnDelayMs(pending.current.text.join(' '));
     setAutoSend({ ms, key: Date.now() });
@@ -496,6 +509,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     // Still answering: keep it and send it the moment the patient finishes.
     const combined = queuedRef.current ? `${queuedRef.current} ${text}` : text;
     queuedRef.current = combined;
+    queuedSourceRef.current = 'typed';
     setQueued(combined);
   }
 

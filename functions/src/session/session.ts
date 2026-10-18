@@ -287,7 +287,13 @@ export async function patientTurn(
     const turns = turnsSnap.docs.map((d) => d.data());
     const prevPatient = [...turns].reverse().find((t) => t.speaker === 'patient');
 
-    const decision = decideCue(sc.script.cueScript, s.cueState, input.text, matcher);
+    const decision = decideCue(
+      sc.script.cueScript,
+      s.cueState,
+      input.text,
+      matcher,
+      turns.filter((t) => t.speaker === 'patient').map((t) => String(t.text ?? '')),
+    );
     const message = buildResidentMessage(input.text, decision.cue);
 
     // Streaming: send each finished sentence (and its voice) while Claude writes the rest.

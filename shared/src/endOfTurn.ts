@@ -9,6 +9,8 @@ export const END_OF_TURN_MS = {
   done: 2200,
   /** A question to the patient: they'd expect an answer. */
   question: 1500,
+  /** A short finished remark ("That's understandable.") is often a lead-in. */
+  shortDone: 3500,
   /** Trails off: "…and", "um", a comma. */
   unfinished: 4500,
 };
@@ -25,5 +27,5 @@ export function endOfTurnDelayMs(text: string): number {
   if (/\?["'”’)]*$/.test(t)) return END_OF_TURN_MS.question;
   // No end punctuation at all usually means the speaker stopped mid-sentence.
   if (!/[.!?]["'”’)]*$/.test(t)) return END_OF_TURN_MS.unfinished;
-  return END_OF_TURN_MS.done;
+  return bare.split(/\s+/).length < 8 ? END_OF_TURN_MS.shortDone : END_OF_TURN_MS.done;
 }

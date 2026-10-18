@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { decideCue, detectUnderstandingCheck, initialCueState, type CueState } from './cues.js';
+import {
+  cueAlreadyCovered,
+  decideCue,
+  detectUnderstandingCheck,
+  initialCueState,
+  type CueState,
+} from './cues.js';
 import { createJargonMatcher, SEED_JARGON } from './jargon.js';
 import type { CueScriptEntry } from './model.js';
 
@@ -98,5 +104,45 @@ describe('decideCue', () => {
   it('reports turn facts', () => {
     const r = decideCue([], initialCueState(), 'Your hypertension is high. Any questions?', m);
     expect(r.turnFacts).toEqual({ words: 6, jargonCount: 1, understandingCheck: 'weak' });
+  });
+});
+
+describe('cues never repeat what the patient already said', () => {
+  const stroke: CueScriptEntry = {
+    id: 'dad-stroke',
+    cue: 'Mentions his father’s stroke',
+    trigger: { type: 'topic_mentioned', topics: ['stroke'] },
+    maxFires: 1,
+    performance: {
+      say: 'My dad had a stroke. He was never the same after.',
+      delivery: {},
+      nonverbal: [],
+    },
+    expectedResidentResponse: '',
+  };
+  const m = createJargonMatcher(SEED_JARGON);
+  it('skips a cue whose line the patient already said on their own', () => {
+    const said = [
+      'My dad had a stroke around my age and it was bad.',
+      'He was never really the same after it.',
+    ];
+    const d = decideCue(
+      [stroke],
+      initialCueState(),
+      'Treating it lowers your risk of a stroke.',
+      m,
+      said,
+    );
+    expect(d.cue).toBeNull();
+    expect(d.next.fired['dad-stroke']).toBe(1);
+    expect(
+      cueAlreadyCovered(stroke, ['He was never really the same after it. My dad had a stroke.']),
+    ).toBe(true);
+  });
+  it('still fires when the patient has not said it', () => {
+    const d = decideCue([stroke], initialCueState(), 'This lowers your stroke risk.', m, [
+      'Four months. Okay.',
+    ]);
+    expect(d.cue?.id).toBe('dad-stroke');
   });
 });

@@ -15,7 +15,11 @@ describe('end of turn', () => {
     }
   });
   it('sends sooner after a finished sentence, soonest after a question', () => {
-    expect(endOfTurnDelayMs('We will check it again next month.')).toBe(END_OF_TURN_MS.done);
+    expect(endOfTurnDelayMs('We will check your blood pressure again next month.')).toBe(
+      END_OF_TURN_MS.done,
+    );
+    // A short lead-in like this is often followed by more.
+    expect(endOfTurnDelayMs("That's definitely understandable.")).toBe(END_OF_TURN_MS.shortDone);
     expect(endOfTurnDelayMs('Can you tell me in your own words what we will do?')).toBe(
       END_OF_TURN_MS.question,
     );
