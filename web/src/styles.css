@@ -786,3 +786,35 @@ p {
 .queued-note {
   margin: 3px 6px 0 0;
 }
+.send-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.send-row > .muted {
+  flex: 1;
+}
+.send-countdown {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.send-countdown span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--primary);
+  transform-origin: left;
+  animation: countdown linear forwards;
+}
+@keyframes countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

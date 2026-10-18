@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, getDoc, getDocs, orderBy, query } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
-import type { NonverbalCue, PatientChunk } from '@plainspeak/shared';
+import { endOfTurnDelayMs, type NonverbalCue, type PatientChunk } from '@plainspeak/shared';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
+import { safeStorage } from '../lib/storage';
 import {
   audioFromChunk,
   fetchPatientAudio,
@@ -35,8 +36,9 @@ interface StartState {
   persona: Persona;
 }
 
-/** Wait this long after the resident stops talking before sending their turn. */
-const SEND_AFTER_SILENCE_MS = 1400;
+/** Remembered per phone: send after a pause (default) or only when tapped. */
+const SEND_MODE_KEY = 'plainspeak.sendMode';
+type SendMode = 'pause' | 'tap';
 
 type Resume =
   | { state: 'loading' }
@@ -346,23 +348,46 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     [sessionId, setPhase, startListening],
   );
 
-  // Voice turns: collect transcript pieces and send after a short silence.
-  const flushVoice = useCallback(() => {
+  // Voice turns: collect transcript pieces and send after a pause. The pause
+  // is longer when the words sound unfinished ("so the plan is, um…").
+  const [sendMode, setSendModeState] = useState<SendMode>(() =>
+    safeStorage.get(SEND_MODE_KEY) === 'tap' ? 'tap' : 'pause',
+  );
+  const sendModeRef = useRef(sendMode);
+  const setSendMode = (m: SendMode) => {
+    sendModeRef.current = m;
+    setSendModeState(m);
+    safeStorage.set(SEND_MODE_KEY, m);
+    if (m === 'tap') cancelAutoSend();
+  };
+  /** The countdown shown while waiting to auto-send (key restarts the animation). */
+  const [autoSend, setAutoSend] = useState<{ ms: number; key: number } | null>(null);
+
+  const cancelAutoSend = useCallback(() => {
     const p = pending.current;
     if (p.timer) window.clearTimeout(p.timer);
     p.timer = null;
+    setAutoSend(null);
+  }, [setAutoSend]);
+
+  const flushVoice = useCallback(() => {
+    cancelAutoSend();
+    const p = pending.current;
     const text = p.text.join(' ').trim();
     const tStart = p.tStart ?? undefined;
     p.text = [];
     p.tStart = null;
+    setPartial('');
     if (text) void sendTurn(text, 'voice', tStart);
-  }, [sendTurn]);
+  }, [sendTurn, cancelAutoSend]);
 
   const scheduleFlush = useCallback(() => {
-    const p = pending.current;
-    if (p.timer) window.clearTimeout(p.timer);
-    p.timer = window.setTimeout(flushVoice, SEND_AFTER_SILENCE_MS);
-  }, [flushVoice]);
+    cancelAutoSend();
+    if (sendModeRef.current === 'tap') return;
+    const ms = endOfTurnDelayMs(pending.current.text.join(' '));
+    setAutoSend({ ms, key: Date.now() });
+    pending.current.timer = window.setTimeout(flushVoice, ms);
+  }, [flushVoice, cancelAutoSend, setAutoSend]);
 
   async function begin() {
     setPhase('connecting');
@@ -387,9 +412,9 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
         const { data } = await sessionApi.sttToken({ sessionId });
         stt.current = new OpenAIRealtimeStt({
           onSpeechStart: () => {
+            // Still talking: never send in the middle of a thought.
+            cancelAutoSend();
             const p = pending.current;
-            if (p.timer) window.clearTimeout(p.timer);
-            p.timer = null;
             p.tStart ??= Math.round(performance.now() - t0.current);
           },
           onPartial: (t) => setPartial([...pending.current.text, t].join(' ')),
@@ -562,6 +587,29 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
               </button>
             </form>
           )}
+          {!typed && phase === 'listening' && partial && (
+            <div className="send-row">
+              {autoSend ? (
+                <>
+                  <div className="send-countdown" aria-hidden="true">
+                    <span key={autoSend.key} style={{ animationDuration: `${autoSend.ms}ms` }} />
+                  </div>
+                  <button className="btn btn-secondary btn-inline" onClick={cancelAutoSend}>
+                    I’m not done
+                  </button>
+                </>
+              ) : (
+                <span className="muted small">
+                  {sendMode === 'tap'
+                    ? 'Tap send when you’re done.'
+                    : 'Paused. Keep talking, or send.'}
+                </span>
+              )}
+              <button className="btn btn-inline" onClick={flushVoice}>
+                {autoSend ? 'Send now' : 'Send'}
+              </button>
+            </div>
+          )}
           <div className="session-buttons">
             <button className="btn btn-secondary btn-inline" onClick={() => setLookupOpen(true)}>
               Plain words
@@ -576,9 +624,13 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
                 Type instead
               </button>
             )}
-            {!typed && phase === 'listening' && partial && (
-              <button className="btn btn-text btn-inline" onClick={flushVoice}>
-                Send now
+            {!typed && (
+              <button
+                className="btn btn-text btn-inline"
+                aria-pressed={sendMode === 'tap'}
+                onClick={() => setSendMode(sendMode === 'tap' ? 'pause' : 'tap')}
+              >
+                {sendMode === 'tap' ? 'Send: when I tap' : 'Send: when I pause'}
               </button>
             )}
             <button className="btn btn-inline end" onClick={() => void finish()}>
