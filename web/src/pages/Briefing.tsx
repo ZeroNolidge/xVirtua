@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { CueTrigger, PatientModel, ScenarioScript, ScenarioStatus } from '@plainspeak/shared';
 import { useAuth } from '../lib/auth';
@@ -6,7 +6,7 @@ import { useScenario, type ScenarioRow } from '../lib/scenarios';
 import { api, friendlyError } from '../lib/api';
 import { Difficulty } from '../components/Difficulty';
 import { Loading } from './StatusScreens';
-import { sessionApi } from '../lib/session';
+import { prewarmConversation, sessionApi } from '../lib/session';
 import { MODEL_LABELS } from '../lib/models';
 
 export function Briefing() {
@@ -15,6 +15,7 @@ export function Briefing() {
   const isFaculty = claims?.role === 'faculty';
   const { detail, status } = useScenario(id, isFaculty);
   const nav = useNavigate();
+  useEffect(prewarmConversation, []);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [model, setModel] = useState<PatientModel | ''>('');

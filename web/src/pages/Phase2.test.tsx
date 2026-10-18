@@ -12,6 +12,7 @@ vi.mock('firebase/firestore', () => ({
   getDocs: vi.fn(() => new Promise(() => {})),
 }));
 vi.mock('../lib/api', () => ({ api: { setScenarioStatus: vi.fn() }, friendlyError: () => 'x' }));
+vi.mock('../lib/session', () => ({ sessionApi: {}, prewarmConversation: vi.fn() }));
 vi.mock('../lib/auth', () => ({
   useAuth: () => ({
     claims: { role: role.current, programId: 'irmc' },

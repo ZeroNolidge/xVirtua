@@ -53,14 +53,20 @@ export const setScenarioStatus = onCall((req) =>
 );
 
 // ----- live conversation -----
-export const startSession = onCall((req) => session.startSession(db(), callerOf(req), req.data));
+/** A `{ warmup: true }` call just starts the container (sent when a briefing opens). */
+const isWarmup = (data: unknown) => typeof data === 'object' && data !== null && 'warmup' in data;
+
+export const startSession = onCall((req) =>
+  isWarmup(req.data) ? { warm: true } : session.startSession(db(), callerOf(req), req.data),
+);
 
 let brain: PatientBrain | null = null;
 // In the local emulator without an Anthropic key, use the offline fake patient.
 const useFakeBrain = () =>
   process.env.FUNCTIONS_EMULATOR === 'true' && !process.env.ANTHROPIC_API_KEY;
 export const patientTurn = onCall(
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: '512MiB', minInstances: 0 },
+  // minInstances 1: kept warm so the first reply in a conversation has no cold start.
+  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: '512MiB', minInstances: 1 },
   (req) => {
     brain ??= useFakeBrain() ? new FakeBrain() : new ClaudeBrain(ANTHROPIC_API_KEY.value());
     return session.patientTurn(db(), callerOf(req), req.data, brain);
@@ -75,7 +81,9 @@ export const endSession = onCall((req) =>
 );
 
 export const getSttToken = onCall({ secrets: [OPENAI_API_KEY] }, (req) =>
-  mintSttToken(db(), callerOf(req), req.data, OPENAI_API_KEY.value()),
+  isWarmup(req.data)
+    ? { warm: true }
+    : mintSttToken(db(), callerOf(req), req.data, OPENAI_API_KEY.value()),
 );
 
 export const tts = onRequest(

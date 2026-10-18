@@ -23,6 +23,15 @@ export const sessionApi = {
   ),
 };
 
+const warmStart = httpsCallable<{ warmup: true }, unknown>(functions, 'startSession');
+const warmStt = httpsCallable<{ warmup: true }, unknown>(functions, 'getSttToken');
+
+/** Wakes up the conversation-start functions while the resident reads the briefing. */
+export function prewarmConversation() {
+  void warmStart({ warmup: true }).catch(() => undefined);
+  void warmStt({ warmup: true }).catch(() => undefined);
+}
+
 function ttsUrl(): string {
   const project = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'demo-plainspeak';
   return usingEmulators
