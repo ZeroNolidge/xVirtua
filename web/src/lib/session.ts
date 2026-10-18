@@ -1,47 +1,98 @@
 import { httpsCallable } from 'firebase/functions';
-import type { PatientModel, PatientUtterance } from '@plainspeak/shared';
-import { auth, functions, usingEmulators } from './firebase';
+import type { PatientChunk, PatientModel, PatientUtterance, ScoreDoc } from '@plainspeak/shared';
+import { appCheckHeaders, auth, functions, usingEmulators } from './firebase';
 
 export type Utterance = PatientUtterance & { idx: number };
+
+export interface TurnInput {
+  sessionId: string;
+  text: string;
+  source: 'voice' | 'typed';
+  tStartMs?: number;
+  tEndMs?: number;
+  /** Resident's own response time, counted from when the patient finished speaking. */
+  responseGapMs?: number;
+  /** How long the app made the resident wait for the previous patient reply. */
+  prevAppWaitMs?: number;
+}
+export interface TurnResult {
+  patient: Utterance;
+  latencyMs: number;
+  /** True when every sentence's voice arrived in the stream. */
+  voiced?: boolean;
+}
+
+const patientTurn = httpsCallable<TurnInput, TurnResult, PatientChunk>(functions, 'patientTurn', {
+  timeout: 70_000,
+});
 
 export const sessionApi = {
   start: httpsCallable<
     { scenarioId: string; model?: PatientModel },
-    { sessionId: string; opening: Utterance; persona: { name: string; age: number; pronouns: string }; patientModel: PatientModel }
+    {
+      sessionId: string;
+      opening: Utterance;
+      persona: { name: string; age: number; pronouns: string };
+      patientModel: PatientModel;
+    }
   >(functions, 'startSession'),
-  turn: httpsCallable<
-    { sessionId: string; text: string; source: 'voice' | 'typed'; tStartMs?: number; tEndMs?: number },
-    { patient: Utterance; latencyMs: number }
-  >(functions, 'patientTurn'),
-  end: httpsCallable<{ sessionId: string; audioExt?: string }, { sessionId: string; status: 'ended' }>(
-    functions,
-    'endSession',
-  ),
-  sttToken: httpsCallable<{ sessionId: string }, { value: string; expiresAt: number | null; model: string }>(
-    functions,
-    'getSttToken',
-  ),
+  end: httpsCallable<
+    { sessionId: string; audioExt?: string; appWaitSec?: number },
+    { sessionId: string; status: 'ended' }
+  >(functions, 'endSession'),
+  sttToken: httpsCallable<
+    { sessionId: string },
+    { value: string; expiresAt: number | null; model: string }
+  >(functions, 'getSttToken'),
+  score: httpsCallable<
+    { sessionId: string; rescore?: boolean },
+    { score: ScoreDoc | null; cached: boolean; reason?: 'no-turns' }
+  >(functions, 'scoreSession', { timeout: 300_000 }),
 };
+
+/**
+ * Sends the resident's turn and streams the reply: `onChunk` gets the
+ * patient's first sentence (and its voice) while the rest is still being
+ * written.
+ */
+export async function streamTurn(
+  input: TurnInput,
+  onChunk: (c: PatientChunk) => void,
+): Promise<TurnResult> {
+  const { stream, data } = await patientTurn.stream(input);
+  // Read chunks in the background; the final result arrives on `data`.
+  const reading = (async () => {
+    try {
+      for await (const c of stream) onChunk(c);
+    } catch {
+      // The final result (or its error) comes from `data`.
+    }
+  })();
+  const result = await data;
+  await reading;
+  return result;
+}
 
 const WARM_FUNCTIONS = ['startSession', 'getSttToken', 'patientTurn'] as const;
 let lastWarm = 0;
 
 /**
  * Wakes the conversation servers (they scale to zero when idle) so the first
- * reply has no cold start. Sent on app open, briefing open and app resume;
- * throttled to once every 2 minutes.
+ * reply has no cold start. Sent on app open, briefing open and app resume,
+ * only when signed in; throttled to once every 2 minutes. The servers answer
+ * these before calling any paid service.
  */
 export function prewarmConversation() {
-  if (Date.now() - lastWarm < 120_000) return;
+  if (!auth.currentUser || Date.now() - lastWarm < 120_000) return;
   lastWarm = Date.now();
   for (const name of WARM_FUNCTIONS) {
     void httpsCallable(functions, name)({ warmup: true }).catch(() => undefined);
   }
-  void fetch(ttsUrl(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ warmup: true }),
-  }).catch(() => undefined);
+  void voiceHeaders()
+    .then((headers) =>
+      fetch(ttsUrl(), { method: 'POST', headers, body: JSON.stringify({ warmup: true }) }),
+    )
+    .catch(() => undefined);
 }
 
 function ttsUrl(): string {
@@ -51,17 +102,34 @@ function ttsUrl(): string {
     : `https://us-east1-${project}.cloudfunctions.net/tts`;
 }
 
-/** Fetches the patient's voice for a stored turn. Returns null if TTS is unavailable. */
-export async function fetchPatientAudio(sessionId: string, turnIdx: number): Promise<ReadableStream<Uint8Array> | null> {
+/** Sign-in and App Check headers for the voice endpoint. */
+async function voiceHeaders(): Promise<Record<string, string>> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in');
+  const [token, check] = await Promise.all([user.getIdToken(), appCheckHeaders()]);
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...check };
+}
+
+/** Fetches the patient's voice for a stored turn. Returns null if voice is unavailable. */
+export async function fetchPatientAudio(sessionId: string, turnIdx: number): Promise<Blob | null> {
   try {
-    const token = await auth.currentUser?.getIdToken();
     const res = await fetch(ttsUrl(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: await voiceHeaders(),
       body: JSON.stringify({ sessionId, turnIdx }),
     });
-    return res.ok && res.body ? res.body : null;
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return blob.size ? blob : null;
   } catch {
     return null;
   }
+}
+
+/** Decodes a base64 audio chunk from the stream. */
+export function audioFromChunk(b64: string, mime: string): Blob {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }

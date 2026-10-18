@@ -23,6 +23,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   override render() {
     const { error } = this.state;
     if (!error) return this.props.children;
+    // Mid-conversation: everything said so far is saved, so offer to continue.
+    const inSession = /^\/session\/[^/]+/.exec(window.location.pathname)?.[0];
     return (
       <div className="app">
         <section>
@@ -31,7 +33,15 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
             <p>Sorry, the app hit an error. Your conversation so far is saved.</p>
             <pre className="error-detail">{`${error.name}: ${error.message}\n${(error.stack ?? '').split('\n').slice(1, 6).join('\n')}`}</pre>
             <p className="muted small">A screenshot of this box helps us fix it.</p>
-            <button className="btn" onClick={() => (window.location.href = '/')}>
+            {inSession && (
+              <button className="btn" onClick={() => (window.location.href = inSession)}>
+                Pick up where you left off
+              </button>
+            )}
+            <button
+              className={inSession ? 'btn btn-secondary' : 'btn'}
+              onClick={() => (window.location.href = '/')}
+            >
               Back to start
             </button>
           </div>

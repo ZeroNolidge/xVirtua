@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CONSENT_VERSION } from '@plainspeak/shared';
+import { CONSENT_VERSION, RETENTION_NOTICE } from '@plainspeak/shared';
 import { api, friendlyError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
@@ -47,7 +47,7 @@ export function Consent() {
             summaries of your progress to Clinical Competency Committee (CCC) reviews.
           </li>
           <li>
-            <strong>How long:</strong> audio and transcripts are kept for 3 years, then deleted.
+            <strong>How long:</strong> {RETENTION_NOTICE}
           </li>
           <li>
             <strong>AI services:</strong> to run the conversation and scoring, your audio or

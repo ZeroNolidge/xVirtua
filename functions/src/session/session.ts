@@ -5,16 +5,28 @@ import {
   CONSENT_VERSION,
   createJargonMatcher,
   decideCue,
+  DEFAULT_TRANSCRIPT_RETENTION_MONTHS,
+  EMOTIONS,
   initialCueState,
+  NONVERBAL_CUES,
   SEED_JARGON,
+  SentenceSplitter,
+  SESSION_LIMITS,
+  stripStageDirections,
+  type CueScriptEntry,
   type CueState,
+  type Delivery,
+  type NonverbalCue,
+  type PatientChunk,
   type PatientModel,
   type PatientUtterance,
 } from '@plainspeak/shared';
 import type { Caller } from '../lib/callable.js';
 import { parse } from '../lib/callable.js';
 import { LIMITS } from '../config.js';
-import type { PatientBrain } from '../patient/brain.js';
+import { consumeQuota } from '../lib/quota.js';
+import { SentenceVoicer, type VoiceService } from '../voice/streamVoice.js';
+import type { OnText, PatientBrain } from '../patient/brain.js';
 import { buildPatientSystemPrompt, buildResidentMessage } from '../patient/prompt.js';
 import { loadScenario } from './scenario.js';
 
@@ -31,7 +43,11 @@ export interface SessionDoc {
   cueState: CueState;
   turnCount: number;
   pending: boolean;
+  pendingAt?: Timestamp;
   startedAt: Timestamp;
+  lastActivityAt?: Timestamp;
+  persona?: { name: string; age: number; pronouns: string };
+  voiceId?: string;
   endedAt?: Timestamp;
   durationSec?: number;
   audioPath?: string | null;
@@ -66,6 +82,7 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
   const me = requireMember(caller);
   const { scenarioId, model } = parse(startInput, data);
 
+  await consumeQuota(db, me.uid, 'sessions');
   const user = await db.doc(`users/${me.uid}`).get();
   if (user.get('consent.version') !== CONSENT_VERSION) {
     throw new HttpsError('failed-precondition', 'Please accept the consent form first.');
@@ -80,6 +97,11 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
   const program = await db.doc(`programs/${me.programId}`).get();
   const programModel =
     (program.get('patientModel') as PatientModel | undefined) ?? 'claude-opus-5-5';
+  const keepMonths =
+    (program.get('transcriptRetentionMonths') as number | undefined) ??
+    DEFAULT_TRANSCRIPT_RETENTION_MONTHS;
+  const deleteAfter = new Date();
+  deleteAfter.setMonth(deleteAfter.getMonth() + keepMonths);
   const patientModel = me.role === 'faculty' && model ? model : programModel;
 
   const ref = db.collection('sessions').doc();
@@ -97,6 +119,8 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
     scenarioId,
     scenarioVersion: sc.version,
     scenarioTitle: sc.briefing.title,
+    // Kept on the session so a crashed conversation can be picked up again.
+    persona: sc.briefing.persona,
     status: 'live',
     patientModel,
     cueState: initialCueState(),
@@ -105,6 +129,8 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
     startedAt: FieldValue.serverTimestamp(),
     lastActivityAt: FieldValue.serverTimestamp(),
     audioPath: null,
+    // Retention: deleted by the nightly job after this date (or at graduation).
+    deleteAfter: Timestamp.fromDate(deleteAfter),
   });
   batch.set(ref.collection('turns').doc('0'), {
     idx: 0,
@@ -124,46 +150,122 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
 
 // ---------- turn ----------
 
+const ms = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(24 * 3600 * 1000)
+  .nullish();
 const turnInput = z.object({
   sessionId: z.string().min(1).max(64),
   text: z.string().trim().min(1).max(LIMITS.maxTurnChars),
   source: z.enum(['voice', 'typed']).default('voice'),
   // Callable clients send missing values as null.
-  tStartMs: z.number().int().nonnegative().nullish(),
-  tEndMs: z.number().int().nonnegative().nullish(),
+  tStartMs: ms,
+  tEndMs: ms,
+  /**
+   * How long the resident took to start answering, counted from when the
+   * patient finished speaking. Time spent waiting on the app (the patient
+   * thinking, the voice loading) is not included.
+   */
+  responseGapMs: ms,
+  /** How long the app made the resident wait for the previous patient reply. */
+  prevAppWaitMs: ms,
 });
+
+/** Why a live session can no longer take turns, or null if it can. */
+export function closedReason(s: SessionDoc, now = Date.now()): string | null {
+  if (s.status !== 'live') return 'This conversation has ended.';
+  if (s.turnCount >= SESSION_LIMITS.maxResidentTurns * 2)
+    return 'This conversation has reached its limit. Please end it.';
+  if ((now - s.startedAt.toMillis()) / 60000 > SESSION_LIMITS.maxMinutes)
+    return 'This conversation timed out. Please end it.';
+  const last = (s.lastActivityAt ?? s.startedAt).toMillis();
+  if ((now - last) / 60000 > SESSION_LIMITS.idleMinutes)
+    return 'This conversation was idle too long. Please end it.';
+  return null;
+}
+
+/** A reply in progress is considered stuck (e.g. the app closed) after this long. */
+const STUCK_PENDING_MS = 90_000;
+
+export interface TurnOptions {
+  /** Streams reply pieces to the app. Omit when the app can't stream. */
+  send?: (chunk: PatientChunk) => Promise<unknown>;
+  voice?: VoiceService | null;
+}
+
+const NEUTRAL: Delivery = {
+  emotion: 'neutral',
+  volume: 'normal',
+  rate: 'normal',
+  pauseBeforeMs: 0,
+};
+
+/** Delivery and nonverbal cues for the voice, from the streamed prefix plus the scripted cue. */
+function streamedDelivery(
+  prefix: Record<string, unknown> | null,
+  cue: CueScriptEntry | null,
+): { delivery: Delivery; nonverbal: NonverbalCue[] } {
+  const d = (prefix?.delivery ?? {}) as Partial<Delivery>;
+  const base: Delivery = {
+    emotion: EMOTIONS.includes(d.emotion as never) ? d.emotion! : 'neutral',
+    volume: d.volume === 'quiet' ? 'quiet' : 'normal',
+    rate: d.rate === 'slow' ? 'slow' : 'normal',
+    pauseBeforeMs: Math.min(5000, Math.max(0, Number(d.pauseBeforeMs) || 0)),
+  };
+  const nv = Array.isArray(prefix?.nonverbal)
+    ? (prefix.nonverbal as unknown[]).filter((n): n is NonverbalCue =>
+        NONVERBAL_CUES.includes(n as NonverbalCue),
+      )
+    : [];
+  if (!cue) return { delivery: base, nonverbal: nv };
+  const c = cue.performance.delivery;
+  return {
+    delivery: {
+      ...NEUTRAL,
+      ...base,
+      ...Object.fromEntries(Object.entries(c).filter(([, v]) => v !== undefined)),
+    },
+    nonverbal: cue.performance.nonverbal.length ? [...cue.performance.nonverbal] : nv,
+  };
+}
 
 export async function patientTurn(
   db: Firestore,
   caller: Caller | null,
   data: unknown,
   brain: PatientBrain,
+  opts: TurnOptions = {},
 ) {
   const me = requireMember(caller);
   const input = parse(turnInput, data);
   const ref = db.doc(`sessions/${input.sessionId}`);
 
   // Reserve two turn slots (resident + patient) so concurrent calls can't collide.
-  const s = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const s = snap.data() as SessionDoc | undefined;
-    if (!s || s.uid !== me.uid) throw new HttpsError('not-found', 'Session not found.');
-    if (s.status !== 'live')
-      throw new HttpsError('failed-precondition', 'This conversation has ended.');
-    if (s.pending) throw new HttpsError('aborted', 'The patient is still answering.');
-    if (s.turnCount >= LIMITS.maxResidentTurns * 2) {
-      throw new HttpsError(
-        'resource-exhausted',
-        'This conversation has reached its limit. Please end it.',
-      );
-    }
-    const ageMin = (Date.now() - s.startedAt.toMillis()) / 60000;
-    if (ageMin > LIMITS.maxSessionMinutes) {
-      throw new HttpsError('deadline-exceeded', 'This conversation timed out. Please end it.');
-    }
-    tx.update(ref, { pending: true });
-    return s;
-  });
+  const [s] = await Promise.all([
+    db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const s = snap.data() as SessionDoc | undefined;
+      if (!s || s.uid !== me.uid) throw new HttpsError('not-found', 'Session not found.');
+      if (s.status !== 'live')
+        throw new HttpsError('failed-precondition', 'This conversation has ended.');
+      const stuck = s.pendingAt && Date.now() - s.pendingAt.toMillis() > STUCK_PENDING_MS;
+      if (s.pending && !stuck) throw new HttpsError('aborted', 'The patient is still answering.');
+      const closed = closedReason(s);
+      if (closed) {
+        throw new HttpsError(
+          s.turnCount >= SESSION_LIMITS.maxResidentTurns * 2
+            ? 'resource-exhausted'
+            : 'deadline-exceeded',
+          closed,
+        );
+      }
+      tx.update(ref, { pending: true, pendingAt: FieldValue.serverTimestamp() });
+      return s;
+    }),
+    consumeQuota(db, me.uid, 'patientTurns'),
+  ]);
 
   try {
     const sc = await loadScenario(db, s.scenarioId, s.scenarioVersion);
@@ -175,15 +277,81 @@ export async function patientTurn(
 
     const decision = decideCue(sc.script.cueScript, s.cueState, input.text, matcher);
     const message = buildResidentMessage(input.text, decision.cue);
-    const result = await brain.reply({
-      model: s.patientModel,
-      system: buildPatientSystemPrompt(sc.briefing, sc.script),
-      history: turns
-        .filter((t) => t.idx > 0)
-        .map((t) => ({ speaker: t.speaker, content: t.speaker === 'resident' ? t.prompt : t.raw })),
-      message,
-      cue: decision.cue,
-    });
+
+    // Streaming: send each finished sentence (and its voice) while Claude writes the rest.
+    let voicer: SentenceVoicer | null = null;
+    let voiceId: string | null = s.voiceId ?? null;
+    let onText: OnText | undefined;
+    let finishStream: ((finalText: string) => Promise<void>) | undefined;
+    if (opts.send) {
+      let voiceReady: Promise<string | null> | null = null;
+      if (opts.voice) {
+        const voice = opts.voice;
+        voiceReady = consumeQuota(db, me.uid, 'voice')
+          .then(async () => {
+            voiceId ??= await voice.voiceId(sc.briefing.persona.pronouns, s.scenarioId);
+            return voiceId;
+          })
+          .catch((e: unknown) => {
+            console.warn('voice unavailable', e instanceof Error ? e.message : e);
+            return null;
+          });
+      }
+      let delivery: Delivery = NEUTRAL;
+      const send = opts.send;
+      voicer = new SentenceVoicer(
+        send,
+        voiceReady
+          ? async (text) => {
+              const id = await voiceReady;
+              if (!id) throw new Error('no voice');
+              return opts.voice!.synthesize(id, text, delivery);
+            }
+          : null,
+      );
+      const splitter = new SentenceSplitter();
+      let started = false;
+      let streamed = '';
+      onText = (soFar: string, prefix: Record<string, unknown> | null) => {
+        streamed = soFar;
+        if (!started) {
+          started = true;
+          const meta = streamedDelivery(prefix, decision.cue);
+          delivery = meta.delivery;
+          void send({ t: 'meta', ...meta });
+        }
+        for (const sentence of splitter.take(soFar)) {
+          const clean = stripStageDirections(sentence);
+          if (clean) voicer!.add(clean);
+        }
+      };
+      finishStream = async (finalText: string) => {
+        // Speak whatever is left (everything, if nothing streamed).
+        for (const sentence of splitter.take(streamed || finalText, true)) {
+          const clean = stripStageDirections(sentence);
+          if (clean) voicer!.add(clean);
+        }
+        await voicer!.flush().catch(() => undefined);
+      };
+    }
+
+    const result = await brain.reply(
+      {
+        model: s.patientModel,
+        system: buildPatientSystemPrompt(sc.briefing, sc.script),
+        history: turns
+          .filter((t) => t.idx > 0)
+          .map((t) => ({
+            speaker: t.speaker,
+            content: t.speaker === 'resident' ? t.prompt : t.raw,
+          })),
+        message,
+        cue: decision.cue,
+      },
+      onText,
+    );
+    await finishStream?.(result.utterance.text);
+    const voiced = !!voicer && voicer.sentences > 0 && voicer.voiced === voicer.sentences;
 
     const rIdx = s.turnCount;
     const pIdx = rIdx + 1;
@@ -196,6 +364,7 @@ export async function patientTurn(
       source: input.source,
       tStartMs: input.tStartMs ?? null,
       tEndMs: input.tEndMs ?? null,
+      responseGapMs: input.responseGapMs ?? null,
       words: decision.turnFacts.words,
       jargonCount: decision.turnFacts.jargonCount,
       understandingCheck: decision.turnFacts.understandingCheck,
@@ -204,6 +373,12 @@ export async function patientTurn(
       afterPatientQuestion: prevPatient?.askedQuestion ?? false,
       createdAt: FieldValue.serverTimestamp(),
     });
+    // The wait the app caused before the previous patient reply, measured by the app.
+    if (prevPatient && prevPatient.idx > 0 && input.prevAppWaitMs != null) {
+      batch.update(ref.collection('turns').doc(String(prevPatient.idx)), {
+        appWaitMs: input.prevAppWaitMs,
+      });
+    }
     batch.set(ref.collection('turns').doc(String(pIdx)), {
       idx: pIdx,
       speaker: 'patient',
@@ -212,6 +387,7 @@ export async function patientTurn(
       model: result.model,
       latencyMs: result.latencyMs,
       usage: result.usage,
+      voicedInStream: voiced,
       createdAt: FieldValue.serverTimestamp(),
     });
     const mode = s.inputMode && s.inputMode !== input.source ? 'mixed' : input.source;
@@ -221,9 +397,10 @@ export async function patientTurn(
       pending: false,
       inputMode: mode,
       lastActivityAt: FieldValue.serverTimestamp(),
+      ...(voiceId && !s.voiceId ? { voiceId } : {}),
     });
     await batch.commit();
-    return { patient: { idx: pIdx, ...result.utterance }, latencyMs: result.latencyMs };
+    return { patient: { idx: pIdx, ...result.utterance }, latencyMs: result.latencyMs, voiced };
   } catch (e) {
     await ref.update({ pending: false }).catch(() => undefined);
     if (e instanceof HttpsError) throw e;
@@ -237,6 +414,13 @@ export async function patientTurn(
 const endInput = z.object({
   sessionId: z.string().min(1).max(64),
   audioExt: z.enum(['webm', 'm4a', 'mp4', 'ogg']).nullish(),
+  /** Seconds the resident spent waiting on the app; left out of practice time. */
+  appWaitSec: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(24 * 3600)
+    .nullish(),
 });
 
 export async function endSession(
@@ -246,7 +430,7 @@ export async function endSession(
   audioExists: (path: string) => Promise<boolean>,
 ) {
   const me = requireMember(caller);
-  const { sessionId, audioExt } = parse(endInput, data);
+  const { sessionId, audioExt, appWaitSec } = parse(endInput, data);
   const ref = db.doc(`sessions/${sessionId}`);
   const snap = await ref.get();
   const s = snap.data() as SessionDoc | undefined;
@@ -259,6 +443,7 @@ export async function endSession(
       status: 'ended',
       endedAt: FieldValue.serverTimestamp(),
       durationSec,
+      ...(appWaitSec != null ? { appWaitSec: Math.min(appWaitSec, durationSec) } : {}),
       pending: false,
     });
   }

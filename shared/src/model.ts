@@ -112,9 +112,60 @@ export interface Evidence {
   quote: string;
 }
 
+/** One coaching moment from the transcript. */
+export interface Moment {
+  metric: Metric;
+  turnIdx: number;
+  quote: string;
+  /** Why it worked, or what to change. */
+  note: string;
+  /** "Try saying this instead" line (fixes only). */
+  rewrite?: string;
+}
+
 export interface MetricScore {
   score: number;
-  evidence: Evidence[];
-  whatWentWell?: string;
-  tryThisInstead?: { original: string; rewrite: string };
+  /** One-line plain summary for the resident. */
+  summary: string;
+  evidence: (Evidence & { note: string })[];
+  tryThisInstead: { turnIdx: number; original: string; rewrite: string } | null;
+}
+
+export interface JargonMetricScore extends MetricScore {
+  flagged: { term: string; plain: string[]; uses: number; turns: number[] }[];
+  explained: { term: string; turnIdx: number }[];
+}
+
+export interface CueResult {
+  cueId: string;
+  cue: string;
+  patientTurnIdx: number;
+  residentTurnIdx: number | null;
+  addressed: boolean;
+  quote: string | null;
+}
+
+/** sessions/{id}/scores/{rubricVersion}. Written by the server only. */
+export interface ScoreDoc {
+  rubricVersion: string;
+  overall: number | null;
+  weights: ScoringWeights;
+  metrics: {
+    jargon: JargonMetricScore;
+    clarity: MetricScore;
+    empathy: MetricScore;
+    cue: MetricScore & {
+      cueResults: CueResult[];
+      steamrolls: { patientTurnIdx: number; residentTurnIdx: number }[];
+    };
+  };
+  /** The one moment that went well, shown first. */
+  highlight: Moment | null;
+  /** At most two things to work on. The first carries the rewrite. */
+  fixes: Moment[];
+  understandingCheck: 'teachback' | 'weak' | null;
+  needsReview: boolean;
+  model: string;
+  promptHash: string;
+  createdAt: string;
 }

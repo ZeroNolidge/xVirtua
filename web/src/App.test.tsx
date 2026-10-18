@@ -62,7 +62,9 @@ describe('auth gate', () => {
     renderAt();
     expect(screen.getByText(/your voice is recorded/i)).toBeInTheDocument();
     expect(screen.getByText(/clinical competency committee/i)).toBeInTheDocument();
-    expect(screen.getByText(/kept for 3 years/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/kept until you graduate \(up to 3 years\), then deleted/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /let’s go/i })).toBeDisabled();
   });
 
@@ -73,11 +75,11 @@ describe('auth gate', () => {
     expect(screen.getByText(/ready to practice/i)).toBeInTheDocument();
   });
 
-  it('shows the Faculty tab to faculty', () => {
+  it('shows the Faculty tab to faculty', async () => {
     state.status = 'ready';
     state.role = 'faculty';
     renderAt('/faculty');
     expect(screen.getByRole('link', { name: 'Faculty' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /invite people/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /invite people/i })).toBeInTheDocument();
   });
 });

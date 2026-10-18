@@ -3,6 +3,7 @@ import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 import { SEED_JARGON } from '@plainspeak/shared';
 import { parse, type Caller } from '../lib/callable.js';
+import { consumeQuota } from '../lib/quota.js';
 
 export const STT_MODEL = process.env.OPENAI_STT_MODEL ?? 'gpt-4o-transcribe';
 
@@ -42,13 +43,35 @@ export async function getSttToken(
   if (s.status !== 'live')
     throw new HttpsError('failed-precondition', 'This conversation has ended.');
 
+  await consumeQuota(db, caller.uid, 'sttTokens');
   const { value, expiresAt } = await mintClientSecret(apiKey);
+  assertEphemeral(value, apiKey);
   return { value, expiresAt, model: STT_MODEL };
+}
+
+/**
+ * The browser only uses the key to open its connection, right away, so it
+ * expires after a minute. The open connection keeps working after that.
+ */
+export const STT_KEY_TTL_SECONDS = 60;
+
+/**
+ * Never hand the browser anything but a short-lived OpenAI client secret
+ * ("ek_…"). Real API keys start with "sk-". Guards against a
+ * misconfiguration ever exposing the real key.
+ */
+export function assertEphemeral(value: string, apiKey: string) {
+  if (value.startsWith('sk-') || value === apiKey || apiKey.includes(value)) {
+    console.error('Refusing to return a non-ephemeral speech key');
+    throw new HttpsError('internal', 'Speech service misconfigured.');
+  }
 }
 
 export function clientSecretBody() {
   return {
-    expires_after: { anchor: 'created_at', seconds: 600 },
+    // Transcription-only session: this key can't be used for chat, audio
+    // generation or any other OpenAI API.
+    expires_after: { anchor: 'created_at', seconds: STT_KEY_TTL_SECONDS },
     session: {
       type: 'transcription',
       audio: {

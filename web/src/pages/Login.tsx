@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { sendSignInLinkToEmail } from 'firebase/auth';
 import { auth, usingEmulators } from '../lib/firebase';
 import { friendlyError } from '../lib/api';
 import { EMAIL_FOR_SIGN_IN, safeStorage } from '../lib/storage';
 import { signInLinkSettings } from '../lib/signInLink';
 
-export function Login() {
-  const [email, setEmail] = useState('');
+export function Login({ initialEmail = '' }: { initialEmail?: string }) {
+  const [email, setEmail] = useState(initialEmail);
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,10 +75,15 @@ export function Login() {
         <button className="btn" disabled={busy}>
           {busy ? 'Sending…' : 'Email me a sign-in link'}
         </button>
-        <p className="muted small">
+        <p className="muted small invite-note">
           PlainSpeak is invite-only. Ask your program director if you can’t get in.
         </p>
       </form>
+      <p className="center-text">
+        <Link to="/privacy" className="small muted">
+          Privacy
+        </Link>
+      </p>
     </section>
   );
 }

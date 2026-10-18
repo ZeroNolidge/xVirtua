@@ -4,11 +4,16 @@ import type { Request, Response } from 'express';
 import type { Delivery } from '@plainspeak/shared';
 import { pickVoice, synthesize } from './cartesia.js';
 import { loadScenario } from '../session/scenario.js';
+import { consumeQuota } from '../lib/quota.js';
+import { appCheckOk } from '../lib/appCheck.js';
 
 /**
  * POST { sessionId, turnIdx } with "Authorization: Bearer <Firebase ID token>".
  * Speaks a stored patient turn only, so the endpoint can't be used as a
  * general-purpose TTS proxy. Returns audio/mpeg.
+ *
+ * POST { warmup: true } (also signed in) just wakes the server: it returns 204
+ * before any paid call.
  */
 export async function handleTts(
   req: Request,
@@ -18,6 +23,7 @@ export async function handleTts(
   key: string,
 ) {
   if (req.method !== 'POST') return void res.status(405).end();
+  if (!(await appCheckOk(req))) return void res.status(401).json({ error: 'app-check' });
   const token = /^Bearer (.+)$/.exec(req.get('authorization') ?? '')?.[1];
   if (!token) return void res.status(401).json({ error: 'unauthenticated' });
   let uid: string;
@@ -30,7 +36,9 @@ export async function handleTts(
     return void res.status(401).json({ error: 'unauthenticated' });
   }
 
-  const { sessionId, turnIdx } = (req.body ?? {}) as { sessionId?: unknown; turnIdx?: unknown };
+  const body = (req.body ?? {}) as { sessionId?: unknown; turnIdx?: unknown; warmup?: unknown };
+  if (body.warmup === true) return void res.status(204).end();
+  const { sessionId, turnIdx } = body;
   if (
     typeof sessionId !== 'string' ||
     !/^[A-Za-z0-9]{1,64}$/.test(sessionId) ||
@@ -45,6 +53,11 @@ export async function handleTts(
   const turn = (await ref.collection('turns').doc(String(turnIdx)).get()).data();
   if (!turn || turn.speaker !== 'patient') return void res.status(404).json({ error: 'not-found' });
 
+  try {
+    await consumeQuota(db, uid, 'voice');
+  } catch {
+    return void res.status(429).json({ error: 'resource-exhausted' });
+  }
   try {
     let voiceId = s.voiceId as string | undefined;
     if (!voiceId) {

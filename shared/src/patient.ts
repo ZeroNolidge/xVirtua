@@ -41,6 +41,15 @@ export interface PatientUtterance {
   nonverbal: NonverbalCue[];
 }
 
+/**
+ * Pieces of a patient reply streamed to the app while Claude is still
+ * writing, so the voice can start on the first sentence.
+ */
+export type PatientChunk =
+  | { t: 'meta'; delivery: Delivery; nonverbal: NonverbalCue[] }
+  | { t: 'say'; seq: number; text: string }
+  | { t: 'audio'; seq: number; b64: string; mime: string };
+
 export interface RendererCapabilities {
   video: boolean;
   /** Nonverbal cues this renderer can actually show. Others fall back to captions. */

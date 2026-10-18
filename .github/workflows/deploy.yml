@@ -20,6 +20,11 @@ on:
         description: 'Optional: invite this email as the first faculty member'
         required: false
         default: ''
+      app_check:
+        description: 'App Check: enforce (block requests not from the app), monitor (tokens only), or off'
+        type: choice
+        options: [enforce, monitor, 'off']
+        default: enforce
 
 concurrency: deploy
 permissions:
@@ -66,10 +71,33 @@ jobs:
           npm run test:rules
           npm run test:functions
 
+      - name: Set up App Check
+        id: appcheck
+        if: ${{ inputs.app_check != 'off' }}
+        continue-on-error: true
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
+          bash scripts/setup-app-check.sh
+
+      - name: App Check status
+        if: ${{ inputs.app_check != 'off' && steps.appcheck.outcome != 'success' }}
+        run: |
+          echo "::warning::App Check could not be set up, so it stays off for this deploy. The deploy account needs the 'reCAPTCHA Enterprise Admin' and 'Firebase App Check Admin' roles (IAM → plainspeak-deployer)."
+
       - name: Build web app with this project's config
         run: |
           node scripts/write-web-env.mjs
           npm run build -w web
+
+      - name: Functions settings
+        # APP_CHECK_ENFORCE makes every function reject requests without a valid App Check token.
+        run: |
+          if [ "${{ inputs.app_check }}" = "enforce" ] && [ -n "${APPCHECK_SITE_KEY:-}" ]; then
+            echo "APP_CHECK_ENFORCE=true" > functions/.env
+          else
+            echo "APP_CHECK_ENFORCE=false" > functions/.env
+          fi
+          cat functions/.env
 
       - name: Prepare functions for Cloud Build
         # The shared package is bundled into functions/lib, so Cloud Build
@@ -114,6 +142,28 @@ jobs:
               --member=allUsers --role=roles/run.invoker --quiet >/dev/null
           done
 
+      - name: Enforce App Check on Firestore and Storage
+        if: ${{ inputs.app_check == 'enforce' && env.APPCHECK_SITE_KEY != '' && contains(inputs.only, 'hosting') }}
+        continue-on-error: true
+        run: |
+          TOKEN=$(gcloud auth print-access-token)
+          for SVC in firestore.googleapis.com firebasestorage.googleapis.com; do
+            curl -sSf -X PATCH \
+              "https://firebaseappcheck.googleapis.com/v1/projects/$PROJECT_ID/services/$SVC?updateMask=enforcementMode" \
+              -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT_ID" \
+              -H 'Content-Type: application/json' -d '{"enforcementMode":"ENFORCED"}' >/dev/null
+            echo "App Check enforced: $SVC"
+          done
+
+      - name: Audio storage lifecycle (cheaper tier at 90 days, delete at 3 years)
+        if: ${{ contains(inputs.only, 'storage') }}
+        continue-on-error: true
+        run: |
+          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
+          BUCKET=$(grep VITE_FIREBASE_STORAGE_BUCKET web/.env.production.local | cut -d= -f2)
+          gcloud storage buckets update "gs://$BUCKET" --lifecycle-file=storage-lifecycle.json --project "$PROJECT_ID"
+          gcloud storage buckets describe "gs://$BUCKET" --format='json(lifecycle_config)'
+
       - name: Seed content
         if: ${{ inputs.seed_content }}
         run: npx tsx scripts/seed-content.ts --prod
@@ -125,7 +175,9 @@ jobs:
         run: npx tsx scripts/bootstrap.ts --email "$FACULTY_EMAIL" --prod
 
       - name: Summary
-        run: echo "### Deployed to https://$PROJECT_ID.web.app" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "### Deployed to https://$PROJECT_ID.web.app" >> "$GITHUB_STEP_SUMMARY"
+          echo "App Check: ${{ inputs.app_check }} (site key $([ -n "${APPCHECK_SITE_KEY:-}" ] && echo set || echo missing))" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove credentials
         if: always()

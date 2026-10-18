@@ -74,9 +74,28 @@ One-time project setup (newer Google projects ship with strict defaults, so all 
 3. Firestore database created (us-east1). Storage → Get started (needed from Phase 3).
 4. Service account `plainspeak-deployer` with roles: Firebase Admin, Cloud Functions Admin,
    Service Account User, Secret Manager Admin, Artifact Registry Administrator, Cloud Scheduler
-   Admin, Service Usage Admin, Cloud Run Admin. Its JSON key goes in the `FIREBASE_SERVICE_ACCOUNT`
-   GitHub secret.
+   Admin, Service Usage Admin, Cloud Run Admin, **reCAPTCHA Enterprise Admin**, **Firebase App
+   Check Admin** (the last two let the deploy set up App Check). Its JSON key goes in the
+   `FIREBASE_SERVICE_ACCOUNT` GitHub secret.
 5. Default compute account `<project-number>-compute@developer.gserviceaccount.com` (builds and
    runs the functions) with roles: Cloud Build Service Account, Cloud Datastore User, Firebase
    Authentication Admin, Storage Object Admin.
 6. First run: pass `faculty_email` to invite the first faculty member.
+
+### What a deploy also sets up
+
+- **App Check** (`app_check` input, default `enforce`): creates a reCAPTCHA Enterprise key, registers
+  it for the web app, makes every function reject requests without a valid token
+  (`APP_CHECK_ENFORCE` in `functions/.env`), and enforces App Check on Firestore and Storage. If the
+  deployer lacks the two roles above, the deploy warns and leaves App Check off.
+- **Audio lifecycle** (`storage-lifecycle.json`): recordings move to the cheaper Nearline tier after
+  90 days and are deleted after 3 years, as a backstop to the nightly job.
+- **Nightly retention job** (`retentionSweep`, 03:17 Eastern): deletes sessions past their 3-year
+  date, deletes all data for residents whose graduation/leaving date has passed (faculty set it on
+  the Faculty tab), closes conversations left open, and removes audio never linked to a session.
+
+### Daily limits per user
+
+Set in `shared/src/constants.ts` (`DAILY_LIMITS`): 20 conversations, 400 patient replies, 60 voice
+connections, 500 voice clips, 100 word lookups, 30 feedback reports. Counters live in `usage/{uid}`
+(server-only).

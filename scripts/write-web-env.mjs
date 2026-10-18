@@ -32,6 +32,8 @@ const lines = {
   VITE_FIREBASE_APP_ID: cfg.appId,
   VITE_USE_EMULATORS: 'false',
 };
+// Optional: set by scripts/setup-app-check.sh.
+if (process.env.APPCHECK_SITE_KEY) lines.VITE_APPCHECK_SITE_KEY = process.env.APPCHECK_SITE_KEY;
 for (const [k, v] of Object.entries(lines)) if (!v) throw new Error(`Missing ${k} in sdkconfig`);
 writeFileSync(
   'web/.env.production.local',
@@ -39,4 +41,6 @@ writeFileSync(
     .map(([k, v]) => `${k}=${v}`)
     .join('\n') + '\n',
 );
-console.log(`Wrote web config for ${cfg.projectId} (app ${appId}).`);
+console.log(
+  `Wrote web config for ${cfg.projectId} (app ${appId}, App Check ${lines.VITE_APPCHECK_SITE_KEY ? 'on' : 'off'}).`,
+);

@@ -65,8 +65,8 @@ describe('audio uploads', () => {
 
   // Uploading into your own folder under a session ID you don't own is allowed
   // by rules, but endSession only links audio for the caller's own session,
-  // and the Phase 7 retention job sweeps unlinked uploads.
-  it.todo('Phase 7: retention job removes uploads not linked to a session');
+  // and the nightly retention job deletes unlinked uploads (see
+  // functions/src/retention/retention.integration.test.ts).
 
   it('rejects wrong type, wrong name, and unauthenticated uploads', async () => {
     await assertFails(

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { SEED_JARGON, type JargonTerm } from '@plainspeak/shared';
-import { db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './firebase';
 
 let cache: JargonTerm[] | null = null;
 
@@ -32,4 +33,25 @@ export function useJargonTerms(programId: string | undefined): JargonTerm[] {
     };
   }, [programId]);
   return terms;
+}
+
+export interface ServerAnswer {
+  term: string;
+  plain: string[];
+  explanation: string;
+}
+
+const lookupFn = httpsCallable<{ term: string }, { result: ServerAnswer | null }>(
+  functions,
+  'lookupPlainWords',
+);
+const answers = new Map<string, ServerAnswer | null>();
+
+/** Server fallback for words the built-in dictionary doesn't have. Cached per page load. */
+export async function lookupOnServer(term: string): Promise<ServerAnswer | null> {
+  const key = term.toLowerCase();
+  if (answers.has(key)) return answers.get(key) ?? null;
+  const { data } = await lookupFn({ term });
+  answers.set(key, data.result);
+  return data.result;
 }

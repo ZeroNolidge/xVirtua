@@ -1,4 +1,4 @@
-import type { BrainRequest, BrainResult, PatientBrain } from './brain.js';
+import type { BrainRequest, BrainResult, OnText, PatientBrain } from './brain.js';
 import { applyCue } from './brain.js';
 
 /**
@@ -8,7 +8,7 @@ import { applyCue } from './brain.js';
  */
 export class FakeBrain implements PatientBrain {
   calls: BrainRequest[] = [];
-  async reply(req: BrainRequest): Promise<BrainResult> {
+  async reply(req: BrainRequest, onText?: OnText): Promise<BrainResult> {
     this.calls.push(req);
     const base = {
       text: req.cue
@@ -24,6 +24,12 @@ export class FakeBrain implements PatientBrain {
       nonverbal: [],
     };
     const utterance = applyCue(base, req.cue);
+    if (onText) {
+      // Stream word by word, like the real model.
+      const words = utterance.text.split(' ');
+      const prefix = { delivery: utterance.delivery, nonverbal: utterance.nonverbal };
+      for (let i = 1; i <= words.length; i++) onText(words.slice(0, i).join(' '), prefix);
+    }
     return {
       utterance,
       raw: JSON.stringify(utterance),

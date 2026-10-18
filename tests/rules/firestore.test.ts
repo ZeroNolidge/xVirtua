@@ -124,6 +124,17 @@ describe('programs', () => {
     );
   });
 
+  it('only faculty of the program can change the patient model', async () => {
+    for (const m of ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']) {
+      await assertSucceeds(updateDoc(doc(fs(a.facultyIrmc), 'programs/irmc'), { patientModel: m }));
+    }
+    for (const who of [a.resA, a.resB, a.facultyOther, a.anon, a.noClaims]) {
+      await assertFails(
+        updateDoc(doc(fs(who), 'programs/irmc'), { patientModel: 'claude-haiku-5-5' }),
+      );
+    }
+  });
+
   it('nobody can create or delete programs from the client', async () => {
     await assertFails(setDoc(doc(fs(a.facultyIrmc), 'programs/new'), program));
     await assertFails(deleteDoc(doc(fs(a.facultyIrmc), 'programs/irmc')));
@@ -301,6 +312,22 @@ describe('audit log', () => {
     await assertFails(getDoc(doc(fs(a.resA), 'auditLog/l1')));
     await assertFails(getDoc(doc(fs(a.facultyOther), 'auditLog/l1')));
     await assertFails(setDoc(doc(fs(a.facultyIrmc), 'auditLog/l2'), { programId: 'irmc' }));
+  });
+});
+
+describe('server-only collections', () => {
+  it('usage counters, lookup cache and crash reports are not readable or writable', async () => {
+    for (const path of [
+      'usage/resA',
+      'usage/resA/days/2026-10-18',
+      'plainWordCache/a1c',
+      'clientErrors/x',
+    ]) {
+      for (const who of [a.resA, a.facultyIrmc]) {
+        await assertFails(getDoc(doc(fs(who), path)));
+        await assertFails(setDoc(doc(fs(who), path), { patientTurns: 0 }));
+      }
+    }
   });
 });
 

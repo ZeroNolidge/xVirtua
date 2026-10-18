@@ -1,20 +1,19 @@
 import { z } from 'zod';
-import { EMOTIONS, NONVERBAL_CUES, type PatientUtterance } from '@plainspeak/shared';
+import {
+  EMOTIONS,
+  NONVERBAL_CUES,
+  stripStageDirections,
+  type PatientUtterance,
+} from '@plainspeak/shared';
 
 /** JSON schema Claude must follow for every patient reply. */
 export const PATIENT_REPLY_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['text', 'askedQuestion', 'cueId', 'delivery', 'nonverbal'],
+  // Order matters: delivery and nonverbal cues stream first, so the voice can
+  // start on the first sentence of "text" with the right emotion.
+  required: ['cueId', 'delivery', 'nonverbal', 'text', 'askedQuestion'],
   properties: {
-    text: {
-      type: 'string',
-      description: 'Exactly what the patient says out loud. 1–3 short sentences.',
-    },
-    askedQuestion: {
-      type: 'boolean',
-      description: 'True if the patient asked the resident a question.',
-    },
     cueId: {
       type: ['string', 'null'],
       description: 'The id of the scripted cue being performed this turn, or null.',
@@ -31,6 +30,15 @@ export const PATIENT_REPLY_JSON_SCHEMA = {
       },
     },
     nonverbal: { type: 'array', items: { type: 'string', enum: [...NONVERBAL_CUES] } },
+    text: {
+      type: 'string',
+      description:
+        'Exactly what the patient says out loud. 1–3 short sentences. Words only: no stage directions or actions in parentheses.',
+    },
+    askedQuestion: {
+      type: 'boolean',
+      description: 'True if the patient asked the resident a question.',
+    },
   },
 } as const;
 
@@ -50,8 +58,10 @@ const replySchema = z.object({
 /** Parses and sanitizes Claude's JSON. Throws on anything malformed. */
 export function parsePatientReply(raw: string): PatientUtterance {
   const r = replySchema.parse(JSON.parse(raw));
+  const text = stripStageDirections(r.text);
+  if (!text) throw new Error('Reply had no spoken words');
   const u: PatientUtterance = {
-    text: r.text,
+    text,
     askedQuestion: r.askedQuestion,
     delivery: {
       ...r.delivery,

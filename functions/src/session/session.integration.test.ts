@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
-import { CONSENT_VERSION } from '@plainspeak/shared';
+import { CONSENT_VERSION, DAILY_LIMITS, type PatientChunk } from '@plainspeak/shared';
+import { dayKey } from '../lib/quota.js';
 import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
 import { endSession, patientTurn, startSession } from './session.js';
 import { FakeBrain } from '../patient/fakeBrain.js';
@@ -53,7 +54,12 @@ describe('startSession', () => {
       status: 'live',
       turnCount: 1,
       audioPath: null,
+      persona: htn.briefing.persona,
     });
+    // Retention: deleted after 3 years at most.
+    const years = (s.deleteAfter.toMillis() - Date.now()) / (365.25 * 86400000);
+    expect(years).toBeGreaterThan(2.9);
+    expect(years).toBeLessThanOrEqual(3.01);
     expect((await db.doc(`sessions/${r.sessionId}/turns/0`).get()).get('speaker')).toBe('patient');
   });
 
@@ -159,10 +165,121 @@ describe('patientTurn', () => {
     expect((await db.collection(`sessions/${sessionId}/turns`).get()).size).toBe(1);
     await db
       .doc(`sessions/${sessionId}`)
-      .update({ startedAt: Timestamp.fromMillis(Date.now() - 30 * 60000) });
+      .update({ startedAt: Timestamp.fromMillis(Date.now() - 50 * 60000) });
     await expect(
       patientTurn(db, resident, { sessionId, text: 'hi' }, new FakeBrain()),
     ).rejects.toMatchObject({ code: 'deadline-exceeded' });
+  });
+
+  it('can be picked up after a crash: a stuck reply unlocks, idle conversations close', async () => {
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const ref = db.doc(`sessions/${sessionId}`);
+    // App closed mid-reply 2 minutes ago: the lock is released.
+    await ref.update({ pending: true, pendingAt: Timestamp.fromMillis(Date.now() - 120_000) });
+    const r = await patientTurn(
+      db,
+      resident,
+      { sessionId, text: 'Where were we?' },
+      new FakeBrain(),
+    );
+    expect(r.patient.idx).toBe(2);
+    // Idle for 40 minutes: closed.
+    await ref.update({ lastActivityAt: Timestamp.fromMillis(Date.now() - 40 * 60000) });
+    await expect(
+      patientTurn(db, resident, { sessionId, text: 'hi' }, new FakeBrain()),
+    ).rejects.toMatchObject({ code: 'deadline-exceeded' });
+  });
+
+  it('streams sentences with voice in order, then saves the turn and app-free timing', async () => {
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const chunks: PatientChunk[] = [];
+    const spoken: string[] = [];
+    const voice = {
+      voiceId: async () => 'voice-1',
+      synthesize: async (_id: string, text: string) => {
+        spoken.push(text);
+        // Later sentences finish first: order must still hold.
+        await new Promise((r) => setTimeout(r, text.length % 3 === 0 ? 5 : 1));
+        return new TextEncoder().encode(`mp3:${text}`).buffer as ArrayBuffer;
+      },
+    };
+    const brain = {
+      reply: async (
+        _req: unknown,
+        onText?: (t: string, p: Record<string, unknown> | null) => void,
+      ) => {
+        const prefix = {
+          delivery: { emotion: 'worried', pauseBeforeMs: 400 },
+          nonverbal: ['frown'],
+        };
+        const text = 'Oh no, that sounds bad. (frowns) Will I need pills forever? I hate pills.';
+        for (let i = 1; i <= text.length; i++) onText?.(text.slice(0, i), prefix);
+        return {
+          utterance: {
+            text: 'Oh no, that sounds bad. Will I need pills forever? I hate pills.',
+            askedQuestion: true,
+            delivery: {
+              emotion: 'worried' as const,
+              volume: 'normal' as const,
+              rate: 'normal' as const,
+              pauseBeforeMs: 400,
+            },
+            nonverbal: ['frown' as const],
+          },
+          raw: '{}',
+          model: 'test',
+          latencyMs: 3,
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        };
+      },
+    };
+    const r = await patientTurn(
+      db,
+      resident,
+      { sessionId, text: 'Your blood pressure is high.', source: 'typed', responseGapMs: 2100 },
+      brain,
+      { send: async (c) => void chunks.push(c), voice },
+    );
+    expect(r.voiced).toBe(true);
+    expect(chunks[0]).toMatchObject({
+      t: 'meta',
+      nonverbal: ['frown'],
+      delivery: { emotion: 'worried', pauseBeforeMs: 400 },
+    });
+    const says = chunks.filter((c) => c.t === 'say');
+    expect(says.map((c) => c.text)).toEqual([
+      'Oh no, that sounds bad.',
+      'Will I need pills forever?',
+      'I hate pills.',
+    ]);
+    expect(spoken.join(' ')).not.toContain('(frowns)');
+    // Every sentence's audio follows its text, in order.
+    const order = chunks
+      .filter((c) => c.t !== 'meta')
+      .map((c) => `${c.t}${'seq' in c ? c.seq : ''}`);
+    expect(order).toEqual(['say0', 'audio0', 'say1', 'audio1', 'say2', 'audio2']);
+
+    const s = (await db.doc(`sessions/${sessionId}`).get()).data()!;
+    expect(s.voiceId).toBe('voice-1');
+    const t1 = (await db.doc(`sessions/${sessionId}/turns/1`).get()).data()!;
+    expect(t1.responseGapMs).toBe(2100);
+
+    // The next turn reports how long the app made the resident wait for that reply.
+    await patientTurn(
+      db,
+      resident,
+      { sessionId, text: 'Let us talk about it.', prevAppWaitMs: 1800 },
+      new FakeBrain(),
+    );
+    expect((await db.doc(`sessions/${sessionId}/turns/2`).get()).get('appWaitMs')).toBe(1800);
+  });
+
+  it('enforces the daily limit on patient replies', async () => {
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    await db.doc(`usage/res1/days/${dayKey()}`).set({ patientTurns: DAILY_LIMITS.patientTurns });
+    await expect(
+      patientTurn(db, resident, { sessionId, text: 'hi' }, new FakeBrain()),
+    ).rejects.toMatchObject({ code: 'resource-exhausted' });
   });
 });
 

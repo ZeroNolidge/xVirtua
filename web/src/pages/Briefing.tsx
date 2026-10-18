@@ -15,7 +15,9 @@ export function Briefing() {
   const isFaculty = claims?.role === 'faculty';
   const { detail, status } = useScenario(id, isFaculty);
   const nav = useNavigate();
-  useEffect(prewarmConversation, []);
+  useEffect(() => {
+    prewarmConversation();
+  }, []);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [model, setModel] = useState<PatientModel | ''>('');
