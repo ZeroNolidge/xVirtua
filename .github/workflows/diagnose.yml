@@ -45,6 +45,13 @@ jobs:
           gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.status>=100' \
             --project "$PROJECT_ID" --freshness=6h --limit=40 \
             --format='table[no-heading](timestamp,resource.labels.service_name,httpRequest.requestMethod,httpRequest.status,httpRequest.latency)' || true
+      - name: Client crash reports
+        continue-on-error: true
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
+        run: |
+          npm run build -w shared >/dev/null
+          npx tsx scripts/client-errors.ts
       - name: Who can call the functions (Cloud Run invoker)
         continue-on-error: true
         run: |

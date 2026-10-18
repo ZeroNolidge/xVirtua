@@ -546,3 +546,14 @@ p {
   align-items: center;
   margin-bottom: 8px;
 }
+.error-detail {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  max-height: 40vh;
+  overflow: auto;
+}

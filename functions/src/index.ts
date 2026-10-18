@@ -14,6 +14,7 @@ import { FakeBrain } from './patient/fakeBrain.js';
 import { handleTts } from './voice/tts.js';
 import { getSttToken as mintSttToken } from './voice/stt.js';
 import type { Caller } from './lib/callable.js';
+import { reportClientError as storeClientError } from './lib/clientErrors.js';
 
 initializeApp();
 // invoker 'public': callable functions do their own auth checks; Cloud Run must
@@ -81,3 +82,5 @@ export const tts = onRequest(
   { secrets: [CARTESIA_API_KEY], cors: true, timeoutSeconds: 30 },
   (req, res) => handleTts(req, res, db(), auth(), CARTESIA_API_KEY.value()),
 );
+
+export const reportClientError = onCall((req) => storeClientError(db(), callerOf(req), req.data));

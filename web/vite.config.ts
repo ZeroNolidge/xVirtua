@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // We register manually (src/lib/pwa.ts) so an update never reloads the
+      // page in the middle of a conversation.
+      injectRegister: null,
       includeAssets: ['icon.svg'],
       manifest: {
         name: 'PlainSpeak',

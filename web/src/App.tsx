@@ -12,6 +12,8 @@ import { Briefing } from './pages/Briefing';
 import { Session } from './pages/Session';
 import { SessionDone } from './pages/SessionDone';
 import { Loading, NotInvited, SettingUp } from './pages/StatusScreens';
+import { useEffect } from 'react';
+import { applyWaitingUpdate } from './lib/pwa';
 
 export function App() {
   return (
@@ -47,7 +49,9 @@ function SignedInApp() {
   const { claims } = useAuth();
   const isFaculty = claims?.role === 'faculty';
   // Hide the tab bar during a live conversation so it can't be left by accident.
-  const inSession = /^\/session\/[^/]+$/.test(useLocation().pathname);
+  const { pathname } = useLocation();
+  const inSession = /^\/session\/[^/]+$/.test(pathname);
+  useEffect(applyWaitingUpdate, [pathname]);
   return (
     <>
       <main>
