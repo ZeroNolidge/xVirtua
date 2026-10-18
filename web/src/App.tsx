@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { TabBar } from './components/TabBar';
 import { useAuth } from './lib/auth';
 import { Home } from './pages/Home';
@@ -9,6 +9,8 @@ import { Progress } from './pages/Progress';
 import { Invites } from './pages/faculty/Invites';
 import { Lookup } from './pages/Lookup';
 import { Briefing } from './pages/Briefing';
+import { Session } from './pages/Session';
+import { SessionDone } from './pages/SessionDone';
 import { Loading, NotInvited, SettingUp } from './pages/StatusScreens';
 
 export function App() {
@@ -44,6 +46,8 @@ function Gate() {
 function SignedInApp() {
   const { claims } = useAuth();
   const isFaculty = claims?.role === 'faculty';
+  // Hide the tab bar during a live conversation so it can't be left by accident.
+  const inSession = /^\/session\/[^/]+$/.test(useLocation().pathname);
   return (
     <>
       <main>
@@ -51,12 +55,14 @@ function SignedInApp() {
           <Route path="/" element={<Home />} />
           <Route path="/lookup" element={<Lookup />} />
           <Route path="/scenario/:id" element={<Briefing />} />
+          <Route path="/session/:id" element={<Session />} />
+          <Route path="/session/:id/done" element={<SessionDone />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/faculty" element={isFaculty ? <Invites /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <TabBar />
+      {!inSession && <TabBar />}
     </>
   );
 }

@@ -76,6 +76,24 @@ jobs:
         # must not try to install it from npm.
         run: npm pkg delete "dependencies.@plainspeak/shared" -w functions
 
+      - name: Sync API keys to Secret Manager
+        # Copies GitHub secrets into Google Secret Manager (only when changed),
+        # where the functions read them. Values are never printed.
+        if: ${{ contains(inputs.only, 'functions') }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CARTESIA_API_KEY: ${{ secrets.CARTESIA_API_KEY }}
+        run: |
+          for NAME in ANTHROPIC_API_KEY OPENAI_API_KEY CARTESIA_API_KEY; do
+            VALUE="${!NAME}"
+            if [ -z "$VALUE" ]; then echo "::error::GitHub secret $NAME is missing"; exit 1; fi
+            CURRENT=$(npx firebase functions:secrets:access "$NAME" --project "$PROJECT_ID" 2>/dev/null || true)
+            if [ "$CURRENT" = "$VALUE" ]; then echo "$NAME unchanged"; continue; fi
+            printf '%s' "$VALUE" | npx firebase functions:secrets:set "$NAME" --data-file=- --project "$PROJECT_ID" --non-interactive --force >/dev/null
+            echo "$NAME updated"
+          done
+
       - name: Deploy
         env:
           ONLY: ${{ inputs.only }}

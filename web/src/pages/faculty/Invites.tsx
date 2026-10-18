@@ -6,6 +6,7 @@ import { auth, db } from '../../lib/firebase';
 import { api, friendlyError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { signInLinkSettings } from '../../lib/signInLink';
+import { Settings } from './Settings';
 
 interface InviteRow {
   email: string;
@@ -103,6 +104,7 @@ export function Invites() {
           ))}
         </ul>
       </div>
+      <Settings />
     </section>
   );
 }

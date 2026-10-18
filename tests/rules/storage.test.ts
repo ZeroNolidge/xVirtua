@@ -63,9 +63,10 @@ describe('audio uploads', () => {
     );
   });
 
-  // Uploading into your own folder under a session ID you don't own is
-  // allowed by rules but removed by the server-side onFinalize check.
-  it.todo('Phase 3: server deletes uploads whose session is not owned by the uploader');
+  // Uploading into your own folder under a session ID you don't own is allowed
+  // by rules, but endSession only links audio for the caller's own session,
+  // and the Phase 7 retention job sweeps unlinked uploads.
+  it.todo('Phase 7: retention job removes uploads not linked to a session');
 
   it('rejects wrong type, wrong name, and unauthenticated uploads', async () => {
     await assertFails(

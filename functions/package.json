@@ -8,11 +8,12 @@
     "node": "22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit && esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --sourcemap --outfile=lib/index.js --external:firebase-admin --external:firebase-functions --external:zod",
+    "build": "tsc -p tsconfig.json --noEmit && esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --sourcemap --outfile=lib/index.js --external:firebase-admin --external:firebase-functions --external:zod --external:@anthropic-ai/sdk",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@plainspeak/shared": "^0.0.0",
     "firebase-admin": "^14.5.0",
     "firebase-functions": "^7.4.0",

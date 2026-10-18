@@ -1,17 +1,38 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import type { CueTrigger, ScenarioScript, ScenarioStatus } from '@plainspeak/shared';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import type { CueTrigger, PatientModel, ScenarioScript, ScenarioStatus } from '@plainspeak/shared';
 import { useAuth } from '../lib/auth';
 import { useScenario, type ScenarioRow } from '../lib/scenarios';
 import { api, friendlyError } from '../lib/api';
 import { Difficulty } from '../components/Difficulty';
 import { Loading } from './StatusScreens';
+import { sessionApi } from '../lib/session';
+import { MODEL_LABELS } from '../lib/models';
 
 export function Briefing() {
   const { id } = useParams();
   const { claims } = useAuth();
   const isFaculty = claims?.role === 'faculty';
   const { detail, status } = useScenario(id, isFaculty);
+  const nav = useNavigate();
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [model, setModel] = useState<PatientModel | ''>('');
+
+  async function startConversation() {
+    if (!id) return;
+    setStarting(true);
+    setStartError(null);
+    try {
+      const { data } = await sessionApi.start({ scenarioId: id, ...(model ? { model } : {}) });
+      nav(`/session/${data.sessionId}`, {
+        state: { opening: data.opening, persona: data.persona },
+      });
+    } catch (e) {
+      setStartError(friendlyError(e));
+      setStarting(false);
+    }
+  }
 
   if (status === 'loading') return <Loading />;
   if (!detail) {
@@ -72,10 +93,28 @@ export function Briefing() {
         <p className="muted small">About {b.estimatedMinutes} minutes.</p>
       </div>
 
-      <button className="btn" disabled>
-        Start conversation
+      {isFaculty && (
+        <label className="field">
+          <span>Patient model (faculty testing)</span>
+          <select value={model} onChange={(e) => setModel(e.target.value as PatientModel | '')}>
+            <option value="">Program default</option>
+            {Object.entries(MODEL_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {startError && (
+        <p className="error" role="alert">
+          {startError}
+        </p>
+      )}
+      <button className="btn" disabled={starting} onClick={() => void startConversation()}>
+        {starting ? 'Getting the room ready…' : 'Start conversation'}
       </button>
-      <p className="muted small center-text">Live conversations arrive in the next update.</p>
+      <p className="muted small center-text">Find a quiet spot. You’ll talk out loud.</p>
 
       {isFaculty && <FacultyReview summary={detail.summary} script={detail.script} />}
     </section>

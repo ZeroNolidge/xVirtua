@@ -14,6 +14,8 @@ vi.mock('firebase/firestore', () => ({
   query: vi.fn(),
   where: vi.fn(),
   onSnapshot: vi.fn(() => () => {}),
+  doc: vi.fn(),
+  updateDoc: vi.fn(),
 }));
 vi.mock('./lib/auth', () => ({
   useAuth: () => ({

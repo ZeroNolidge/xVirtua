@@ -21,9 +21,9 @@ service firebase.storage {
 
       // The owner uploads once, into their own folder only. We deliberately
       // avoid a cross-service firestore.get() here (unreliable in the
-      // emulator, extra setup + a read per upload in production). Instead a
-      // Storage onFinalize Function (Phase 3) deletes any upload whose
-      // {sid} isn't a session owned by {uid} in {pid}.
+      // emulator, extra setup + a read per upload in production). Instead
+      // endSession links audio only for the caller's own session, and the
+      // retention job (Phase 7) sweeps uploads that were never linked.
       allow create: if isOwner(pid, uid)
         && resource == null
         && sid.matches('[A-Za-z0-9_-]{1,64}')
