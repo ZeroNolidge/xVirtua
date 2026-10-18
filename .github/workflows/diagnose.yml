@@ -33,13 +33,22 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
           echo "PROJECT_ID=$PID" >> "$GITHUB_ENV"
           gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet
-      - name: Function logs (claimInvite and others)
+      - name: Recent warnings and errors (last 24h, newest first)
         continue-on-error: true
-        run: npx firebase functions:log --project "$PROJECT_ID" -n 80
+        run: |
+          gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING' \
+            --project "$PROJECT_ID" --freshness=1d --limit=40 \
+            --format='table[no-heading](timestamp,resource.labels.service_name,severity,textPayload,jsonPayload.message)' || true
+      - name: Recent requests (last 6h)
+        continue-on-error: true
+        run: |
+          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.status>=100' \
+            --project "$PROJECT_ID" --freshness=6h --limit=40 \
+            --format='table[no-heading](timestamp,resource.labels.service_name,httpRequest.requestMethod,httpRequest.status,httpRequest.latency)' || true
       - name: Who can call the functions (Cloud Run invoker)
         continue-on-error: true
         run: |
-          for f in claiminvite createinvite acceptconsent revokeinvite; do
+          for f in claiminvite startsession patientturn getstttoken endsession tts; do
             echo "== $f"; gcloud run services get-iam-policy "$f" --region us-east1 --project "$PROJECT_ID" --format=json || true
           done
       - name: Roles held by the runtime service account
