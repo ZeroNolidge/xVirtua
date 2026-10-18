@@ -1,0 +1,635 @@
+PlainSpeak jargon dictionary (DRAFT for review)
+368 terms
+
+How to read: TERM -> say instead. [OK if explained] means it is fine to use the term if the resident explains it in plain words nearby; otherwise it should just be swapped.
+Also catches: other spellings/abbreviations that count as the same term.
+
+==== General doctor-speak (98) ====
+
+acute  ->  sudden / short-term   [OK if explained]
+adherence  ->  sticking with the plan / taking it as prescribed
+      also catches: adherent, adhere
+administer  ->  give
+      also catches: administered, administering
+adverse effect  ->  side effect / bad reaction
+      also catches: adverse effects, adverse event, adverse events, adverse reaction
+ambulate  ->  walk
+      also catches: ambulating, ambulation
+ambulatory  ->  walking / outpatient
+anterior  ->  front
+approximately  ->  about
+asymptomatic  ->  no symptoms / you may not feel anything
+auscultate  ->  listen
+      also catches: auscultation
+baseline  ->  starting point   [OK if explained]
+benign  ->  not cancer / harmless   [OK if explained]
+bilateral  ->  both sides
+      also catches: bilaterally
+cardiovascular risk  ->  heart risk   [OK if explained]
+      also catches: cardiac risk
+chronic  ->  long-lasting / long-term   [OK if explained]
+clinically significant  ->  important for your health
+combination therapy  ->  more than one medicine
+commence  ->  start
+comorbidity  ->  other health problem
+      also catches: comorbidities, comorbid
+compliance  ->  taking it as planned / sticking with it
+      also catches: compliant
+congenital  ->  born with it
+contraindicated  ->  not safe for you
+      also catches: contraindication, contraindications
+deficiency  ->  not enough
+      also catches: deficient
+demonstrate  ->  show
+      also catches: demonstrates, demonstrated
+differential diagnosis  ->  list of possible causes
+      also catches: differential
+discharge  ->  go home from the hospital / fluid coming out   [OK if explained]
+discontinue  ->  stop
+      also catches: discontinuing, discontinued
+distal  ->  farther from the body
+efficacy  ->  how well it works
+      also catches: efficacious
+elevated  ->  high / higher than normal
+etiology  ->  cause
+      also catches: aetiology
+evidence-based  ->  proven by research
+exacerbation  ->  flare-up
+      also catches: exacerbations, exacerbate
+facilitate  ->  help / make easier
+      also catches: facilitating
+familial  ->  runs in families
+first-line  ->  first choice
+      also catches: first line
+genetic predisposition  ->  runs in your family
+      also catches: predisposition, predisposed
+hereditary  ->  runs in families   [OK if explained]
+idiopathic  ->  no known cause
+incidence  ->  how often new cases happen
+indicate  ->  show
+      also catches: indicates, indicated
+initiate  ->  start
+      also catches: initiating, initiated
+inpatient  ->  staying in the hospital
+intervention  ->  treatment / step we take
+      also catches: interventions
+invasive  ->  involves cutting or going inside the body
+lesion  ->  spot / sore / area
+      also catches: lesions
+lifestyle modification  ->  changes to daily habits
+      also catches: lifestyle modifications
+localized  ->  in one spot
+malignant  ->  cancer
+      also catches: malignancy
+modality  ->  type of treatment
+      also catches: modalities
+modifiable risk factor  ->  something you can change that raises your risk
+      also catches: modifiable risk factors
+monotherapy  ->  one medicine
+morbidity  ->  illness / health problems
+mortality  ->  death / risk of dying
+nodule  ->  small lump
+      also catches: nodules
+noncompliant  ->  not taking it as planned
+      also catches: noncompliance, non-compliant, non-compliance
+noninvasive  ->  no cutting or needles
+      also catches: non-invasive
+nonpharmacologic  ->  without medicine
+      also catches: non-pharmacologic, nonpharmacological
+optimal  ->  best
+optimize  ->  make the most of / get the best results
+      also catches: optimizing, optimization
+palpate  ->  feel
+      also catches: palpation, palpated
+parameters  ->  numbers we track
+pathology  ->  the disease / lab study of tissue
+pathophysiology  ->  how the illness works in the body
+pharmacologic  ->  with medicine
+      also catches: pharmacological
+posterior  ->  back
+prevalence  ->  how common it is
+primary prevention  ->  preventing a first heart attack or stroke
+prior to  ->  before
+prognosis  ->  outlook / what to expect   [OK if explained]
+progressive  ->  gets worse over time   [OK if explained]
+prophylaxis  ->  prevention
+      also catches: prophylactic
+proximal  ->  closer to the body
+refractory  ->  hard to treat
+regimen  ->  plan / schedule
+remission  ->  quiet period / no signs of disease right now   [OK if explained]
+risk factor  ->  something that raises your chance of a problem   [OK if explained]
+      also catches: risk factors
+risk stratification  ->  figuring out your risk
+rule out  ->  make sure it isn't
+      also catches: ruled out, r/o
+secondary prevention  ->  preventing it from happening again
+sedentary  ->  sitting most of the day
+sequelae  ->  after-effects
+shared decision-making  ->  deciding together
+      also catches: shared decision making
+statistically significant  ->  unlikely to be chance
+subsequently  ->  later / after that
+sufficient  ->  enough
+      also catches: insufficient
+symptomatic  ->  having symptoms
+systemic  ->  affects the whole body
+terminate  ->  stop / end
+therapeutic  ->  helpful / used as treatment
+triage  ->  sorting by how urgent
+uncontrolled  ->  too high / not in a good range
+      also catches: poorly controlled
+unilateral  ->  one side
+unremarkable  ->  normal
+utilize  ->  use
+      also catches: utilization, utilizing, utilized
+well-controlled  ->  in a good range
+      also catches: well controlled
+within normal limits  ->  normal
+      also catches: wnl
+workup  ->  tests / checking things out
+      also catches: work-up
+
+==== Conditions & symptoms (103) ====
+
+abstinence  ->  not using at all
+      also catches: abstinent
+anemia  ->  low red blood cells / low blood count   [OK if explained]
+      also catches: anemic, anaemia
+aneurysm  ->  a bulge in a blood vessel   [OK if explained]
+      also catches: aneurysms
+angina  ->  chest pain from the heart   [OK if explained]
+arrhythmia  ->  irregular heartbeat
+      also catches: arrhythmias, dysrhythmia
+arteriosclerosis  ->  hardening of the arteries
+arthralgia  ->  joint pain
+      also catches: arthralgias
+ascvd  ->  heart disease and stroke from clogged arteries
+      also catches: atherosclerotic cardiovascular disease
+atherosclerosis  ->  plaque buildup in the arteries / hardening of the arteries
+      also catches: atherosclerotic
+atrial fibrillation  ->  irregular heartbeat   [OK if explained]
+      also catches: afib, a-fib, a fib
+bmi  ->  a number based on your height and weight   [OK if explained]
+      also catches: body mass index
+bradycardia  ->  slow heartbeat
+      also catches: bradycardic
+carcinoma  ->  cancer
+      also catches: carcinomas
+cardiovascular disease  ->  heart and blood vessel disease
+      also catches: cvd, cardiovascular
+cephalgia  ->  headache
+cerebrovascular accident  ->  stroke
+      also catches: cva
+cessation  ->  quitting
+      also catches: smoking cessation, tobacco cessation
+chronic kidney disease  ->  kidneys not filtering as well over time   [OK if explained]
+      also catches: ckd
+cirrhosis  ->  scarring of the liver   [OK if explained]
+claudication  ->  leg pain when walking
+congestive heart failure  ->  heart isn't pumping as well as it should
+      also catches: chf, hfref, hfpef
+copd  ->  lung disease that makes it hard to breathe   [OK if explained]
+      also catches: chronic obstructive pulmonary disease
+coronary artery disease  ->  clogged heart arteries
+      also catches: cad, coronary heart disease, chd
+deep vein thrombosis  ->  blood clot in the leg
+      also catches: dvt
+dermatitis  ->  skin irritation
+diabetes mellitus  ->  diabetes
+      also catches: dm, t2dm, dm2, type 2 diabetes mellitus, t2d, niddm
+dyslipidemia  ->  unhealthy cholesterol levels
+dyspepsia  ->  indigestion
+dyspnea  ->  shortness of breath
+      also catches: dyspneic, sob
+edema  ->  swelling
+      also catches: oedema, peripheral edema
+electrolytes  ->  body salts like sodium and potassium   [OK if explained]
+      also catches: electrolyte
+embolism  ->  a clot that travels
+      also catches: emboli, embolus
+emesis  ->  vomiting
+      also catches: emesis episodes
+emphysema  ->  lung damage that makes it hard to breathe   [OK if explained]
+erectile dysfunction  ->  trouble getting or keeping an erection
+erythema  ->  redness
+      also catches: erythematous
+gastrointestinal  ->  stomach and intestines
+      also catches: gi
+generalized anxiety disorder  ->  anxiety
+      also catches: gad
+gerd  ->  acid reflux / heartburn
+      also catches: gastroesophageal reflux disease, gastroesophageal reflux
+hematuria  ->  blood in the urine
+hepatic  ->  liver
+hepatic steatosis  ->  fatty liver   [OK if explained]
+      also catches: steatosis, nafld, masld, fatty liver disease, nash, mash
+hepatitis  ->  liver inflammation   [OK if explained]
+hypercholesterolemia  ->  high cholesterol
+hyperglycemia  ->  high blood sugar
+      also catches: hyperglycemic
+hyperkalemia  ->  high potassium
+hyperlipidemia  ->  high cholesterol
+hypertension  ->  high blood pressure   [OK if explained]
+      also catches: htn, hypertensive
+hyperthyroidism  ->  overactive thyroid
+      also catches: hyperthyroid
+hypertriglyceridemia  ->  too much fat in the blood
+hypoglycemia  ->  low blood sugar
+      also catches: hypoglycemic, hypo, hypos
+hypokalemia  ->  low potassium
+hyponatremia  ->  low sodium
+hypotension  ->  low blood pressure
+      also catches: hypotensive
+hypothyroidism  ->  underactive thyroid
+      also catches: hypothyroid
+insomnia  ->  trouble sleeping   [OK if explained]
+insulin resistance  ->  your body doesn't respond well to insulin   [OK if explained]
+      also catches: insulin resistant
+ischemia  ->  not enough blood flow
+      also catches: ischemic
+lethargy  ->  very tired / sluggish
+      also catches: lethargic
+major depressive disorder  ->  depression
+      also catches: mdd
+malaise  ->  feeling unwell
+metabolic syndrome  ->  a group of problems that raise heart risk   [OK if explained]
+metastasis  ->  cancer that has spread
+      also catches: metastases, metastatic, mets
+myalgia  ->  muscle aches
+      also catches: myalgias
+myocardial infarction  ->  heart attack
+      also catches: mi, myocardial infarctions, stemi, nstemi
+neoplasm  ->  growth / tumor
+      also catches: neoplasms, neoplastic
+nephropathy  ->  kidney damage
+      also catches: diabetic nephropathy
+neuropathy  ->  nerve damage   [OK if explained]
+      also catches: peripheral neuropathy, neuropathic
+nicotine dependence  ->  addiction to nicotine   [OK if explained]
+      also catches: nicotine addiction
+nocturia  ->  getting up at night to pee
+obesity  ->  a weight that's unhealthy for your body   [OK if explained]
+      also catches: obese, morbid obesity, morbidly obese
+obstructive sleep apnea  ->  pauses in breathing during sleep   [OK if explained]
+      also catches: osa, sleep apnea, apnea
+orthopnea  ->  trouble breathing when lying flat
+orthostatic hypotension  ->  dizziness when you stand up
+      also catches: orthostatic, orthostasis
+osteoarthritis  ->  wear-and-tear arthritis
+      also catches: oa, degenerative joint disease, djd
+osteopenia  ->  bones thinner than normal
+osteoporosis  ->  thin, weak bones   [OK if explained]
+pack-years  ->  how much you've smoked over the years
+      also catches: pack years, pack-year, pack year
+palpitations  ->  feeling your heart race or skip   [OK if explained]
+paresthesia  ->  tingling / numbness
+      also catches: paresthesias
+polydipsia  ->  feeling very thirsty
+polyp  ->  small growth   [OK if explained]
+      also catches: polyps
+polyuria  ->  peeing a lot
+prediabetes  ->  blood sugar higher than normal, but not diabetes yet   [OK if explained]
+      also catches: pre-diabetes, prediabetic
+proteinuria  ->  protein in the urine
+      also catches: albuminuria, microalbuminuria
+pruritus  ->  itching
+      also catches: pruritic
+pulmonary  ->  lung
+pulmonary embolism  ->  blood clot in the lung
+      also catches: pulmonary emboli
+renal  ->  kidney
+renal failure  ->  kidney failure
+      also catches: renal insufficiency
+respiratory  ->  breathing
+retinopathy  ->  damage to the back of the eye
+      also catches: diabetic retinopathy
+rhabdomyolysis  ->  serious muscle breakdown
+      also catches: rhabdo
+sepsis  ->  the body's overreaction to a serious infection   [OK if explained]
+      also catches: septic
+syncope  ->  fainting
+      also catches: syncopal
+tachycardia  ->  fast heartbeat
+      also catches: tachycardic
+thrombosis  ->  blood clot
+      also catches: thrombus, thrombi
+tobacco use disorder  ->  being hooked on tobacco
+transient ischemic attack  ->  mini-stroke
+      also catches: tia
+upper respiratory infection  ->  a cold
+      also catches: uri
+urinary tract infection  ->  bladder infection
+      also catches: uti, utis
+urticaria  ->  hives
+vertigo  ->  spinning dizziness   [OK if explained]
+
+==== Body parts (24) ====
+
+abdomen  ->  belly
+      also catches: abdominal
+adrenal  ->  the small glands on your kidneys
+      also catches: adrenal glands
+aorta  ->  the body's main artery   [OK if explained]
+      also catches: aortic
+arterial  ->  artery
+atrium  ->  the heart's top chamber
+      also catches: atria, atrial
+cardiac  ->  heart
+carotid  ->  the big arteries in your neck
+      also catches: carotid arteries, carotids
+cerebral  ->  brain
+coronary  ->  the heart's blood vessels   [OK if explained]
+      also catches: coronary arteries
+dermatologic  ->  skin
+      also catches: dermatological
+extremities  ->  arms and legs
+      also catches: extremity
+glomerular  ->  kidney filter
+lower extremities  ->  legs
+      also catches: lower extremity
+lumbar  ->  lower back
+musculoskeletal  ->  muscles and bones
+myocardium  ->  heart muscle
+      also catches: myocardial
+neurological  ->  nerves and brain
+      also catches: neurologic
+ophthalmic  ->  eye
+      also catches: ocular
+pancreatic  ->  pancreas
+thorax  ->  chest
+      also catches: thoracic
+upper extremities  ->  arms
+      also catches: upper extremity
+vascular  ->  blood vessel
+      also catches: vasculature
+venous  ->  vein
+ventricle  ->  the heart's pumping chamber
+      also catches: ventricles, ventricular
+
+==== Tests & results (52) ====
+
+alt  ->  liver enzyme   [OK if explained]
+      also catches: alanine aminotransferase
+ast  ->  liver enzyme   [OK if explained]
+      also catches: aspartate aminotransferase
+biopsy  ->  small tissue sample   [OK if explained]
+      also catches: biopsies
+bun  ->  kidney blood test
+      also catches: blood urea nitrogen
+cbc  ->  blood count
+      also catches: complete blood count
+cgm  ->  sugar sensor / a sensor that checks your sugar all day   [OK if explained]
+      also catches: continuous glucose monitor
+cmp  ->  routine blood chemistry test
+      also catches: comprehensive metabolic panel, bmp, basic metabolic panel
+creatine kinase  ->  muscle enzyme test
+      also catches: ck, cpk
+creatinine  ->  kidney function test   [OK if explained]
+ct scan  ->  detailed x-ray scan   [OK if explained]
+      also catches: ct, cat scan, computed tomography
+culture  ->  lab test to grow germs   [OK if explained]
+      also catches: cultures
+diastolic  ->  bottom number
+echocardiogram  ->  heart ultrasound
+      also catches: echo
+egfr  ->  kidney filtering number   [OK if explained]
+      also catches: gfr, estimated glomerular filtration rate, glomerular filtration rate
+ekg  ->  heart tracing   [OK if explained]
+      also catches: ecg, electrocardiogram
+fasting plasma glucose  ->  fasting blood sugar
+      also catches: fasting glucose, fpg
+fingerstick  ->  finger-prick sugar check
+      also catches: finger stick
+glucometer  ->  blood sugar meter
+      also catches: glucose meter
+glucose  ->  blood sugar   [OK if explained]
+      also catches: blood glucose
+hdl  ->  good cholesterol   [OK if explained]
+      also catches: high-density lipoprotein, hdl cholesterol
+hematocrit  ->  red blood cell level
+hemoglobin  ->  red blood cell level   [OK if explained]
+hemoglobin a1c  ->  3-month blood sugar test   [OK if explained]
+      also catches: a1c, hba1c, glycated hemoglobin, glycosylated hemoglobin
+imaging  ->  scans / pictures of the inside of your body   [OK if explained]
+incidental finding  ->  something we weren't looking for
+      also catches: incidentaloma
+inr  ->  clotting test   [OK if explained]
+      also catches: pt/inr
+labs  ->  blood tests   [OK if explained]
+      also catches: lab work
+ldl  ->  bad cholesterol   [OK if explained]
+      also catches: low-density lipoprotein, ldl cholesterol, ldl-c
+lipid panel  ->  cholesterol test
+      also catches: lipid profile, fasting lipid panel
+lipids  ->  cholesterol and fats in the blood   [OK if explained]
+      also catches: lipid
+liver enzymes  ->  liver tests   [OK if explained]
+liver function tests  ->  liver tests
+      also catches: lfts, lft, liver panel
+microalbumin  ->  protein in the urine test
+      also catches: urine microalbumin, uacr
+mmhg  ->  the units for blood pressure
+      also catches: millimeters of mercury
+mri  ->  detailed scan using magnets   [OK if explained]
+      also catches: magnetic resonance imaging
+oral glucose tolerance test  ->  sugar drink test
+      also catches: ogtt
+plasma  ->  the liquid part of blood
+pulse oximetry  ->  oxygen level check
+      also catches: pulse ox, o2 sat, spo2, oxygen saturation
+radiograph  ->  x-ray
+      also catches: radiographs
+reference range  ->  normal range
+serum  ->  blood
+specimen  ->  sample
+      also catches: specimens
+spirometry  ->  breathing test
+      also catches: pulmonary function test, pulmonary function tests, pfts
+stress test  ->  treadmill heart test   [OK if explained]
+systolic  ->  top number
+titer  ->  level
+      also catches: titers
+transaminases  ->  liver tests
+      also catches: transaminitis
+triglycerides  ->  a type of fat in the blood   [OK if explained]
+      also catches: triglyceride
+tsh  ->  thyroid test   [OK if explained]
+      also catches: thyroid stimulating hormone
+urinalysis  ->  urine test
+      also catches: ua
+vital signs  ->  your blood pressure, pulse and temperature   [OK if explained]
+      also catches: vitals
+white blood cell count  ->  infection-fighting cells
+      also catches: wbc
+
+==== Medicines & dosing (56) ====
+
+ace inhibitor  ->  blood pressure pill that also protects the kidneys   [OK if explained]
+      also catches: ace inhibitors, acei, ace-i
+analgesic  ->  pain reliever
+      also catches: analgesics, analgesia
+anaphylaxis  ->  severe allergic reaction
+      also catches: anaphylactic
+anticoagulant  ->  blood thinner
+      also catches: anticoagulants, anticoagulation
+antiemetic  ->  anti-nausea medicine
+      also catches: antiemetics
+antihypertensive  ->  blood pressure medicine
+      also catches: antihypertensives
+antiplatelet  ->  medicine that keeps blood from clotting too easily
+      also catches: antiplatelets
+antipyretic  ->  fever reducer
+      also catches: antipyretics
+anxiolytic  ->  anxiety medicine
+      also catches: anxiolytics
+arb  ->  blood pressure pill   [OK if explained]
+      also catches: arbs, angiotensin receptor blocker, angiotensin receptor blockers
+basal insulin  ->  long-acting insulin   [OK if explained]
+beta blocker  ->  medicine that slows the heart and lowers blood pressure   [OK if explained]
+      also catches: beta blockers, beta-blocker, beta-blockers
+bid  ->  twice a day
+      also catches: b.i.d.
+bolus  ->  mealtime dose
+      also catches: bolus insulin
+calcium channel blocker  ->  blood pressure pill   [OK if explained]
+      also catches: calcium channel blockers, ccb
+corticosteroid  ->  steroid
+      also catches: corticosteroids
+diuretic  ->  water pill
+      also catches: diuretics, thiazide, thiazides
+dosage  ->  amount
+formulary  ->  list of medicines your insurance covers
+gi upset  ->  upset stomach
+      also catches: gi side effects
+glp-1 agonist  ->  weekly diabetes and weight shot   [OK if explained]
+      also catches: glp-1, glp1, glp-1 receptor agonist, glp-1 ra, glp-1s
+half-life  ->  how long it stays in your body
+      also catches: half life
+hepatotoxicity  ->  liver damage
+      also catches: hepatotoxic
+hypersensitivity  ->  allergic reaction
+      also catches: hypersensitivity reaction
+intramuscular  ->  a shot in the muscle
+intravenous  ->  through a vein
+      also catches: iv
+loading dose  ->  bigger first dose
+maintenance dose  ->  regular dose
+medication reconciliation  ->  going over all your medicines together
+      also catches: med rec, med reconciliation
+myopathy  ->  muscle problems
+      also catches: myopathies
+nephrotoxic  ->  harmful to the kidneys
+      also catches: nephrotoxicity
+nicotine replacement therapy  ->  nicotine patch, gum or lozenge   [OK if explained]
+      also catches: nrt
+nsaid  ->  anti-inflammatory pain reliever like ibuprofen   [OK if explained]
+      also catches: nsaids, non-steroidal anti-inflammatory, nonsteroidal anti-inflammatory
+oral hypoglycemic  ->  diabetes pill
+      also catches: oral hypoglycemics, hypoglycemic agent, oral agent
+over-the-counter  ->  without a prescription
+      also catches: otc, over the counter
+pharmacotherapy  ->  medicine treatment
+po  ->  by mouth
+      also catches: per os
+polypharmacy  ->  taking a lot of medicines
+prior authorization  ->  insurance approval
+      also catches: prior auth
+prn  ->  as needed
+      also catches: p.r.n.
+qd  ->  once a day
+      also catches: q.d.
+qhs  ->  at bedtime
+      also catches: q.h.s.
+qid  ->  four times a day
+      also catches: q.i.d.
+sglt2 inhibitor  ->  diabetes pill that removes sugar through the urine   [OK if explained]
+      also catches: sglt2, sglt-2 inhibitor, sglt2 inhibitors
+side effect profile  ->  possible side effects
+ssri  ->  a type of antidepressant   [OK if explained]
+      also catches: ssris, selective serotonin reuptake inhibitor
+stat  ->  right away
+statin  ->  cholesterol medicine   [OK if explained]
+      also catches: statins, hmg-coa reductase inhibitor
+subcutaneous  ->  under the skin
+      also catches: subq, sub-q, subcut
+sublingual  ->  under the tongue
+sulfonylurea  ->  diabetes pill that makes your body release insulin   [OK if explained]
+      also catches: sulfonylureas
+taper  ->  lower the dose slowly   [OK if explained]
+      also catches: tapering, tapered
+tid  ->  three times a day
+      also catches: t.i.d.
+titrate  ->  adjust the dose slowly
+      also catches: titration, titrating, up-titrate, uptitrate
+tolerability  ->  how well you handle it   [OK if explained]
+      also catches: tolerate, tolerated, tolerating
+topical  ->  on the skin
+
+==== Treatments, diet & specialists (25) ====
+
+aerobic exercise  ->  activity that gets your heart pumping, like walking   [OK if explained]
+      also catches: aerobic activity, cardio
+angioplasty  ->  opening a blocked artery with a tiny balloon   [OK if explained]
+bariatric surgery  ->  weight-loss surgery
+      also catches: bariatric
+behavioral therapy  ->  counseling to change habits   [OK if explained]
+      also catches: cognitive behavioral therapy, cbt
+caloric intake  ->  how much you eat
+      also catches: calorie intake
+carbohydrates  ->  carbs, like bread, rice and sweets   [OK if explained]
+      also catches: carbohydrate, carbohydrate intake
+cardiac catheterization  ->  a test that looks at the heart's arteries with a thin tube   [OK if explained]
+      also catches: heart cath, cardiac cath, catheterization
+cardiology  ->  heart doctor
+      also catches: cardiologist
+dash diet  ->  an eating plan that lowers blood pressure   [OK if explained]
+      also catches: dash
+dialysis  ->  a machine that cleans your blood when the kidneys can't   [OK if explained]
+dietary modification  ->  changes to what you eat
+      also catches: dietary modifications, dietary changes
+endocrinology  ->  hormone and diabetes doctor
+      also catches: endocrinologist, endo
+gastroenterology  ->  stomach doctor
+      also catches: gastroenterologist
+moderate-intensity  ->  brisk, like fast walking
+      also catches: moderate intensity
+nephrology  ->  kidney doctor
+      also catches: nephrologist
+ophthalmology  ->  eye doctor
+      also catches: ophthalmologist
+podiatry  ->  foot doctor
+      also catches: podiatrist
+primary care physician  ->  regular doctor
+      also catches: pcp, primary care provider
+pulmonology  ->  lung doctor
+      also catches: pulmonologist, pulmonary clinic
+referral  ->  sending you to a specialist   [OK if explained]
+      also catches: refer, referring, referred
+revascularization  ->  restoring blood flow
+saturated fat  ->  the kind of fat in butter and red meat   [OK if explained]
+      also catches: saturated fats
+self-monitoring  ->  checking at home
+      also catches: smbg, self-monitoring of blood glucose
+sodium restriction  ->  cutting back on salt   [OK if explained]
+      also catches: sodium intake, low-sodium diet, low sodium diet
+weight reduction  ->  losing weight
+
+==== Abbreviations (10) ====
+
+bm  ->  bowel movement
+      also catches: bms
+bp  ->  blood pressure
+      also catches: bps
+cp  ->  chest pain
+dx  ->  diagnosis
+f/u  ->  follow-up
+      also catches: fu
+fhx  ->  family history
+      also catches: fh
+hx  ->  history
+      also catches: pmh, past medical history
+n/v  ->  nausea and vomiting
+rx  ->  prescription
+      also catches: rxs
+sx  ->  symptoms

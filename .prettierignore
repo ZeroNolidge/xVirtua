@@ -5,3 +5,4 @@ coverage
 .emulator-data
 package-lock.json
 PLAN.md
+docs/*.csv
