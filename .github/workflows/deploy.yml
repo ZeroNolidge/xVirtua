@@ -21,10 +21,15 @@ on:
         required: false
         default: ''
       app_check:
-        description: 'App Check: enforce (block requests not from the app), monitor (tokens only), or off'
+        description: 'App Check: monitor (send tokens, block nothing), enforce (block requests without a token; only if tokens are confirmed), or off'
         type: choice
-        options: [enforce, monitor, 'off']
-        default: enforce
+        options: [monitor, enforce, 'off']
+        default: monitor
+      patient_model:
+        description: 'Optional: set the patient model for all programs'
+        type: choice
+        options: [unchanged, claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5]
+        default: unchanged
 
 concurrency: deploy
 permissions:
@@ -89,10 +94,22 @@ jobs:
           node scripts/write-web-env.mjs
           npm run build -w web
 
+      - name: Confirm App Check tokens before enforcing
+        # Enforcement only turns on once the live app has sent valid tokens
+        # (counted by the /warm route). Otherwise this deploy stays in monitor mode.
+        id: confirm
+        if: ${{ inputs.app_check == 'enforce' && env.APPCHECK_SITE_KEY != '' }}
+        continue-on-error: true
+        run: npx tsx scripts/app-check-status.ts && echo "APP_CHECK_CONFIRMED=true" >> "$GITHUB_ENV"
+
+      - name: App Check enforcement status
+        if: ${{ inputs.app_check == 'enforce' && env.APP_CHECK_CONFIRMED != 'true' }}
+        run: echo "::warning::App Check tokens aren't confirmed yet, so this deploy keeps App Check in monitor mode (nothing is blocked). Open the app a few times, then deploy with enforce again."
+
       - name: Functions settings
         # APP_CHECK_ENFORCE makes every function reject requests without a valid App Check token.
         run: |
-          if [ "${{ inputs.app_check }}" = "enforce" ] && [ -n "${APPCHECK_SITE_KEY:-}" ]; then
+          if [ "${APP_CHECK_CONFIRMED:-}" = "true" ]; then
             echo "APP_CHECK_ENFORCE=true" > functions/.env
           else
             echo "APP_CHECK_ENFORCE=false" > functions/.env
@@ -143,7 +160,7 @@ jobs:
           done
 
       - name: Enforce App Check on Firestore and Storage
-        if: ${{ inputs.app_check == 'enforce' && env.APPCHECK_SITE_KEY != '' && contains(inputs.only, 'hosting') }}
+        if: ${{ env.APP_CHECK_CONFIRMED == 'true' }}
         continue-on-error: true
         run: |
           TOKEN=$(gcloud auth print-access-token)
@@ -164,6 +181,13 @@ jobs:
           gcloud storage buckets update "gs://$BUCKET" --lifecycle-file=storage-lifecycle.json --project "$PROJECT_ID"
           gcloud storage buckets describe "gs://$BUCKET" --format='json(lifecycle_config)'
 
+      - name: Set patient model
+        if: ${{ inputs.patient_model != 'unchanged' }}
+        run: npx tsx scripts/set-patient-model.ts "${{ inputs.patient_model }}"
+
+      - name: Move old numeric scores out of residents' view
+        run: npx tsx scripts/migrate-feedback.ts
+
       - name: Seed content
         if: ${{ inputs.seed_content }}
         run: npx tsx scripts/seed-content.ts --prod
@@ -177,7 +201,7 @@ jobs:
       - name: Summary
         run: |
           echo "### Deployed to https://$PROJECT_ID.web.app" >> "$GITHUB_STEP_SUMMARY"
-          echo "App Check: ${{ inputs.app_check }} (site key $([ -n "${APPCHECK_SITE_KEY:-}" ] && echo set || echo missing))" >> "$GITHUB_STEP_SUMMARY"
+          echo "App Check: requested ${{ inputs.app_check }}; site key $([ -n "${APPCHECK_SITE_KEY:-}" ] && echo set || echo missing); enforced: ${APP_CHECK_CONFIRMED:-false}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove credentials
         if: always()

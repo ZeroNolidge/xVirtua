@@ -16,6 +16,9 @@ Status: **Approved with changes (round 1).** Decisions marked **❓** are still 
 | D8 | Retention: **audio 3 years, transcripts and scores 3 years** (both admin-configurable). |
 | D9 | **HIPAA/BAA not required** (all patients are fictional). Vendors are chosen on accuracy, latency and price; BAA columns below are informational only. |
 | D10 | Phase 3 includes a **transcription bake-off**: the same 10 jargon-heavy recordings through OpenAI Realtime, Deepgram Nova-3 and Soniox (~$0.002/min), comparing jargon caught, latency and cost. OpenAI stays the default unless another matches it. |
+| D12 | (2026-10-18, supersedes D2) **Residents see a word plus a trend** ("Getting there, up from last time"), never 0–100 numbers. Exact scores live in a faculty-only record for the dashboard and Milestones export. Feedback = one strength + two fixes from two different areas; the rest behind "See all suggestions". |
+| D13 | **Rewrites never add facts**: rubric v2 forbids new clinical, legal or licensing facts; a server check hides and flags rewrites that add licensing/legal terms, drug names or numbers the resident didn't say. |
+| D14 | **Patient model default: Haiku 5.5** (fastest in the bench, stayed in character). Faculty can switch in Settings. |
 | D11 | Defaults accepted: voice-first + Phase 8 avatar bake-off; all program faculty see all program residents; 5–8 min sessions, soft cap 12; ACGME export shows evidence only. |
 
 Still open, with defaults I'll use unless you say otherwise:

@@ -54,6 +54,9 @@ async function seed() {
     await setDoc(doc(db, 'sessions/sA'), { uid: 'resA', programId: 'irmc', status: 'scored' });
     await setDoc(doc(db, 'sessions/sA/turns/0'), { idx: 0, speaker: 'patient', text: 'Hi' });
     await setDoc(doc(db, 'sessions/sA/scores/2026-11-v1'), { overall: 70 });
+    await setDoc(doc(db, 'sessions/sA/feedback/current'), {
+      overall: { band: 'Solid', trend: 'up' },
+    });
     await setDoc(doc(db, 'scenarios/htn'), { programId: 'irmc', status: 'active', title: 'HTN' });
     await setDoc(doc(db, 'scenarios/htn/versions/1'), { title: 'HTN' });
     await setDoc(doc(db, 'scenarios/htn/versions/1/private/script'), { hiddenConcern: 'secret' });
@@ -205,12 +208,18 @@ describe('progress and stats (server-owned)', () => {
 });
 
 describe('sessions, turns, scores', () => {
-  it('owner and same-program faculty can read', async () => {
+  it('owner and same-program faculty can read the session, turns and word feedback', async () => {
     for (const ctx of [a.resA, a.facultyIrmc]) {
       await assertSucceeds(getDoc(doc(fs(ctx), 'sessions/sA')));
       await assertSucceeds(getDoc(doc(fs(ctx), 'sessions/sA/turns/0')));
-      await assertSucceeds(getDoc(doc(fs(ctx), 'sessions/sA/scores/2026-11-v1')));
+      await assertSucceeds(getDoc(doc(fs(ctx), 'sessions/sA/feedback/current')));
     }
+  });
+
+  it('exact 0–100 scores are faculty-only: the resident cannot read their own numbers', async () => {
+    await assertSucceeds(getDoc(doc(fs(a.facultyIrmc), 'sessions/sA/scores/2026-11-v1')));
+    await assertFails(getDoc(doc(fs(a.resA), 'sessions/sA/scores/2026-11-v1')));
+    await assertFails(getDocs(collection(fs(a.resA), 'sessions/sA/scores')));
   });
 
   it('other residents and other-program faculty cannot read', async () => {
@@ -218,6 +227,7 @@ describe('sessions, turns, scores', () => {
       await assertFails(getDoc(doc(fs(ctx), 'sessions/sA')));
       await assertFails(getDoc(doc(fs(ctx), 'sessions/sA/turns/0')));
       await assertFails(getDoc(doc(fs(ctx), 'sessions/sA/scores/2026-11-v1')));
+      await assertFails(getDoc(doc(fs(ctx), 'sessions/sA/feedback/current')));
     }
   });
 
@@ -238,6 +248,7 @@ describe('sessions, turns, scores', () => {
     await assertFails(updateDoc(doc(fs(a.resA), 'sessions/sA'), { status: 'scored' }));
     await assertFails(setDoc(doc(fs(a.resA), 'sessions/sA/turns/1'), { text: 'fake' }));
     await assertFails(setDoc(doc(fs(a.resA), 'sessions/sA/scores/2026-11-v1'), { overall: 100 }));
+    await assertFails(setDoc(doc(fs(a.resA), 'sessions/sA/feedback/current'), { overall: null }));
     await assertFails(
       setDoc(doc(fs(a.facultyIrmc), 'sessions/sA/scores/2026-11-v1'), { overall: 0 }),
     );

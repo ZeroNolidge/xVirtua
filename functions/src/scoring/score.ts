@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
-import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue, type Firestore, type Timestamp } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 import {
@@ -17,6 +17,7 @@ import {
   type JargonResult,
   type MetricScore,
   type Moment,
+  type ResidentFeedback,
   type ScoreDoc,
   type ScoringWeights,
   type UnderstandingCheck,
@@ -25,6 +26,7 @@ import { parse, type Caller } from '../lib/callable.js';
 import { consumeQuota } from '../lib/quota.js';
 import { loadScenario } from '../session/scenario.js';
 import { RUBRIC, SCORE_JSON_SCHEMA } from './rubric.js';
+import { checkRewrites, distinctFixes, toResidentFeedback } from './feedback.js';
 
 export const SCORING_MODEL = 'claude-opus-5-5';
 
@@ -432,105 +434,196 @@ export async function runScoring(
 
 const input = z.object({
   sessionId: z.string().min(1).max(64),
-  /** Faculty only: score again even if a score exists for this rubric version. */
+  /** Faculty only: score again (e.g. after a rubric change). */
   rescore: z.boolean().nullish(),
 });
 
 const matcher = createJargonMatcher(SEED_JARGON);
 
+/** Scoring that started this long ago and never finished is treated as failed. */
+const STUCK_SCORING_MS = 5 * 60_000;
+
+/** The resident's previous scored conversation's overall score, for the trend. */
+async function previousOverall(
+  db: Firestore,
+  uid: string,
+  sessionId: string,
+  startedAt: Timestamp | undefined,
+) {
+  if (!startedAt) return null;
+  const prev = await db
+    .collection('sessions')
+    .where('uid', '==', uid)
+    .orderBy('startedAt', 'desc')
+    .limit(20)
+    .get();
+  for (const d of prev.docs) {
+    if (d.id === sessionId || !d.get('scoredAt')) continue;
+    if ((d.get('startedAt') as Timestamp).toMillis() >= startedAt.toMillis()) continue;
+    const sc = await d.ref.collection('scores').orderBy('createdAt', 'desc').limit(1).get();
+    const o = sc.docs[0]?.get('overall');
+    if (typeof o === 'number') return o;
+  }
+  return null;
+}
+
+export interface ScoreResult {
+  /** What the resident sees: words and trend, no numbers. */
+  feedback: ResidentFeedback | null;
+  /** Faculty only: the exact scores. */
+  score?: ScoreDoc;
+  cached: boolean;
+  reason?: 'no-turns';
+}
+
 /**
- * Scores a finished conversation (or returns the saved score). The resident
- * who owns it or faculty in the same program may call it. Ends a still-open
- * conversation first, so turns already done can always be scored.
+ * Scores a finished conversation once and saves the result. Later calls
+ * return the saved feedback (the app reads it straight from Firestore and
+ * only calls this when there is none yet). Ends a still-open conversation
+ * first, so turns already done can always be scored.
+ *
+ * Writes two records:
+ * - sessions/{id}/scores/{rubricVersion}: exact 0–100 scores, faculty only.
+ * - sessions/{id}/feedback/current: words and trend for the resident.
  */
 export async function scoreSession(
   db: Firestore,
   caller: Caller | null,
   data: unknown,
   scorer: Scorer,
-) {
+): Promise<ScoreResult> {
   if (!caller) throw new HttpsError('unauthenticated', 'Please sign in.');
   const { sessionId, rescore } = parse(input, data);
   const ref = db.doc(`sessions/${sessionId}`);
-  const s = (await ref.get()).data();
-  const isFaculty = caller.claims.role === 'faculty' && caller.claims.programId === s?.programId;
-  if (!s || (s.uid !== caller.uid && !isFaculty))
+  const feedbackRef = ref.collection('feedback').doc('current');
+  const first = (await ref.get()).data();
+  const isFaculty =
+    caller.claims.role === 'faculty' && caller.claims.programId === first?.programId;
+  if (!first || (first.uid !== caller.uid && !isFaculty))
     throw new HttpsError('not-found', 'Session not found.');
+  const force = !!rescore && isFaculty;
 
-  const scoreRef = ref.collection('scores').doc(RUBRIC_VERSION);
-  const existing = await scoreRef.get();
-  if (existing.exists && !(rescore && isFaculty))
-    return { score: existing.data() as ScoreDoc, cached: true };
+  const facultyCopy = async () => {
+    if (!isFaculty) return {};
+    const sc = await ref.collection('scores').orderBy('createdAt', 'desc').limit(1).get();
+    return sc.docs[0] ? { score: sc.docs[0].data() as ScoreDoc } : {};
+  };
 
-  const turns = (await ref.collection('turns').orderBy('idx').get()).docs.map(
-    (d) => d.data() as Turn,
-  );
-  const residentTurns = turns.filter((t) => t.speaker === 'resident');
-  if (!residentTurns.length) return { score: null, cached: false, reason: 'no-turns' as const };
-
-  if (s.status === 'live') {
-    if (s.uid !== caller.uid)
-      throw new HttpsError('failed-precondition', 'This conversation is still going.');
-    const started = s.startedAt?.toMillis?.() ?? Date.now();
-    await ref.update({
-      status: 'ended',
-      endedReason: 'scored-early',
-      endedAt: FieldValue.serverTimestamp(),
-      durationSec: Math.round((Date.now() - started) / 1000),
-      pending: false,
-    });
-  }
-
-  await consumeQuota(db, caller.uid, 'scoring');
-  const sc = await loadScenario(db, s.scenarioId, s.scenarioVersion);
-  if (!sc) throw new HttpsError('not-found', 'Scenario not found.');
-  const program = (await db.doc(`programs/${s.programId}`).get()).data();
-  const weights =
-    (program?.scoringWeights as ScoringWeights | undefined) ?? DEFAULT_SCORING_WEIGHTS;
-
-  const jargon = scoreJargon(
-    residentTurns.map((t) => ({ idx: t.idx, text: t.text })),
-    matcher,
-  );
-  const prompt = buildScoringPrompt({
-    scenario: {
-      title: sc.briefing.title,
-      residentTask: sc.briefing.residentTask,
-      learningObjectives: sc.briefing.learningObjectives,
-      patientName: sc.briefing.persona.name,
-    },
-    cues: sc.script.cueScript,
-    turns,
-    jargon,
+  // Score once: take a lock, or return what's already saved.
+  const claim = await db.runTransaction(async (tx) => {
+    const [snap, fb] = await Promise.all([tx.get(ref), tx.get(feedbackRef)]);
+    const s = snap.data()!;
+    if (fb.exists && !force) return { saved: fb.data() as ResidentFeedback };
+    const started = (s.scoringAt as Timestamp | undefined)?.toMillis() ?? 0;
+    if (s.scoreState === 'running' && Date.now() - started < STUCK_SCORING_MS) {
+      throw new HttpsError(
+        'aborted',
+        'Your feedback is still being written. Check back in a minute.',
+      );
+    }
+    tx.update(ref, { scoreState: 'running', scoringAt: FieldValue.serverTimestamp() });
+    return { saved: null, s };
   });
-  const promptHash = createHash('sha256')
-    .update(prompt.system)
-    .update(JSON.stringify(SCORE_JSON_SCHEMA))
-    .digest('hex')
-    .slice(0, 16);
+  if (claim.saved) return { feedback: claim.saved, cached: true, ...(await facultyCopy()) };
+  const s = claim.s!;
 
-  let result;
   try {
-    result = await runScoring(scorer, prompt, turns);
-  } catch (e) {
-    console.error('scoring failed', e);
-    throw new HttpsError(
-      'unavailable',
-      'Feedback isn’t available right now. Please try again in a minute.',
+    const turns = (await ref.collection('turns').orderBy('idx').get()).docs.map(
+      (d) => d.data() as Turn,
     );
+    const residentTurns = turns.filter((t) => t.speaker === 'resident');
+    if (!residentTurns.length) {
+      await ref.update({ scoreState: FieldValue.delete() });
+      return { feedback: null, cached: false, reason: 'no-turns' };
+    }
+
+    if (s.status === 'live') {
+      if (s.uid !== caller.uid)
+        throw new HttpsError('failed-precondition', 'This conversation is still going.');
+      const startedAt = s.startedAt?.toMillis?.() ?? Date.now();
+      await ref.update({
+        status: 'ended',
+        endedReason: 'scored-early',
+        endedAt: FieldValue.serverTimestamp(),
+        durationSec: Math.round((Date.now() - startedAt) / 1000),
+        pending: false,
+      });
+    }
+
+    await consumeQuota(db, caller.uid, 'scoring');
+    const sc = await loadScenario(db, s.scenarioId, s.scenarioVersion);
+    if (!sc) throw new HttpsError('not-found', 'Scenario not found.');
+    const program = (await db.doc(`programs/${s.programId}`).get()).data();
+    const weights =
+      (program?.scoringWeights as ScoringWeights | undefined) ?? DEFAULT_SCORING_WEIGHTS;
+
+    const jargon = scoreJargon(
+      residentTurns.map((t) => ({ idx: t.idx, text: t.text })),
+      matcher,
+    );
+    const prompt = buildScoringPrompt({
+      scenario: {
+        title: sc.briefing.title,
+        residentTask: sc.briefing.residentTask,
+        learningObjectives: sc.briefing.learningObjectives,
+        patientName: sc.briefing.persona.name,
+      },
+      cues: sc.script.cueScript,
+      turns,
+      jargon,
+    });
+    const promptHash = createHash('sha256')
+      .update(prompt.system)
+      .update(JSON.stringify(SCORE_JSON_SCHEMA))
+      .digest('hex')
+      .slice(0, 16);
+
+    let result;
+    try {
+      result = await runScoring(scorer, prompt, turns);
+    } catch (e) {
+      console.error('scoring failed', e);
+      throw new HttpsError(
+        'unavailable',
+        'Feedback isn’t available right now. Please try again in a minute.',
+      );
+    }
+    const assembled = assembleScore({
+      claude: result.claude,
+      jargon,
+      turns,
+      cues: sc.script.cueScript,
+      weights,
+      needsReview: result.needsReview,
+      model: result.model,
+      promptHash,
+    });
+    // Rewrites must not add facts; then make sure the two fixes cover two areas.
+    const checked = checkRewrites(assembled, residentTurns.map((t) => t.text).join(' \n '));
+    const prev = await previousOverall(db, s.uid, sessionId, s.startedAt);
+    const full: ScoreDoc = {
+      ...checked,
+      fixes: distinctFixes(checked),
+      previousOverall: prev,
+      createdAt: new Date().toISOString(),
+    };
+    const feedback = toResidentFeedback(full, prev);
+
+    const batch = db.batch();
+    batch.set(ref.collection('scores').doc(RUBRIC_VERSION), full);
+    batch.set(feedbackRef, feedback);
+    batch.update(ref, {
+      scoreState: 'done',
+      scoredAt: FieldValue.serverTimestamp(),
+      latestRubricVersion: RUBRIC_VERSION,
+      // Residents can read the session doc, so it only gets the word.
+      feedbackBand: feedback.overall?.band ?? null,
+      overall: FieldValue.delete(),
+    });
+    await batch.commit();
+    return { feedback, cached: false, ...(isFaculty ? { score: full } : {}) };
+  } catch (e) {
+    await ref.update({ scoreState: FieldValue.delete() }).catch(() => undefined);
+    throw e;
   }
-  const doc = assembleScore({
-    claude: result.claude,
-    jargon,
-    turns,
-    cues: sc.script.cueScript,
-    weights,
-    needsReview: result.needsReview,
-    model: result.model,
-    promptHash,
-  });
-  const full: ScoreDoc = { ...doc, createdAt: new Date().toISOString() };
-  await scoreRef.set(full);
-  await ref.update({ latestRubricVersion: RUBRIC_VERSION, overall: doc.overall });
-  return { score: full, cached: false };
 }

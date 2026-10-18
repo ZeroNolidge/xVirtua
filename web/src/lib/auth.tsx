@@ -1,3 +1,4 @@
+import { reportError } from './errorReport';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { onIdTokenChanged, signOut as fbSignOut, type User } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -53,8 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch((e: unknown) => {
-        const code = typeof e === 'object' && e && 'code' in e ? String(e.code) : 'unknown';
-        setError(`We couldn’t finish setting up your account. Please try again. (code: ${code})`);
+        // Details go to our error log, never on screen.
+        reportError('claimInvite', e);
+        setError('We couldn’t finish setting up your account. Please try again.');
       })
       .finally(() => {
         claimingFor.current = null;

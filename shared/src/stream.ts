@@ -92,8 +92,26 @@ export function stripStageDirections(text: string): string {
 export class SentenceSplitter {
   private emitted = 0;
 
+  /**
+   * `firstClauseMinWords`: let the very first piece end at a comma or dash
+   * once it has this many words, so speech can start sooner.
+   */
+  constructor(private readonly opts: { firstClauseMinWords?: number } = {}) {}
+
   take(text: string, final = false): string[] {
     const out: string[] = [];
+    const min = this.opts.firstClauseMinWords;
+    if (min && this.emitted === 0) {
+      const sentenceEnd = /[.!?…]/.exec(text)?.index ?? Infinity;
+      for (const m of text.matchAll(/[,;:—–]\s+/g)) {
+        if (m.index > sentenceEnd) break;
+        const piece = text.slice(0, m.index + 1).trim();
+        if (piece.split(/\s+/).length < min) continue;
+        out.push(piece);
+        this.emitted = m.index + m[0].length;
+        break;
+      }
+    }
     const re = /[.!?…]+["'”’)\]]*\s+/g;
     re.lastIndex = this.emitted;
     let m: RegExpExecArray | null;

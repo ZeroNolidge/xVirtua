@@ -1,5 +1,10 @@
 import { httpsCallable } from 'firebase/functions';
-import type { PatientChunk, PatientModel, PatientUtterance, ScoreDoc } from '@plainspeak/shared';
+import type {
+  PatientChunk,
+  PatientModel,
+  PatientUtterance,
+  ResidentFeedback,
+} from '@plainspeak/shared';
 import { appCheckHeaders, auth, functions, usingEmulators } from './firebase';
 
 export type Utterance = PatientUtterance & { idx: number };
@@ -44,9 +49,10 @@ export const sessionApi = {
     { sessionId: string },
     { value: string; expiresAt: number | null; model: string }
   >(functions, 'getSttToken'),
+  /** Scores once; the result is saved and read from Firestore after that. */
   score: httpsCallable<
-    { sessionId: string; rescore?: boolean },
-    { score: ScoreDoc | null; cached: boolean; reason?: 'no-turns' }
+    { sessionId: string },
+    { feedback: ResidentFeedback | null; cached: boolean; reason?: 'no-turns' }
   >(functions, 'scoreSession', { timeout: 300_000 }),
 };
 
@@ -73,34 +79,31 @@ export async function streamTurn(
   return result;
 }
 
-const WARM_FUNCTIONS = ['startSession', 'getSttToken', 'patientTurn'] as const;
 let lastWarm = 0;
 
 /**
  * Wakes the conversation servers (they scale to zero when idle) so the first
- * reply has no cold start. Sent on app open, briefing open and app resume,
- * only when signed in; throttled to once every 2 minutes. The servers answer
- * these before calling any paid service.
+ * reply has no cold start. One ping to the free /warm route, sent on app open,
+ * briefing open and app resume, only when signed in; throttled to once every
+ * 2 minutes. The server wakes the others through their warm-up path, which
+ * returns before any paid service is called.
  */
 export function prewarmConversation() {
   if (!auth.currentUser || Date.now() - lastWarm < 120_000) return;
   lastWarm = Date.now();
-  for (const name of WARM_FUNCTIONS) {
-    void httpsCallable(functions, name)({ warmup: true }).catch(() => undefined);
-  }
   void voiceHeaders()
-    .then((headers) =>
-      fetch(ttsUrl(), { method: 'POST', headers, body: JSON.stringify({ warmup: true }) }),
-    )
+    .then((headers) => fetch(functionUrl('warm'), { method: 'POST', headers, body: '{}' }))
     .catch(() => undefined);
 }
 
-function ttsUrl(): string {
+function functionUrl(name: string): string {
   const project = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'demo-plainspeak';
   return usingEmulators
-    ? `http://${window.location.hostname}:5001/${project}/us-east1/tts`
-    : `https://us-east1-${project}.cloudfunctions.net/tts`;
+    ? `http://${window.location.hostname}:5001/${project}/us-east1/${name}`
+    : `https://us-east1-${project}.cloudfunctions.net/${name}`;
 }
+
+const ttsUrl = () => functionUrl('tts');
 
 /** Sign-in and App Check headers for the voice endpoint. */
 async function voiceHeaders(): Promise<Record<string, string>> {

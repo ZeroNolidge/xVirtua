@@ -41,6 +41,19 @@ describe('SentenceSplitter', () => {
   });
 });
 
+describe('SentenceSplitter first clause', () => {
+  it('starts at the first comma once there are enough words, then goes by sentence', () => {
+    const s = new SentenceSplitter({ firstClauseMinWords: 4 });
+    expect(s.take('Well, I')).toEqual([]);
+    expect(s.take('Well, I guess that makes sense, but')).toEqual([
+      'Well, I guess that makes sense,',
+    ]);
+    expect(s.take('Well, I guess that makes sense, but what about my job? And', false)).toEqual([
+      'but what about my job?',
+    ]);
+  });
+});
+
 describe('stripStageDirections', () => {
   it('removes parenthetical and starred directions', () => {
     expect(stripStageDirections('(frowns) I don’t know, *looks away* maybe.')).toBe(

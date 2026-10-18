@@ -24,7 +24,10 @@ vi.mock('../lib/auth', () => ({
 }));
 vi.mock('../components/PlainWordSearch', () => ({ PlainWordSearch: () => null }));
 
+/** Set to hold the next reply until released (to type while Ray is "thinking"). */
+let hold: Promise<void> | null = null;
 const streamTurn = vi.fn(async (_input: unknown, onChunk: (c: PatientChunk) => void) => {
+  if (hold) await hold;
   onChunk({
     t: 'meta',
     delivery: { emotion: 'worried', volume: 'normal', rate: 'normal', pauseBeforeMs: 0 },
@@ -116,5 +119,37 @@ describe('conversation screen', () => {
 
     // Leaving the screen runs every effect cleanup.
     expect(() => unmount()).not.toThrow();
+  });
+
+  it('queues a reply sent while Ray is still answering and sends it when he finishes', async () => {
+    streamTurn.mockClear();
+    let release!: () => void;
+    hold = new Promise<void>((r) => (release = r));
+    const { unmount } = renderSession();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /start talking/i }));
+    });
+    const box = await screen.findByRole('textbox', { name: /your reply/i });
+    await act(async () => {
+      fireEvent.change(box, { target: { value: 'First thing.' } });
+      fireEvent.submit(box.closest('form')!);
+    });
+    // Ray is thinking: Enter on the next message must not drop it.
+    await act(async () => {
+      fireEvent.change(box, { target: { value: 'And one more thing.' } });
+      fireEvent.submit(box.closest('form')!);
+    });
+    expect(screen.getByText('And one more thing.')).toBeInTheDocument();
+    expect(screen.getByText(/sends when ray finishes/i)).toBeInTheDocument();
+    expect(streamTurn).toHaveBeenCalledTimes(1);
+
+    hold = null;
+    await act(async () => {
+      release();
+    });
+    await vi.waitFor(() => expect(streamTurn).toHaveBeenCalledTimes(2));
+    expect((streamTurn.mock.calls[1]![0] as { text: string }).text).toBe('And one more thing.');
+    expect(screen.queryByText(/sends when ray finishes/i)).toBeNull();
+    unmount();
   });
 });

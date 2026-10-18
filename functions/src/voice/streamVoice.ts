@@ -16,6 +16,8 @@ export class SentenceVoicer {
   private seq = 0;
   voiced = 0;
   failed = false;
+  /** When the first audio chunk was sent (Date.now()). */
+  firstAudioAt: number | null = null;
 
   constructor(
     private readonly send: (chunk: PatientChunk) => Promise<unknown>,
@@ -36,6 +38,7 @@ export class SentenceVoicer {
         return;
       }
       this.voiced++;
+      this.firstAudioAt ??= Date.now();
       await this.send({
         t: 'audio',
         seq,

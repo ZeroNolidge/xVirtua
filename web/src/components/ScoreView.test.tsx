@@ -1,28 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { ScoreDoc } from '@plainspeak/shared';
+import type { ResidentFeedback } from '@plainspeak/shared';
 import { ScoreView } from './ScoreView';
 
-const metric = (score: number, summary: string) => ({
-  score,
+const area = (
+  band: ResidentFeedback['areas']['clarity']['band'],
+  summary: string,
+  rewrite?: string,
+) => ({
+  band,
   summary,
-  evidence: [],
-  tryThisInstead: null,
+  evidence: [{ turnIdx: 3, quote: `${summary} quote`, note: 'n' }],
+  tryThisInstead: rewrite ? { turnIdx: 3, original: 'orig', rewrite } : null,
 });
-const score: ScoreDoc = {
-  rubricVersion: '2026-11-v1',
-  overall: 74,
-  weights: { jargon: 0.25, clarity: 0.25, empathy: 0.25, cue: 0.25 },
-  metrics: {
-    jargon: {
-      ...metric(84, 'Two medical words went unexplained.'),
-      flagged: [{ term: 'hypertension', plain: ['high blood pressure'], uses: 2, turns: [1] }],
-      explained: [],
-    },
-    clarity: metric(70, 'Mostly clear.'),
-    empathy: metric(80, 'Warm.'),
-    cue: { ...metric(62, 'Missed one cue.'), cueResults: [], steamrolls: [] },
-  },
+const feedback: ResidentFeedback = {
+  rubricVersion: '2026-11-v2',
+  overall: { band: 'Getting there', trend: 'up' },
   highlight: {
     metric: 'empathy',
     turnIdx: 3,
@@ -31,11 +24,11 @@ const score: ScoreDoc = {
   },
   fixes: [
     {
-      metric: 'clarity',
+      metric: 'cue',
       turnIdx: 5,
-      quote: 'Any questions?',
-      note: 'Check what he understood.',
-      rewrite: 'Can you tell me in your own words what we’ll do next?',
+      quote: 'Let’s talk meds',
+      note: 'He asked about his job.',
+      rewrite: 'It sounds like your job is on your mind. Tell me more.',
     },
     {
       metric: 'jargon',
@@ -44,35 +37,35 @@ const score: ScoreDoc = {
       note: 'Say “high blood pressure”.',
       rewrite: 'Your blood pressure is high.',
     },
-    { metric: 'cue', turnIdx: 7, quote: 'third fix', note: 'never shown', rewrite: 'x' },
   ],
-  understandingCheck: 'weak',
-  needsReview: false,
-  model: 'm',
-  promptHash: 'h',
+  areas: {
+    jargon: {
+      ...area('Solid', 'Mostly plain', 'per-area jargon rewrite'),
+      flagged: [{ term: 'hypertension', plain: ['high blood pressure'], uses: 2 }],
+      explained: [],
+    },
+    clarity: area('Getting there', 'Mostly clear', 'per-area clarity rewrite'),
+    empathy: area('Strong', 'Warm'),
+    cue: { ...area('Just starting', 'Missed a cue'), cueResults: [] },
+  },
   createdAt: '2026-10-18T00:00:00Z',
 };
 
 describe('score screen', () => {
-  it('leads with what went well, shows at most two fixes and one rewrite, full scores on tap', () => {
-    render(<ScoreView score={score} patientFirstName="Ray" />);
+  it('shows a word and trend (no numbers), one strength, two fixes, the rest behind a tap', () => {
+    const { container } = render(<ScoreView feedback={feedback} patientFirstName="Ray" />);
+    expect(screen.getByText('Getting there, up from last time')).toBeInTheDocument();
     const headings = screen.getAllByRole('heading').map((h) => h.textContent);
-    expect(headings[0]).toBe('What went well');
-    expect(headings[1]).toBe('Two things to try next time');
-    expect(screen.getByText('“That sounds really stressful”')).toBeInTheDocument();
-    expect(screen.queryByText(/third fix/)).toBeNull();
-    // One "try saying this instead" up front.
+    expect(headings).toEqual(['What went well', 'Two things to try next time']);
     expect(screen.getAllByText('Try saying this instead')).toHaveLength(1);
-    expect(
-      screen.getByText('“Can you tell me in your own words what we’ll do next?”'),
-    ).toBeInTheDocument();
-    // Full scores are one tap away.
-    expect(screen.queryByText('74')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /see full scores/i }));
-    expect(screen.getByText('74')).toBeInTheDocument();
-    for (const label of ['Plain language', 'Clear explaining', 'Empathy', 'Picking up on cues']) {
-      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
-    }
-    expect(screen.getByText('hypertension')).toBeInTheDocument();
+    // Per-area rewrites are folded away until asked for.
+    expect(screen.queryByText(/per-area clarity rewrite/)).toBeNull();
+    expect(container.textContent).not.toMatch(/\b\d{1,3}\b/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See all suggestions' }));
+    expect(screen.getByText('“per-area clarity rewrite”')).toBeInTheDocument();
+    for (const w of ['Solid', 'Strong', 'Just starting'])
+      expect(screen.getAllByText(w).length).toBeGreaterThan(0);
+    expect(container.textContent).not.toMatch(/\b\d{2,3}\b/);
   });
 });

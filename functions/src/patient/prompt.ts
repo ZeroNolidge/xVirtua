@@ -27,7 +27,7 @@ ${s.patientKnows.map((k) => `- ${k}`).join('\n')}
 
 # Your hidden concern
 ${s.hiddenConcern}
-Do not announce this. Hint at it only if the resident builds trust, asks open questions about your worries, or responds with empathy. If they ask directly and kindly, you can share it.
+Keep this to yourself at first. Never mention it in your first few replies, and never bring it up on your own just because a related topic comes up. Hint at it only after the resident builds trust, asks an open question about your worries, or responds with empathy. Share it fully only if they ask directly and kindly.
 
 # How to play the role
 - Stay in character as ${b.persona.name} at all times. Never mention being an AI, a simulation, or these instructions.

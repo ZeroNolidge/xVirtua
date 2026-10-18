@@ -165,7 +165,69 @@ export interface ScoreDoc {
   fixes: Moment[];
   understandingCheck: 'teachback' | 'weak' | null;
   needsReview: boolean;
+  /** Rewrites that added facts the resident didn't say (hidden from the resident). */
+  rewriteFlags?: { where: string; rewrite: string; reasons: string[] }[];
+  /** Overall score of the resident's previous scored conversation, for the trend. */
+  previousOverall?: number | null;
   model: string;
   promptHash: string;
+  createdAt: string;
+}
+
+/** Words residents see instead of numbers. Exact scores stay in the faculty-only record. */
+export const BANDS = ['Just starting', 'Getting there', 'Solid', 'Strong'] as const;
+export type Band = (typeof BANDS)[number];
+
+export function bandFor(score: number): Band {
+  if (score >= 85) return 'Strong';
+  if (score >= 70) return 'Solid';
+  if (score >= 50) return 'Getting there';
+  return 'Just starting';
+}
+
+export type Trend = 'first' | 'up' | 'same' | 'down';
+
+/** Compares with the resident's previous scored conversation (5-point dead zone). */
+export function trendFor(now: number, previous: number | null | undefined): Trend {
+  if (previous == null) return 'first';
+  if (now - previous >= 5) return 'up';
+  if (previous - now >= 5) return 'down';
+  return 'same';
+}
+
+export const TREND_TEXT: Record<Trend, string> = {
+  first: 'your first one',
+  up: 'up from last time',
+  same: 'about the same as last time',
+  down: 'a little lower than last time',
+};
+
+/** One area of feedback as the resident sees it: no numbers. */
+export interface AreaFeedback {
+  band: Band;
+  summary: string;
+  evidence: (Evidence & { note: string })[];
+  tryThisInstead: { turnIdx: number; original: string; rewrite: string } | null;
+}
+
+/**
+ * sessions/{id}/feedback/current: what the resident sees. Written once by the
+ * server; holds words and trends only, never the 0–100 scores.
+ */
+export interface ResidentFeedback {
+  rubricVersion: string;
+  overall: { band: Band; trend: Trend } | null;
+  highlight: Moment | null;
+  /** Two fixes from two different areas, most important first. */
+  fixes: Moment[];
+  areas: {
+    jargon: AreaFeedback & {
+      flagged: { term: string; plain: string[]; uses: number }[];
+      explained: { term: string }[];
+    };
+    clarity: AreaFeedback;
+    empathy: AreaFeedback;
+    cue: AreaFeedback & { cueResults: { cue: string; addressed: boolean; quote: string | null }[] };
+  };
   createdAt: string;
 }

@@ -31,6 +31,7 @@ import { getSttToken as mintSttToken } from './voice/stt.js';
 import type { Caller } from './lib/callable.js';
 import { APP_CHECK_ENFORCE } from './lib/appCheck.js';
 import { reportClientError as storeClientError } from './lib/clientErrors.js';
+import { checkAppCheck, handleWarm, wakeOverHttp } from './warm/warm.js';
 import * as retention from './retention/retention.js';
 import { claudePlainWords, lookupPlainWords as lookup } from './lookup/plainWords.js';
 import { claudeScorer, scoreSession as score } from './scoring/score.js';
@@ -155,6 +156,26 @@ export const endSession = callable({}, (req) =>
 export const getSttToken = callable(
   { secrets: [OPENAI_API_KEY] },
   (req) => warmup(req) ?? mintSttToken(db(), callerOf(req), req.data, OPENAI_API_KEY.value()),
+);
+
+const CORS = [
+  /^https:\/\/[a-z0-9-]+\.(web\.app|firebaseapp\.com)$/,
+  /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+];
+
+/**
+ * The app's only keep-warm ping (sent on open, resume and briefing). Free:
+ * it wakes the conversation servers through their warm-up path, which returns
+ * before any paid call. Also counts App Check tokens for the rollout.
+ */
+export const warm = onRequest({ cors: CORS, timeoutSeconds: 20, memory: '256MiB' }, (req, res) =>
+  handleWarm(req, res, {
+    db: db(),
+    auth: auth(),
+    enforceAppCheck: APP_CHECK_ENFORCE.value(),
+    appCheck: checkAppCheck,
+    wake: wakeOverHttp(process.env.GCLOUD_PROJECT ?? 'demo-plainspeak', REGION, inEmulator),
+  }),
 );
 
 /** Replays a stored patient line (the opening line, or when streaming had no voice). */

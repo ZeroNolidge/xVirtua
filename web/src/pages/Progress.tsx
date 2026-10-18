@@ -18,7 +18,8 @@ interface Row {
   scenarioTitle?: string;
   status: 'live' | 'ended';
   startedAt?: Timestamp;
-  overall?: number | null;
+  /** A word like "Solid": residents never see the numbers. */
+  feedbackBand?: string | null;
 }
 
 /** The resident's past conversations, newest first. */
@@ -69,7 +70,7 @@ export function Progress() {
                     {r.status === 'live' ? ' · open' : ''}
                   </span>
                 </Link>
-                {typeof r.overall === 'number' && <span className="score-pill">{r.overall}</span>}
+                {r.feedbackBand && <span className="score-pill">{r.feedbackBand}</span>}
               </li>
             ))}
           </ul>

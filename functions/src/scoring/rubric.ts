@@ -30,11 +30,12 @@ Anchors: 90+ every cue caught and explored. 70s most cues caught, one missed or 
 - Quote the resident's words EXACTLY as they appear in the transcript line you cite (a short phrase or sentence, max 25 words). Cite that line's turn number.
 - Only quote RESIDENT turns as evidence, highlights, fixes and rewrites. Cue results cite the resident turn that responded.
 - Every "rewrite" is one or two sentences the resident could say instead, in plain, warm language at about a 6th-grade reading level. When no understanding check was done, the top rewrite should model teach-back.
+- A rewrite changes HOW the resident said something, never WHAT is medically or legally true. Use only facts the resident already said in the conversation. Never add new clinical facts (diagnoses, drug names, doses, test values, risks, timelines), legal facts, or licensing / driving / work-permit claims. If a better answer would need a fact the resident didn't give, rewrite toward asking, acknowledging, or checking understanding instead (e.g. "Let's look at what that means for your job together").
 - Coaching tone: never "wrong", "bad" or "fail". Notes are one short sentence each.
 
 ## Highlight and fixes
 - highlight: the single best moment in the conversation, from any metric.
-- fixes: at most 2, most important first, from any metric including jargon. Each has a rewrite; the first one is shown as "Try saying this instead".`;
+- fixes: exactly 2 when possible, most important first, from TWO DIFFERENT metrics (never the same metric twice; jargon counts as a metric). Each has a rewrite; the first one is shown as "Try saying this instead".`;
 
 const moment = (withRewrite: boolean) => ({
   type: 'object',

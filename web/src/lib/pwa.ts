@@ -1,18 +1,38 @@
 import { registerSW } from 'virtual:pwa-register';
 
 let updateWaiting = false;
+const listeners = new Set<() => void>();
 const inConversation = () => /^\/session\/[^/]+$/.test(window.location.pathname);
 
+/** True once a new version is ready but we held the reload (mid-conversation). */
+export const isUpdateWaiting = () => updateWaiting;
+export function onUpdateWaiting(fn: () => void) {
+  listeners.add(fn);
+  return () => void listeners.delete(fn);
+}
+
 /**
- * New app versions activate in the background. Reloading mid-conversation
- * would wipe the session, so the reload waits until the user leaves it.
+ * New app versions take over as soon as they're installed (skipWaiting +
+ * clientsClaim in the service worker). Outside a conversation the page reloads
+ * right away; during one we show "New version — tap to refresh" instead.
+ * The app also checks for a new version every 30 minutes and whenever it
+ * comes back to the foreground (iPhone home-screen apps rarely check on their own).
  */
 export function setupPwa() {
   registerSW({
     immediate: true,
     onNeedReload() {
-      if (inConversation()) updateWaiting = true;
-      else window.location.reload();
+      if (!inConversation()) return window.location.reload();
+      updateWaiting = true;
+      for (const fn of listeners) fn();
+    },
+    onRegisteredSW(_url, reg) {
+      if (!reg) return;
+      const check = () => void reg.update().catch(() => undefined);
+      window.setInterval(check, 30 * 60_000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+      });
     },
   });
 }

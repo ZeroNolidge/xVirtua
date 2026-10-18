@@ -81,6 +81,10 @@ const startInput = z.object({
 export async function startSession(db: Firestore, caller: Caller | null, data: unknown) {
   const me = requireMember(caller);
   const { scenarioId, model } = parse(startInput, data);
+  // The patient model is a faculty setting; residents can't pick one per session.
+  if (model && me.role !== 'faculty') {
+    throw new HttpsError('permission-denied', 'Only faculty can choose the patient model.');
+  }
 
   await consumeQuota(db, me.uid, 'sessions');
   const user = await db.doc(`users/${me.uid}`).get();
@@ -96,7 +100,8 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
 
   const program = await db.doc(`programs/${me.programId}`).get();
   const programModel =
-    (program.get('patientModel') as PatientModel | undefined) ?? 'claude-opus-5-5';
+    // Default: the fastest model that stayed in character in the bench (docs/patient-model-bench.md).
+    (program.get('patientModel') as PatientModel | undefined) ?? 'claude-haiku-5-5';
   const keepMonths =
     (program.get('transcriptRetentionMonths') as number | undefined) ??
     DEFAULT_TRANSCRIPT_RETENTION_MONTHS;
@@ -241,6 +246,9 @@ export async function patientTurn(
   const me = requireMember(caller);
   const input = parse(turnInput, data);
   const ref = db.doc(`sessions/${input.sessionId}`);
+  const t0 = Date.now();
+  // Read the conversation so far while the lock is taken (saves a round trip).
+  const turnsEarly = ref.collection('turns').orderBy('idx').get();
 
   // Reserve two turn slots (resident + patient) so concurrent calls can't collide.
   const [s] = await Promise.all([
@@ -268,10 +276,14 @@ export async function patientTurn(
   ]);
 
   try {
-    const sc = await loadScenario(db, s.scenarioId, s.scenarioVersion);
+    const [sc, early] = await Promise.all([
+      loadScenario(db, s.scenarioId, s.scenarioVersion),
+      turnsEarly,
+    ]);
     if (!sc) throw new HttpsError('not-found', 'Scenario not found.');
-
-    const turnsSnap = await ref.collection('turns').orderBy('idx').get();
+    // If a turn landed between the early read and the lock, read again.
+    const turnsSnap =
+      early.size === s.turnCount ? early : await ref.collection('turns').orderBy('idx').get();
     const turns = turnsSnap.docs.map((d) => d.data());
     const prevPatient = [...turns].reverse().find((t) => t.speaker === 'patient');
 
@@ -282,6 +294,8 @@ export async function patientTurn(
     let voicer: SentenceVoicer | null = null;
     let voiceId: string | null = s.voiceId ?? null;
     let onText: OnText | undefined;
+    // Where the time goes, for tuning (stored on the patient turn).
+    const timing: Record<string, number> = { preMs: Date.now() - t0 };
     let finishStream: ((finalText: string) => Promise<void>) | undefined;
     if (opts.send) {
       let voiceReady: Promise<string | null> | null = null;
@@ -309,13 +323,15 @@ export async function patientTurn(
             }
           : null,
       );
-      const splitter = new SentenceSplitter();
+      // The first piece is voiced at the first clause, so the patient starts sooner.
+      const splitter = new SentenceSplitter({ firstClauseMinWords: 4 });
       let started = false;
       let streamed = '';
       onText = (soFar: string, prefix: Record<string, unknown> | null) => {
         streamed = soFar;
         if (!started) {
           started = true;
+          timing.firstTextMs = Date.now() - t0;
           const meta = streamedDelivery(prefix, decision.cue);
           delivery = meta.delivery;
           void send({ t: 'meta', ...meta });
@@ -387,6 +403,11 @@ export async function patientTurn(
       model: result.model,
       latencyMs: result.latencyMs,
       usage: result.usage,
+      timing: {
+        ...timing,
+        ...(voicer?.firstAudioAt ? { firstAudioMs: voicer.firstAudioAt - t0 } : {}),
+        totalMs: Date.now() - t0,
+      },
       voicedInStream: voiced,
       createdAt: FieldValue.serverTimestamp(),
     });

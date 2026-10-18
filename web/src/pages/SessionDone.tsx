@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { collection, doc, getDoc, getDocs, orderBy, query } from 'firebase/firestore';
-import type { ScoreDoc } from '@plainspeak/shared';
+import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
+import type { ResidentFeedback } from '@plainspeak/shared';
 import { db } from '../lib/firebase';
 import { friendlyError } from '../lib/api';
+import { reportError } from '../lib/errorReport';
 import { sessionApi } from '../lib/session';
 import { ScoreView } from '../components/ScoreView';
 import { Loading } from './StatusScreens';
@@ -12,77 +13,130 @@ import { canContinue, type SessionRow } from '../lib/resume';
 
 type Meta = Partial<SessionRow>;
 
-type ScoreState =
-  | { state: 'idle' }
+type FeedbackState =
+  | { state: 'loading' }
+  | { state: 'missing' }
   | { state: 'working' }
-  | { state: 'ok'; score: ScoreDoc }
-  | { state: 'none' }
+  | { state: 'ok'; feedback: ResidentFeedback }
   | { state: 'error'; message: string };
 
-export function SessionDone() {
-  const { id = '' } = useParams();
-  const nav = useNavigate();
+/** The saved conversation plus its saved feedback (read live, never rescored). */
+function useConversation(id: string) {
   const [bubbles, setBubbles] = useState<Bubble[] | null>(null);
   const [meta, setMeta] = useState<Meta>({});
-  const [score, setScore] = useState<ScoreState>({ state: 'idle' });
-  const [showTranscript, setShowTranscript] = useState(false);
-
-  async function getFeedback() {
-    setScore({ state: 'working' });
-    try {
-      const { data } = await sessionApi.score({ sessionId: id });
-      setScore(data.score ? { state: 'ok', score: data.score } : { state: 'none' });
-    } catch (e) {
-      setScore({ state: 'error', message: friendlyError(e) });
-    }
-  }
-
-  // Load the saved conversation, then score it if it's finished.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const s = await getDoc(doc(db, 'sessions', id));
-      const t = await getDocs(query(collection(db, 'sessions', id, 'turns'), orderBy('idx')));
+      const [s, t] = await Promise.all([
+        getDoc(doc(db, 'sessions', id)),
+        getDocs(query(collection(db, 'sessions', id, 'turns'), orderBy('idx'))),
+      ]);
       if (cancelled) return;
-      const m = (s.data() as Meta | undefined) ?? {};
-      const list = t.docs.map((d) => {
-        const x = d.data() as {
-          idx: number;
-          speaker: 'patient' | 'resident';
-          text: string;
-          nonverbal?: string[];
-        };
-        return { key: `t${x.idx}`, who: x.speaker, text: x.text, nonverbal: x.nonverbal };
-      });
-      setMeta(m);
-      setBubbles(list);
-      const open = m.status === 'live' && canContinue(m as SessionRow);
-      if (!open && list.some((b) => b.who === 'resident')) await getFeedback();
+      setMeta((s.data() as Meta | undefined) ?? {});
+      setBubbles(
+        t.docs.map((d) => {
+          const x = d.data() as {
+            idx: number;
+            speaker: 'patient' | 'resident';
+            text: string;
+            nonverbal?: string[];
+          };
+          return { key: `t${x.idx}`, who: x.speaker, text: x.text, nonverbal: x.nonverbal };
+        }),
+      );
     })().catch(() => {
       if (!cancelled) setBubbles([]);
     });
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  return { bubbles, meta };
+}
+
+function useSavedFeedback(id: string): [FeedbackState, (s: FeedbackState) => void] {
+  const [fb, setFb] = useState<FeedbackState>({ state: 'loading' });
+  useEffect(() => {
+    return onSnapshot(
+      doc(db, 'sessions', id, 'feedback', 'current'),
+      (snap) => {
+        if (snap.exists()) setFb({ state: 'ok', feedback: snap.data() as ResidentFeedback });
+        else setFb((cur) => (cur.state === 'loading' ? { state: 'missing' } : cur));
+      },
+      () => setFb((cur) => (cur.state === 'loading' ? { state: 'missing' } : cur)),
+    );
+  }, [id]);
+  return [fb, setFb];
+}
+
+export function SessionDone() {
+  const { id = '' } = useParams();
+  const nav = useNavigate();
+  const { bubbles, meta } = useConversation(id);
+  const [fb, setFb] = useSavedFeedback(id);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const asked = useRef(false);
 
   const residentTurns = bubbles?.filter((b) => b.who === 'resident').length ?? 0;
   const resumable = meta.status === 'live' && canContinue(meta as SessionRow);
 
-  if (!bubbles) return <Loading label="Loading your conversation…" />;
+  /** Scores once on the server. The saved result then arrives through the listener above. */
+  async function requestFeedback() {
+    asked.current = true;
+    setFb({ state: 'working' });
+    try {
+      const { data } = await sessionApi.score({ sessionId: id });
+      if (data.feedback) setFb({ state: 'ok', feedback: data.feedback });
+    } catch (e) {
+      const code = typeof e === 'object' && e && 'code' in e ? String(e.code) : '';
+      // Another tab or an earlier visit is already writing it: wait for it to arrive.
+      if (code.endsWith('aborted')) return;
+      reportError('scoreSession', e);
+      setFb({ state: 'error', message: friendlyError(e) });
+    }
+  }
+
+  // Only when nothing is saved yet: a finished conversation with something said.
+  const needsScoring =
+    fb.state === 'missing' &&
+    bubbles !== null &&
+    residentTurns > 0 &&
+    meta.status !== undefined &&
+    !resumable;
+  useEffect(() => {
+    if (!needsScoring || asked.current) return;
+    const t = window.setTimeout(() => void requestFeedback(), 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsScoring]);
+
+  if (!bubbles || fb.state === 'loading') return <Loading label="Loading your conversation…" />;
   const first = meta.persona?.name.split(' ')[0] ?? 'the patient';
   const practiceSec = Math.max(0, (meta.durationSec ?? 0) - (meta.appWaitSec ?? 0));
   const mins = practiceSec ? Math.max(1, Math.round(practiceSec / 60)) : null;
 
+  // Nothing was said: no praise, just an easy way back in.
+  if (residentTurns === 0) {
+    return (
+      <section>
+        <h1>This one didn’t get going.</h1>
+        <div className="card">
+          <p>Want to try again?</p>
+          <Link to={meta.scenarioId ? `/scenario/${meta.scenarioId}` : '/'} className="btn">
+            Try again
+          </Link>
+          <Link to="/" className="btn btn-text">
+            Back to patients
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section>
       <h1>
-        {score.state === 'ok'
-          ? 'Nice work 👏'
-          : meta.status === 'live'
-            ? 'What you said so far'
-            : 'Nice work 👏'}
+        {fb.state === 'ok' ? 'Nice work 👏' : resumable ? 'What you said so far' : 'Your feedback'}
       </h1>
       <p className="muted">
         {meta.scenarioTitle ? `${meta.scenarioTitle} · ` : ''}
@@ -90,34 +144,19 @@ export function SessionDone() {
         {mins ? ` · about ${mins} min` : ''}
       </p>
 
-      {resumable && score.state === 'idle' && (
+      {resumable && fb.state === 'missing' && (
         <div className="card">
           <p>This conversation is still open. Everything you said is saved.</p>
           <button className="btn" onClick={() => nav(`/session/${id}`, { replace: true })}>
             Pick up where you left off
           </button>
-          <button
-            className="btn btn-secondary"
-            disabled={!residentTurns}
-            onClick={() => void getFeedback()}
-          >
-            Finish and get feedback
+          <button className="btn btn-secondary" onClick={() => void requestFeedback()}>
+            Get feedback on what you said
           </button>
         </div>
       )}
 
-      {residentTurns === 0 && (
-        <div className="card">
-          <p>You didn’t get to say anything yet, so there’s nothing to give feedback on.</p>
-          {meta.scenarioId && (
-            <Link to={`/scenario/${meta.scenarioId}`} className="btn">
-              Start this scenario again
-            </Link>
-          )}
-        </div>
-      )}
-
-      {score.state === 'working' && (
+      {fb.state === 'working' && (
         <div className="card center-card">
           <div className="spinner" aria-hidden="true" />
           <p className="muted">
@@ -125,39 +164,33 @@ export function SessionDone() {
           </p>
         </div>
       )}
-      {score.state === 'error' && (
+      {fb.state === 'error' && (
         <div className="card">
           <p className="error" role="alert">
-            {score.message}
+            {fb.message}
           </p>
-          <button className="btn" onClick={() => void getFeedback()}>
+          <button className="btn" onClick={() => void requestFeedback()}>
             Try again
           </button>
         </div>
       )}
-      {score.state === 'ok' && <ScoreView score={score.score} patientFirstName={first} />}
+      {fb.state === 'ok' && <ScoreView feedback={fb.feedback} patientFirstName={first} />}
 
-      {residentTurns > 0 && (
-        <>
-          <button
-            className="btn btn-text"
-            aria-expanded={showTranscript}
-            onClick={() => setShowTranscript((x) => !x)}
-          >
-            {showTranscript ? 'Hide the conversation' : 'Show the whole conversation'}
-          </button>
-          {showTranscript && (
-            <div className="card">
-              <Transcript bubbles={bubbles} patientFirstName={first} />
-              <p className="muted small">
-                {meta.audioPath ? 'Recording saved.' : 'Transcript saved.'}
-              </p>
-            </div>
-          )}
-        </>
+      <button
+        className="btn btn-text"
+        aria-expanded={showTranscript}
+        onClick={() => setShowTranscript((x) => !x)}
+      >
+        {showTranscript ? 'Hide the conversation' : 'Show the whole conversation'}
+      </button>
+      {showTranscript && (
+        <div className="card">
+          <Transcript bubbles={bubbles} patientFirstName={first} />
+          <p className="muted small">{meta.audioPath ? 'Recording saved.' : 'Transcript saved.'}</p>
+        </div>
       )}
 
-      {score.state !== 'working' && !resumable && (
+      {fb.state !== 'working' && !resumable && (
         <Link to="/" className="btn">
           Practice again
         </Link>

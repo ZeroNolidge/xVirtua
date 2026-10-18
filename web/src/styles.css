@@ -758,3 +758,31 @@ p {
 .btn.danger {
   color: #b03a2e;
 }
+.update-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: var(--text);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
+}
+.overall-word {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 12px;
+}
+.band {
+  font-weight: 700;
+  color: var(--primary);
+}
+.queued-note {
+  margin: 3px 6px 0 0;
+}

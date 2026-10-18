@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Metric, MetricScore, Moment, ScoreDoc } from '@plainspeak/shared';
-import { METRIC_LABEL } from './metricLabels';
+import { METRICS, type AreaFeedback, type Moment, type ResidentFeedback } from '@plainspeak/shared';
+import { METRIC_LABEL, overallText } from './metricLabels';
 
 function Quote({ text }: { text: string }) {
   return <blockquote className="quote">“{text}”</blockquote>;
@@ -30,34 +30,17 @@ function MomentCard({
   );
 }
 
-function Bar({ score }: { score: number }) {
-  return (
-    <div className="bar" role="img" aria-label={`${score} out of 100`}>
-      <div className="bar-fill" style={{ width: `${Math.max(2, Math.min(100, score))}%` }} />
-    </div>
-  );
-}
-
-function MetricDetail({
-  metric,
-  m,
-  extra,
-}: {
-  metric: Metric;
-  m: MetricScore;
-  extra?: React.ReactNode;
-}) {
+function Area({ name, a, extra }: { name: string; a: AreaFeedback; extra?: React.ReactNode }) {
   return (
     <div className="metric">
       <div className="metric-head">
-        <strong>{METRIC_LABEL[metric]}</strong>
-        <span className="metric-score">{m.score}</span>
+        <strong>{name}</strong>
+        <span className="band">{a.band}</span>
       </div>
-      <Bar score={m.score} />
-      <p className="muted">{m.summary}</p>
-      {m.evidence.length > 0 && (
+      <p className="muted">{a.summary}</p>
+      {a.evidence.length > 0 && (
         <ul className="evidence">
-          {m.evidence.map((e, i) => (
+          {a.evidence.map((e, i) => (
             <li key={i}>
               <Quote text={e.quote} />
               <span className="small muted">{e.note}</span>
@@ -66,109 +49,102 @@ function MetricDetail({
         </ul>
       )}
       {extra}
-      {m.tryThisInstead && (
+      {a.tryThisInstead && (
         <div className="rewrite">
           <div className="rewrite-label">Try saying this instead</div>
-          <p className="small muted">Instead of “{m.tryThisInstead.original}”</p>
-          <p>“{m.tryThisInstead.rewrite}”</p>
+          <p className="small muted">Instead of “{a.tryThisInstead.original}”</p>
+          <p>“{a.tryThisInstead.rewrite}”</p>
         </div>
       )}
     </div>
   );
 }
 
-/** Coaching-style results: one win first, at most two fixes, full scores one tap away. */
+/**
+ * Coaching-style results: one strength, two fixes from two different areas,
+ * everything else one tap away. Residents see words and trends, never numbers.
+ */
 export function ScoreView({
-  score,
+  feedback,
   patientFirstName,
 }: {
-  score: ScoreDoc;
+  feedback: ResidentFeedback;
   patientFirstName: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { metrics: m } = score;
+  const { areas } = feedback;
   return (
     <>
-      {score.highlight && (
+      {feedback.overall && (
+        <p className="overall-word" aria-label="Overall">
+          {overallText(feedback.overall)}
+        </p>
+      )}
+
+      {feedback.highlight && (
         <div className="card">
           <h2>What went well</h2>
-          <MomentCard m={score.highlight} kind="good" showRewrite={false} />
+          <MomentCard m={feedback.highlight} kind="good" showRewrite={false} />
         </div>
       )}
 
-      {score.fixes.length > 0 && (
+      {feedback.fixes.length > 0 && (
         <div className="card">
           <h2>
-            {score.fixes.length === 1
+            {feedback.fixes.length === 1
               ? 'One thing to try next time'
               : 'Two things to try next time'}
           </h2>
-          {score.fixes.slice(0, 2).map((f, i) => (
+          {feedback.fixes.slice(0, 2).map((f, i) => (
             <MomentCard key={i} m={f} kind="fix" showRewrite={i === 0} />
           ))}
         </div>
       )}
 
       <button className="btn btn-secondary" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
-        {open ? 'Hide full scores' : 'See full scores'}
+        {open ? 'Hide suggestions' : 'See all suggestions'}
       </button>
 
       {open && (
         <div className="card scores">
-          {score.overall !== null && (
-            <div className="overall">
-              <span className="overall-num">{score.overall}</span>
-              <span className="muted small">overall, out of 100</span>
-            </div>
-          )}
-          <MetricDetail
-            metric="jargon"
-            m={m.jargon}
-            extra={
-              <>
-                {m.jargon.flagged.length > 0 && (
-                  <ul className="swaps">
-                    {m.jargon.flagged.map((f) => (
-                      <li key={f.term}>
-                        <strong>{f.term}</strong> → {f.plain.join(' or ')}
-                        {f.uses > 1 && <span className="muted small"> ({f.uses}×)</span>}
+          {METRICS.map((m) => (
+            <Area
+              key={m}
+              name={METRIC_LABEL[m]}
+              a={areas[m]}
+              extra={
+                m === 'jargon' ? (
+                  <>
+                    {areas.jargon.flagged.length > 0 && (
+                      <ul className="swaps">
+                        {areas.jargon.flagged.map((f) => (
+                          <li key={f.term}>
+                            <strong>{f.term}</strong> → {f.plain.join(' or ')}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {areas.jargon.explained.length > 0 && (
+                      <p className="small ok">
+                        Nice: you explained{' '}
+                        {areas.jargon.explained.map((e) => `“${e.term}”`).join(', ')}.
+                      </p>
+                    )}
+                  </>
+                ) : m === 'cue' && areas.cue.cueResults.length > 0 ? (
+                  <ul className="cue-results">
+                    {areas.cue.cueResults.map((c, i) => (
+                      <li key={i}>
+                        <span aria-hidden="true">{c.addressed ? '✅' : '◻️'}</span>{' '}
+                        {patientFirstName}: {c.cue}
+                        {c.quote && <span className="muted small"> — you said “{c.quote}”</span>}
                       </li>
                     ))}
                   </ul>
-                )}
-                {m.jargon.explained.length > 0 && (
-                  <p className="small ok">
-                    Nice: you explained {m.jargon.explained.map((e) => `“${e.term}”`).join(', ')}.
-                  </p>
-                )}
-              </>
-            }
-          />
-          <MetricDetail metric="clarity" m={m.clarity} />
-          <MetricDetail metric="empathy" m={m.empathy} />
-          <MetricDetail
-            metric="cue"
-            m={m.cue}
-            extra={
-              m.cue.cueResults.length > 0 && (
-                <ul className="cue-results">
-                  {m.cue.cueResults.map((c, i) => (
-                    <li key={i}>
-                      <span aria-hidden="true">{c.addressed ? '✅' : '◻️'}</span> {patientFirstName}
-                      : {c.cue}
-                      {c.quote && <span className="muted small"> — you said “{c.quote}”</span>}
-                    </li>
-                  ))}
-                </ul>
-              )
-            }
-          />
-          <p className="muted small">
-            Each area counts {Math.round(score.weights.jargon * 100)}% of the overall score. Rubric{' '}
-            {score.rubricVersion}.
-            {score.needsReview &&
-              ' Some quotes couldn’t be matched to the transcript, so faculty may review this one.'}
-          </p>
+                ) : null
+              }
+            />
+          ))}
         </div>
       )}
     </>

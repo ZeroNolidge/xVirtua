@@ -78,7 +78,10 @@ describe('startSession', () => {
     const f = await startSession(db, faculty, { scenarioId: htn.id, model: 'claude-haiku-5-5' });
     expect(f.patientModel).toBe('claude-haiku-5-5');
     await seedScenario('active');
-    const r = await startSession(db, resident, { scenarioId: htn.id, model: 'claude-haiku-5-5' });
+    await expect(
+      startSession(db, resident, { scenarioId: htn.id, model: 'claude-haiku-5-5' }),
+    ).rejects.toMatchObject({ code: 'permission-denied' });
+    const r = await startSession(db, resident, { scenarioId: htn.id });
     expect(r.patientModel).toBe('claude-sonnet-5-5');
   });
 });

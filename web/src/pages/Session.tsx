@@ -6,6 +6,7 @@ import type { NonverbalCue, PatientChunk } from '@plainspeak/shared';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
 import { friendlyError } from '../lib/api';
+import { reportError } from '../lib/errorReport';
 import {
   audioFromChunk,
   fetchPatientAudio,
@@ -215,12 +216,27 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
   const updateBubble = (key: string, patch: Partial<Bubble>) =>
     setBubbles((xs) => xs.map((b) => (b.key === key ? { ...b, ...patch } : b)));
 
+  // A typed reply sent while the patient is still answering waits here.
+  const [queued, setQueued] = useState<string | null>(null);
+  const queuedRef = useRef<string | null>(null);
+  const sendTurnRef = useRef<((text: string, source: 'voice' | 'typed') => Promise<void>) | null>(
+    null,
+  );
+
   const startListening = useCallback(() => {
     if (phaseRef.current === 'ending') return;
     timing.current.patientDoneAt = performance.now();
     timing.current.typingStartAt = null;
     stt.current?.setMuted(false);
     setPhase('listening');
+    const next = queuedRef.current;
+    if (next) {
+      queuedRef.current = null;
+      setQueued(null);
+      // The resident had already answered, so there was no pause on their side.
+      timing.current.typingStartAt = timing.current.patientDoneAt;
+      window.setTimeout(() => void sendTurnRef.current?.(next, 'typed'), 0);
+    }
   }, [setPhase]);
 
   /** Plays a stored patient line (the opening line). */
@@ -392,7 +408,8 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
       } catch (e) {
         stt.current = null;
         setTyped(true);
-        setNotice(`Voice input isn’t available (${friendlyError(e)}). You can type your side.`);
+        reportError('stt.start', e);
+        setNotice('Voice input isn’t available right now. You can type your side.');
       }
     }
     if (opening) await speakStored(opening);
@@ -441,12 +458,20 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     };
   }, []);
 
+  useEffect(() => {
+    sendTurnRef.current = sendTurn;
+  }, [sendTurn]);
+
   function submitTyped(e: FormEvent) {
     e.preventDefault();
     const text = draft.trim();
-    if (!text || phase !== 'listening') return;
+    if (!text || phase === 'ending') return;
     setDraft('');
-    void sendTurn(text, 'typed');
+    if (phase === 'listening') return void sendTurn(text, 'typed');
+    // Still answering: keep it and send it the moment the patient finishes.
+    const combined = queuedRef.current ? `${queuedRef.current} ${text}` : text;
+    queuedRef.current = combined;
+    setQueued(combined);
   }
 
   const status: Record<Phase, string> = {
@@ -494,7 +519,9 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
               done, tap <strong>End</strong> to get feedback.
             </p>
           )}
-          <p className="muted small">Your microphone is recorded for this practice session.</p>
+          <p className="muted small">
+            We’ll record this practice so you can review it and get feedback (kept up to 3 years).
+          </p>
           <button className="btn" onClick={() => void begin()}>
             {resumeFrom ? 'Continue the conversation' : 'Start talking'}
           </button>
@@ -507,6 +534,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
           partial={partial}
           thinking={phase === 'thinking'}
           patientFirstName={first}
+          queued={queued}
         />
       )}
       <div ref={bottom} />
@@ -529,7 +557,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
                   setDraft(e.target.value);
                 }}
               />
-              <button className="btn btn-inline" disabled={phase !== 'listening' || !draft.trim()}>
+              <button className="btn btn-inline" disabled={!draft.trim()}>
                 Send
               </button>
             </form>
@@ -589,12 +617,15 @@ export function Transcript({
   thinking = false,
   patientFirstName = 'The patient',
   highlightTurns,
+  queued = null,
 }: {
   bubbles: Bubble[];
   partial?: string;
   thinking?: boolean;
   patientFirstName?: string;
   highlightTurns?: Set<string>;
+  /** A typed reply waiting for the patient to finish. */
+  queued?: string | null;
 }) {
   return (
     <div className="chat" aria-live="polite">
@@ -627,6 +658,12 @@ export function Transcript({
               <i />
             </span>
           </div>
+        </div>
+      )}
+      {queued && (
+        <div className="turn resident">
+          <div className="bubble resident partial">{queued}</div>
+          <div className="nonverbal queued-note">Sends when {patientFirstName} finishes</div>
         </div>
       )}
     </div>

@@ -12,12 +12,8 @@ export const PATIENT_REPLY_JSON_SCHEMA = {
   additionalProperties: false,
   // Order matters: delivery and nonverbal cues stream first, so the voice can
   // start on the first sentence of "text" with the right emotion.
-  required: ['cueId', 'delivery', 'nonverbal', 'text', 'askedQuestion'],
+  required: ['delivery', 'nonverbal', 'text', 'askedQuestion', 'cueId'],
   properties: {
-    cueId: {
-      type: ['string', 'null'],
-      description: 'The id of the scripted cue being performed this turn, or null.',
-    },
     delivery: {
       type: 'object',
       additionalProperties: false,
@@ -38,6 +34,10 @@ export const PATIENT_REPLY_JSON_SCHEMA = {
     askedQuestion: {
       type: 'boolean',
       description: 'True if the patient asked the resident a question.',
+    },
+    cueId: {
+      type: ['string', 'null'],
+      description: 'The id of the scripted cue being performed this turn, or null.',
     },
   },
 } as const;

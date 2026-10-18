@@ -100,7 +100,13 @@ service cloud.firestore {
         allow read: if canReadSession(sessionData(sid));
         allow write: if false;
       }
+      // Exact 0–100 scores: faculty of the program only (dashboard, Milestones export).
       match /scores/{rubricVersion} {
+        allow read: if facultyOf(sessionData(sid).programId);
+        allow write: if false;
+      }
+      // What the resident sees: words and trend, no numbers.
+      match /feedback/{docId} {
         allow read: if canReadSession(sessionData(sid));
         allow write: if false;
       }

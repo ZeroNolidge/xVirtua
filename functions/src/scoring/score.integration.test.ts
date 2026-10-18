@@ -43,7 +43,7 @@ afterAll(async () => {
 });
 
 describe('scoreSession', () => {
-  it('scores turns done so far (ending an open conversation), saves by rubric version, and reuses it', async () => {
+  it('scores once, gives the resident words only, keeps numbers for faculty, and never rescores on revisit', async () => {
     const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
     await patientTurn(
       db,
@@ -62,34 +62,92 @@ describe('scoreSession', () => {
       code: 'not-found',
     });
     const r = await scoreSession(db, resident, { sessionId }, scorer);
-    expect(r.score).not.toBeNull();
-    expect(r.score!.rubricVersion).toBe(RUBRIC_VERSION);
-    expect(r.score!.metrics.jargon.flagged.map((f) => f.term)).toContain('hypertension');
-    expect(r.score!.highlight?.quote).toBe('Your hypertension needs treatment, Ray.');
-    expect(r.score!.fixes.length).toBeLessThanOrEqual(2);
-    expect(r.score!.needsReview).toBe(false);
+    expect(r.score).toBeUndefined(); // residents never get the numbers
+    const fb = r.feedback!;
+    expect(fb.rubricVersion).toBe(RUBRIC_VERSION);
+    expect(fb.overall).toMatchObject({ trend: 'first' });
+    expect(['Just starting', 'Getting there', 'Solid', 'Strong']).toContain(fb.overall!.band);
+    expect(fb.areas.jargon.flagged.map((f) => f.term)).toContain('hypertension');
+    expect(fb.highlight?.quote).toBe('Your hypertension needs treatment, Ray.');
+    // Two fixes from two different areas.
+    expect(fb.fixes).toHaveLength(2);
+    expect(new Set(fb.fixes.map((f) => f.metric)).size).toBe(2);
+    // No 0–100 numbers anywhere in what the resident can read.
+    const residentView =
+      JSON.stringify(fb) + JSON.stringify((await db.doc(`sessions/${sessionId}`).get()).data());
+    expect(residentView).not.toMatch(/"(score|overall)":\s*\d/);
+
     const s = (await db.doc(`sessions/${sessionId}`).get()).data()!;
     expect(s).toMatchObject({
       status: 'ended',
       endedReason: 'scored-early',
       latestRubricVersion: RUBRIC_VERSION,
+      scoreState: 'done',
+      feedbackBand: fb.overall!.band,
     });
-    expect((await db.doc(`sessions/${sessionId}/scores/${RUBRIC_VERSION}`).get()).exists).toBe(
-      true,
-    );
+    expect(s.overall).toBeUndefined();
+    const full = (await db.doc(`sessions/${sessionId}/scores/${RUBRIC_VERSION}`).get()).data()!;
+    expect(typeof full.overall).toBe('number');
+    expect(typeof full.metrics.clarity.score).toBe('number');
 
-    // Second view: cached, no new Claude call. Faculty can force a rescore.
+    // Revisit: saved feedback, no new Claude call. Faculty can force a rescore and get numbers.
     expect((await scoreSession(db, resident, { sessionId }, scorer)).cached).toBe(true);
     expect(calls).toBe(1);
-    expect((await scoreSession(db, faculty, { sessionId, rescore: true }, scorer)).cached).toBe(
-      false,
-    );
+    const f = await scoreSession(db, faculty, { sessionId, rescore: true }, scorer);
+    expect(f.cached).toBe(false);
+    expect(typeof f.score!.overall).toBe('number');
     expect(calls).toBe(2);
+  });
+
+  it('a second request while scoring runs waits instead of scoring twice', async () => {
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    await patientTurn(db, resident, { sessionId, text: 'Hi Ray.' }, new FakeBrain());
+    let calls = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const base = fakeScorer();
+    const slow = async (s: string, u: string) => {
+      calls++;
+      await gate;
+      return base(s, u);
+    };
+    const firstCall = scoreSession(db, resident, { sessionId }, slow);
+    await new Promise((r) => setTimeout(r, 300));
+    await expect(scoreSession(db, resident, { sessionId }, slow)).rejects.toMatchObject({
+      code: 'aborted',
+    });
+    release();
+    await firstCall;
+    expect(calls).toBe(1);
+  });
+
+  it('shows a trend against the previous scored conversation', async () => {
+    const one = await startSession(db, resident, { scenarioId: htn.id });
+    await patientTurn(
+      db,
+      resident,
+      { sessionId: one.sessionId, text: 'Hello Ray.' },
+      new FakeBrain(),
+    );
+    await scoreSession(db, resident, { sessionId: one.sessionId }, fakeScorer());
+    // Pretend the first one scored much lower.
+    const v = `sessions/${one.sessionId}/scores/${RUBRIC_VERSION}`;
+    await db.doc(v).update({ overall: 40 });
+    await new Promise((r) => setTimeout(r, 20));
+    const two = await startSession(db, resident, { scenarioId: htn.id });
+    await patientTurn(
+      db,
+      resident,
+      { sessionId: two.sessionId, text: 'Hello again Ray.' },
+      new FakeBrain(),
+    );
+    const r = await scoreSession(db, resident, { sessionId: two.sessionId }, fakeScorer());
+    expect(r.feedback!.overall!.trend).toBe('up');
   });
 
   it('returns nothing to score when the resident never spoke', async () => {
     const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
     const r = await scoreSession(db, resident, { sessionId }, fakeScorer());
-    expect(r).toMatchObject({ score: null, reason: 'no-turns' });
+    expect(r).toMatchObject({ feedback: null, reason: 'no-turns' });
   });
 });

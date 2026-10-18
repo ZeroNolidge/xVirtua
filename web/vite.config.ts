@@ -33,6 +33,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // New deploys take over right away instead of waiting for every tab to close.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         // Never cache API or auth traffic.
         navigateFallbackDenylist: [/^\/__/, /^\/api\//],

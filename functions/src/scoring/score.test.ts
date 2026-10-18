@@ -10,6 +10,8 @@ import {
   type ClaudeScore,
   type Turn,
 } from './score.js';
+import { distinctFixes } from './feedback.js';
+import { rewriteProblems } from './rewriteCheck.js';
 
 const turns: Turn[] = [
   { idx: 0, speaker: 'patient', text: 'So my blood pressure is high?', askedQuestion: true },
@@ -189,5 +191,77 @@ describe('scoring prompt and result', () => {
     expect(steamrollHints(t)).toEqual([{ patientTurnIdx: 0, residentTurnIdx: 1 }]);
     t[1] = { idx: 1, speaker: 'resident', text: `${long} and your license is safe` };
     expect(steamrollHints(t)).toEqual([]);
+  });
+});
+
+describe('fixes from two different areas', () => {
+  const metric = (score: number, rewrite: string | null) => ({
+    score,
+    summary: `summary ${score}`,
+    evidence: [],
+    tryThisInstead: rewrite ? { turnIdx: 1, original: 'orig', rewrite } : null,
+  });
+  const metrics = {
+    jargon: { ...metric(90, 'plain rewrite'), flagged: [], explained: [] },
+    clarity: metric(60, 'clear rewrite'),
+    empathy: metric(80, 'warm rewrite'),
+    cue: { ...metric(50, 'cue rewrite'), cueResults: [], steamrolls: [] },
+  };
+  const fix = (m: 'cue' | 'clarity', q: string) => ({
+    metric: m,
+    turnIdx: 1,
+    quote: q,
+    note: 'n',
+    rewrite: 'r',
+  });
+
+  it('swaps a same-area second fix for the top fix from the next-weakest area', () => {
+    const out = distinctFixes({ fixes: [fix('cue', 'a'), fix('cue', 'b')], metrics });
+    expect(out.map((f) => f.metric)).toEqual(['cue', 'clarity']);
+    expect(out[1]).toMatchObject({ rewrite: 'clear rewrite', note: 'summary 60' });
+  });
+
+  it('fills a missing second fix and keeps different areas as they are', () => {
+    expect(distinctFixes({ fixes: [fix('clarity', 'a')], metrics }).map((f) => f.metric)).toEqual([
+      'clarity',
+      'cue',
+    ]);
+    expect(
+      distinctFixes({ fixes: [fix('clarity', 'a'), fix('cue', 'b')], metrics }).map((f) => f.quote),
+    ).toEqual(['a', 'b']);
+  });
+});
+
+describe('rewrites must not add facts', () => {
+  const said = 'Your blood pressure is high. We could start a small pill and check again soon.';
+  it('flags licensing claims, drug names and numbers the resident never said', () => {
+    expect(rewriteProblems('Don’t worry, you won’t lose your CDL license.', said).join()).toMatch(
+      /licensing/,
+    );
+    expect(rewriteProblems('Let’s start lisinopril 10 mg.', said).join()).toMatch(
+      /drug: "lisinopril"/,
+    );
+    expect(rewriteProblems('Let’s start lisinopril 10 mg.', said).join()).toMatch(/number: "10"/);
+    expect(rewriteProblems('We’ll recheck in two weeks.', said).join()).toMatch(
+      /number: "two weeks"/,
+    );
+    expect(rewriteProblems('Losartan works well.', said).join()).toMatch(/losartan/);
+  });
+  it('allows rephrasing what the resident did say', () => {
+    expect(
+      rewriteProblems(
+        'Your blood pressure is high, so a small pill could help. Can you tell me in your own words what we’ll do?',
+        said,
+      ),
+    ).toEqual([]);
+    expect(
+      rewriteProblems('I hear you. Let’s talk about what this means for your job.', said),
+    ).toEqual([]);
+    expect(rewriteProblems('We can check it again in April.', said)).toEqual([]);
+  });
+  it('allows a drug the resident named themselves', () => {
+    expect(
+      rewriteProblems('Lisinopril is a blood pressure pill.', 'I want to start lisinopril.'),
+    ).toEqual([]);
   });
 });

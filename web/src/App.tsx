@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { TabBar } from './components/TabBar';
+import { UpdateBanner } from './components/UpdateBanner';
 import { useAuth } from './lib/auth';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
@@ -24,6 +25,7 @@ const Invites = named(() => import('./pages/faculty/Invites'), 'Invites');
 export function App() {
   return (
     <div className="app">
+      <UpdateBanner />
       <Routes>
         {/* The email link must work regardless of auth state. */}
         <Route path="/auth/finish" element={<FinishSignIn />} />

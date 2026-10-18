@@ -52,6 +52,18 @@ jobs:
         run: |
           npm run build -w shared >/dev/null
           npx tsx scripts/client-errors.ts
+      - name: Patient reply timing (server side)
+        continue-on-error: true
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
+        run: npx tsx scripts/reply-timing.ts
+
+      - name: App Check tokens seen by the app
+        continue-on-error: true
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
+        run: npx tsx scripts/app-check-status.ts || true
+
       - name: Who can call the functions (Cloud Run invoker)
         continue-on-error: true
         run: |

@@ -109,7 +109,7 @@ export async function mintClientSecret(
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 500);
     console.error('OpenAI client secret failed', res.status, detail);
-    throw new HttpsError('unavailable', `Speech service unavailable (${res.status}).`, {
+    throw new HttpsError('unavailable', 'Speech service unavailable.', {
       status: res.status,
       detail,
     });

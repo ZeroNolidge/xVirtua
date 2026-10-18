@@ -4,7 +4,9 @@ import type { ScoringWeights } from './model.js';
 export const CONSENT_VERSION = 2;
 
 /** Stored with every score so trends stay comparable across rubric changes. */
-export const RUBRIC_VERSION = '2026-11-v1';
+// v2: rewrites may only change how something is said, never add clinical,
+// legal or licensing facts.
+export const RUBRIC_VERSION = '2026-11-v2';
 
 /** D4: equal weights across the four metrics. */
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {

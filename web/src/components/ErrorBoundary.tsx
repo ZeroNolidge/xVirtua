@@ -23,28 +23,38 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   override render() {
     const { error } = this.state;
     if (!error) return this.props.children;
-    // Mid-conversation: everything said so far is saved, so offer to continue.
-    const inSession = /^\/session\/[^/]+/.exec(window.location.pathname)?.[0];
+    // Details were already sent to our error log (componentDidCatch); never shown here.
+    const sessionPath = /^\/session\/[^/]+/.exec(window.location.pathname)?.[0];
     return (
       <div className="app">
         <section>
-          <h1>Something went wrong</h1>
-          <div className="card">
-            <p>Sorry, the app hit an error. Your conversation so far is saved.</p>
-            <pre className="error-detail">{`${error.name}: ${error.message}\n${(error.stack ?? '').split('\n').slice(1, 6).join('\n')}`}</pre>
-            <p className="muted small">A screenshot of this box helps us fix it.</p>
-            {inSession && (
-              <button className="btn" onClick={() => (window.location.href = inSession)}>
-                Pick up where you left off
-              </button>
-            )}
-            <button
-              className={inSession ? 'btn btn-secondary' : 'btn'}
-              onClick={() => (window.location.href = '/')}
-            >
-              Back to start
-            </button>
-          </div>
+          {sessionPath ? (
+            <>
+              <h1>Sorry, that hiccuped</h1>
+              <div className="card">
+                <p>Your conversation so far is saved.</p>
+                <button className="btn" onClick={() => (window.location.href = sessionPath)}>
+                  Pick up where you left off
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => (window.location.href = `${sessionPath}/done`)}
+                >
+                  Get feedback on what you said
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1>Sorry, something went wrong</h1>
+              <div className="card">
+                <p>Please try again. If it keeps happening, let your program director know.</p>
+                <button className="btn" onClick={() => (window.location.href = '/')}>
+                  Back to start
+                </button>
+              </div>
+            </>
+          )}
         </section>
       </div>
     );
