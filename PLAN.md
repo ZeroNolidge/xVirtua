@@ -19,6 +19,7 @@ Status: **Approved with changes (round 1).** Decisions marked **❓** are still 
 | D12 | (2026-10-18, supersedes D2) **Residents see a word plus a trend** ("Getting there, up from last time"), never 0–100 numbers. Exact scores live in a faculty-only record for the dashboard and Milestones export. Feedback = one strength + two fixes from two different areas; the rest behind "See all suggestions". |
 | D13 | **Rewrites never add facts**: rubric v2 forbids new clinical, legal or licensing facts; a server check hides and flags rewrites that add licensing/legal terms, drug names or numbers the resident didn't say. |
 | D14 | **Patient model default: Haiku 5.5** (fastest in the bench, stayed in character). Faculty can switch in Settings. |
+| D15 | **Turn-taking must feel like a real exam room.** The "I'm not done" / "Send now" / tap-to-send controls are a temporary aid. Remove them once turn detection is natural enough: smarter end-of-turn detection (a model judging whether the resident sounds finished, not just silence) and letting the resident talk over the patient (full duplex, see the interruption note). |
 | D11 | Defaults accepted: voice-first + Phase 8 avatar bake-off; all program faculty see all program residents; 5–8 min sessions, soft cap 12; ACGME export shows evidence only. |
 
 Still open, with defaults I'll use unless you say otherwise:
