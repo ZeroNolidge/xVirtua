@@ -265,3 +265,29 @@ describe('rewrites must not add facts', () => {
     ).toEqual([]);
   });
 });
+
+describe('interruptions in the scoring transcript', () => {
+  it('shows where the resident cut the patient off and only what was heard', () => {
+    const p = buildScoringPrompt({
+      scenario: { title: 't', residentTask: 'x', learningObjectives: [], patientName: 'Ray K' },
+      cues: [],
+      turns: [
+        { idx: 1, speaker: 'resident', text: 'Hi.' },
+        {
+          idx: 2,
+          speaker: 'patient',
+          text: 'My dad had a stroke and I worry that I will end up the same.',
+          interrupted: true,
+          heardText: 'My dad had a stroke',
+        },
+        { idx: 3, speaker: 'resident', text: 'Anyway, about your pills.' },
+      ],
+      jargon: { score: 100, flagged: [], explained: [] },
+    });
+    expect(p.user).toContain(
+      '[T2] PATIENT (cut off: the resident talked over them): My dad had a stroke —',
+    );
+    expect(p.user).not.toContain('end up the same');
+    expect(p.system).toMatch(/Talking over the patient/);
+  });
+});

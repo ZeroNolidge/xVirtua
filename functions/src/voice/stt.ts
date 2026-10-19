@@ -44,9 +44,9 @@ export async function getSttToken(
     throw new HttpsError('failed-precondition', 'This conversation has ended.');
 
   await consumeQuota(db, caller.uid, 'sttTokens');
-  const { value, expiresAt } = await mintClientSecret(apiKey);
+  const { value, expiresAt, turnDetection } = await mintClientSecret(apiKey);
   assertEphemeral(value, apiKey);
-  return { value, expiresAt, model: STT_MODEL };
+  return { value, expiresAt, model: STT_MODEL, turnDetection };
 }
 
 /**
@@ -67,7 +67,25 @@ export function assertEphemeral(value: string, apiKey: string) {
   }
 }
 
-export function clientSecretBody() {
+/**
+ * How the speech service decides the resident has finished a turn.
+ * semantic: a model judges whether the words sound finished ("so the plan
+ * is…" waits; "does that make sense?" ends quickly). Falls back to plain
+ * silence detection if OpenAI rejects it.
+ */
+export type TurnDetection = 'semantic' | 'silence';
+
+const TURN_DETECTION = {
+  semantic: { type: 'semantic_vad', eagerness: 'low' },
+  silence: {
+    type: 'server_vad',
+    threshold: 0.5,
+    prefix_padding_ms: 300,
+    silence_duration_ms: 1000,
+  },
+} as const;
+
+export function clientSecretBody(turn: TurnDetection = 'semantic') {
   return {
     // Transcription-only session: this key can't be used for chat, audio
     // generation or any other OpenAI API.
@@ -82,12 +100,7 @@ export function clientSecretBody() {
             language: 'en',
             prompt: sttPrompt(),
           },
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 900,
-          },
+          turn_detection: TURN_DETECTION[turn],
         },
       },
     },
@@ -97,15 +110,26 @@ export function clientSecretBody() {
 /** Calls OpenAI for a short-lived client secret. Throws HttpsError('unavailable') with detail. */
 export async function mintClientSecret(
   apiKey: string,
-): Promise<{ value: string; expiresAt: number | null }> {
-  const res = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(clientSecretBody()),
-  }).catch((e: unknown) => {
-    console.error('OpenAI unreachable', e);
-    throw new HttpsError('unavailable', 'Speech service unreachable.');
-  });
+): Promise<{ value: string; expiresAt: number | null; turnDetection: TurnDetection }> {
+  const post = (turn: TurnDetection) =>
+    fetch('https://api.openai.com/v1/realtime/client_secrets', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(clientSecretBody(turn)),
+    }).catch((e: unknown) => {
+      console.error('OpenAI unreachable', e);
+      throw new HttpsError('unavailable', 'Speech service unreachable.');
+    });
+  let turnDetection: TurnDetection = 'semantic';
+  let res = await post(turnDetection);
+  if (res.status === 400) {
+    console.warn(
+      'semantic turn detection rejected, using silence detection',
+      (await res.text()).slice(0, 300),
+    );
+    turnDetection = 'silence';
+    res = await post(turnDetection);
+  }
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 500);
     console.error('OpenAI client secret failed', res.status, detail);
@@ -121,5 +145,5 @@ export async function mintClientSecret(
   };
   const value = body.value ?? body.client_secret?.value;
   if (!value) throw new HttpsError('unavailable', 'Speech service returned no key.');
-  return { value, expiresAt: body.expires_at ?? null };
+  return { value, expiresAt: body.expires_at ?? null, turnDetection };
 }

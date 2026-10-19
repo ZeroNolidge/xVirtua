@@ -22,6 +22,10 @@ export class ReplyPlayer {
   private closed = false;
   private wake: (() => void) | null = null;
   firstSoundAt: number | null = null;
+  /** Sentences the resident actually heard (started playing). */
+  readonly played: string[] = [];
+  /** The resident talked over the patient; playback stopped. */
+  interrupted = false;
 
   constructor(
     private readonly renderer: VoiceRenderer,
@@ -52,25 +56,42 @@ export class ReplyPlayer {
     this.poke();
   }
 
+  /** Stops mid-sentence: the resident is talking over the patient. */
+  interrupt() {
+    if (this.interrupted) return;
+    this.interrupted = true;
+    this.closed = true;
+    this.renderer.stopClip();
+    this.poke();
+  }
+
+  /** Everything the patient has said so far, for telling echo from the resident. */
+  get spokenSoFar() {
+    return this.played.join(' ');
+  }
+
   get received() {
     return this.items.filter(Boolean).length;
   }
 
   /** Plays everything, in order, until finish() and the queue is empty. */
   async run(pauseBeforeMs: number): Promise<void> {
-    if (pauseBeforeMs > 0) await sleep(pauseBeforeMs);
+    // The patient's deliberate pause; the resident may start talking during it.
+    for (let left = pauseBeforeMs; left > 0 && !this.interrupted; left -= 100) await sleep(Math.min(100, left));
     for (let i = 0; ; i++) {
-      while (!this.renderer.stopped) {
+      while (!this.renderer.stopped && !this.interrupted) {
         const it = this.items[i];
         if (it && it.text && it.audio !== undefined) break;
         if (this.closed && i >= this.items.length) return;
         await new Promise<void>((r) => (this.wake = r));
       }
-      if (this.renderer.stopped) return;
+      if (this.renderer.stopped || this.interrupted) return;
       const it = this.items[i]!;
       this.firstSoundAt ??= performance.now();
+      this.played.push(it.text);
       this.onSentence(it.text, i);
       await this.renderer.play(it.audio ?? null, it.text);
+      if (this.interrupted) return;
     }
   }
 }
@@ -95,9 +116,26 @@ export class VoiceRenderer {
   }
 
   /** Plays one clip, or waits long enough to read `text` if there's no audio. */
+  private textWait: (() => void) | null = null;
+
+  /** Waits long enough to read `text`, unless stopped. */
+  private readingPause(text: string) {
+    return new Promise<void>((resolve) => {
+      const t = setTimeout(done, readingTimeMs(text));
+      const self = this;
+      function done() {
+        clearTimeout(t);
+        if (self.textWait === done) self.textWait = null;
+        resolve();
+      }
+      this.textWait = done;
+    });
+  }
+
   async play(blob: Blob | null, text: string): Promise<void> {
     if (this.stopped) return;
-    if (!blob || !blob.size) return void (await sleep(readingTimeMs(text)));
+    this.audio.volume = 1;
+    if (!blob || !blob.size) return this.readingPause(text);
     if (this.currentUrl) URL.revokeObjectURL(this.currentUrl);
     this.currentUrl = URL.createObjectURL(blob);
     this.audio.src = this.currentUrl;
@@ -109,8 +147,21 @@ export class VoiceRenderer {
         this.audio.onpause = () => resolve();
       });
     } catch {
-      await sleep(readingTimeMs(text));
+      await this.readingPause(text);
     }
+  }
+
+  /** Turn the patient down while we check whether the resident is starting to talk. */
+  duck(on: boolean) {
+    this.audio.volume = on ? 0.3 : 1;
+  }
+
+  /** Stops the clip that's playing (play() then returns). */
+  stopClip() {
+    this.audio.pause();
+    const w = this.textWait;
+    this.textWait = null;
+    w?.();
   }
 
   dispose(): void {

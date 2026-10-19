@@ -155,6 +155,16 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
 
 // ---------- turn ----------
 
+/** What the patient model sees of its own earlier reply: only what was heard if cut off. */
+function patientHistoryText(t: Record<string, unknown>): string {
+  if (!t.interrupted) return String(t.raw);
+  try {
+    return JSON.stringify({ ...JSON.parse(String(t.raw)), text: `${String(t.heardText ?? '')} —` });
+  } catch {
+    return String(t.raw);
+  }
+}
+
 const ms = z
   .number()
   .int()
@@ -176,6 +186,13 @@ const turnInput = z.object({
   responseGapMs: ms,
   /** How long the app made the resident wait for the previous patient reply. */
   prevAppWaitMs: ms,
+  /**
+   * The resident kept talking before the patient's reply played: replace that
+   * exchange (this resident turn index and the reply after it) with this turn.
+   */
+  supersedes: z.number().int().positive().nullish(),
+  /** The resident talked over the patient's last reply; only this much was heard. */
+  prevInterrupted: z.object({ heard: z.string().max(2000) }).nullish(),
 });
 
 /** Why a live session can no longer take turns, or null if it can. */
@@ -269,6 +286,25 @@ export async function patientTurn(
           closed,
         );
       }
+      // Replace an exchange whose reply was never played (the resident kept talking).
+      const sup = input.supersedes;
+      if (sup != null && s.turnCount === sup + 2) {
+        const residentRef = ref.collection('turns').doc(String(sup));
+        const replyRef = ref.collection('turns').doc(String(sup + 1));
+        const [rSnap, pSnap] = await Promise.all([tx.get(residentRef), tx.get(replyRef)]);
+        if (rSnap.get('speaker') === 'resident' && pSnap.get('speaker') === 'patient') {
+          const before = (pSnap.get('cueStateBefore') as CueState | undefined) ?? s.cueState;
+          tx.delete(residentRef);
+          tx.delete(replyRef);
+          tx.update(ref, {
+            turnCount: sup,
+            cueState: before,
+            pending: true,
+            pendingAt: FieldValue.serverTimestamp(),
+          });
+          return { ...s, turnCount: sup, cueState: before };
+        }
+      }
       tx.update(ref, { pending: true, pendingAt: FieldValue.serverTimestamp() });
       return s;
     }),
@@ -286,6 +322,10 @@ export async function patientTurn(
       early.size === s.turnCount ? early : await ref.collection('turns').orderBy('idx').get();
     const turns = turnsSnap.docs.map((d) => d.data());
     const prevPatient = [...turns].reverse().find((t) => t.speaker === 'patient');
+    // Talked over: the patient only "said" what the resident let them say.
+    const heard = input.prevInterrupted?.heard.trim();
+    const interrupted = !!(prevPatient && prevPatient.idx > 0 && input.prevInterrupted);
+    if (interrupted) Object.assign(prevPatient!, { interrupted: true, heardText: heard ?? '' });
 
     const decision = decideCue(
       sc.script.cueScript,
@@ -294,7 +334,11 @@ export async function patientTurn(
       matcher,
       turns.filter((t) => t.speaker === 'patient').map((t) => String(t.text ?? '')),
     );
-    const message = buildResidentMessage(input.text, decision.cue);
+    const message = buildResidentMessage(
+      input.text,
+      decision.cue,
+      interrupted ? { heard: heard ?? '' } : undefined,
+    );
 
     // Streaming: send each finished sentence (and its voice) while Claude writes the rest.
     let voicer: SentenceVoicer | null = null;
@@ -365,7 +409,7 @@ export async function patientTurn(
           .filter((t) => t.idx > 0)
           .map((t) => ({
             speaker: t.speaker,
-            content: t.speaker === 'resident' ? t.prompt : t.raw,
+            content: t.speaker === 'resident' ? t.prompt : patientHistoryText(t),
           })),
         message,
         cue: decision.cue,
@@ -395,10 +439,12 @@ export async function patientTurn(
       afterPatientQuestion: prevPatient?.askedQuestion ?? false,
       createdAt: FieldValue.serverTimestamp(),
     });
-    // The wait the app caused before the previous patient reply, measured by the app.
-    if (prevPatient && prevPatient.idx > 0 && input.prevAppWaitMs != null) {
+    // The wait the app caused before the previous patient reply, measured by the app,
+    // and whether the resident talked over it.
+    if (prevPatient && prevPatient.idx > 0 && (input.prevAppWaitMs != null || interrupted)) {
       batch.update(ref.collection('turns').doc(String(prevPatient.idx)), {
-        appWaitMs: input.prevAppWaitMs,
+        ...(input.prevAppWaitMs != null ? { appWaitMs: input.prevAppWaitMs } : {}),
+        ...(interrupted ? { interrupted: true, heardText: heard ?? '' } : {}),
       });
     }
     batch.set(ref.collection('turns').doc(String(pIdx)), {
@@ -415,6 +461,8 @@ export async function patientTurn(
         totalMs: Date.now() - t0,
       },
       voicedInStream: voiced,
+      // So this exchange can be replaced if the resident keeps talking.
+      cueStateBefore: s.cueState,
       createdAt: FieldValue.serverTimestamp(),
     });
     const mode = s.inputMode && s.inputMode !== input.source ? 'mixed' : input.source;

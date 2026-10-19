@@ -50,8 +50,16 @@ Your first line in this visit was: "${s.openingLine}"`;
 }
 
 /** Text of the user turn sent to Claude for one resident message. */
-export function buildResidentMessage(residentText: string, cue: CueScriptEntry | null): string {
-  let msg = `The resident says:\n"""${residentText.replace(/"""/g, '"')}"""`;
+export function buildResidentMessage(
+  residentText: string,
+  cue: CueScriptEntry | null,
+  interrupted?: { heard: string },
+): string {
+  let msg = '';
+  if (interrupted) {
+    msg += `(The resident talked over you. You only got to say: "${interrupted.heard.replace(/"/g, "'")}" and the rest went unsaid. React naturally, the way a real patient would when cut off.)\n\n`;
+  }
+  msg += `The resident says:\n"""${residentText.replace(/"""/g, '"')}"""`;
   if (cue) {
     const d = cue.performance.delivery;
     msg += `\n\nDIRECTOR NOTE (perform this cue now)

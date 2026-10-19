@@ -37,6 +37,9 @@ export interface Turn {
   cueId?: string | null;
   askedQuestion?: boolean;
   responseGapMs?: number | null;
+  /** The resident talked over this patient reply; only heardText was said. */
+  interrupted?: boolean;
+  heardText?: string;
   understandingCheck?: UnderstandingCheck;
   words?: number;
 }
@@ -164,7 +167,9 @@ export function buildScoringPrompt(p: PromptInput): { system: string; user: stri
       const cue = t.cueId ? cueById.get(t.cueId) : undefined;
       if (cue) tags.push(`CUE ${cue.id}: ${cue.cue}`);
       if (t.askedQuestion) tags.push('asked a question');
-      return `[T${t.idx}] PATIENT${tags.length ? ` (${tags.join('; ')})` : ''}: ${t.text}`;
+      if (t.interrupted) tags.push('cut off: the resident talked over them');
+      const said = t.interrupted ? `${t.heardText ?? ''} —` : t.text;
+      return `[T${t.idx}] PATIENT${tags.length ? ` (${tags.join('; ')})` : ''}: ${said}`;
     }
     const tags: string[] = [];
     if (t.responseGapMs != null)

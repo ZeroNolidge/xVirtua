@@ -19,6 +19,10 @@ export interface TurnInput {
   responseGapMs?: number;
   /** How long the app made the resident wait for the previous patient reply. */
   prevAppWaitMs?: number;
+  /** Replace the exchange starting at this resident turn (the resident kept talking). */
+  supersedes?: number;
+  /** The resident talked over the previous reply; only this much was heard. */
+  prevInterrupted?: { heard: string };
 }
 export interface TurnResult {
   patient: Utterance;
@@ -47,7 +51,13 @@ export const sessionApi = {
   >(functions, 'endSession'),
   sttToken: httpsCallable<
     { sessionId: string },
-    { value: string; expiresAt: number | null; model: string }
+    {
+      value: string;
+      expiresAt: number | null;
+      model: string;
+      /** semantic: the speech service judges turn ends by meaning. */
+      turnDetection?: 'semantic' | 'silence';
+    }
   >(functions, 'getSttToken'),
   /** Scores once; the result is saved and read from Firestore after that. */
   score: httpsCallable<

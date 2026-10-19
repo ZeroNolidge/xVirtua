@@ -23,6 +23,7 @@ Anchors: 90+ repeated, specific empathy tied to what the patient said. 70s some 
 ## Cue responsiveness
 Scripted cues are moments where the patient signals something (confusion, worry, a hint about a hidden concern). A cue is "addressed" if the resident's NEXT turn responds to it in the way described by its expected response (it need not match word for word).
 - Steamrolling: the patient asked a question or showed a cue, and the resident's next turn ignored it and kept going with their own agenda.
+- Talking over the patient: lines marked "cut off" mean the resident spoke while the patient was still talking. Count it against cue responsiveness when it cut off a question, a worry or an emotional moment and the resident carried on with their own agenda. A brief, responsive overlap (e.g. "I'm sorry—" when the patient is upset, or answering the question they were asking) is natural and fine.
 - Timing: response timing shown in the transcript already excludes any time the resident spent waiting on the app (the patient "thinking" or the voice loading). Never count that waiting as the resident's silence or delay, and don't penalize a thoughtful pause.
 Anchors: 90+ every cue caught and explored. 70s most cues caught, one missed or brushed off. 50s half missed or a clear steamroll. Below 40 most cues ignored.
 

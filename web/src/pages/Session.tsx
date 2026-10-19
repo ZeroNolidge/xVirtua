@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, getDoc, getDocs, orderBy, query } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
-import { endOfTurnDelayMs, type NonverbalCue, type PatientChunk } from '@plainspeak/shared';
+import {
+  endOfTurnDelayMs,
+  isResidentSpeech,
+  type NonverbalCue,
+  type PatientChunk,
+} from '@plainspeak/shared';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
 import { friendlyError } from '../lib/api';
@@ -226,12 +231,31 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     null,
   );
 
+  // ----- two-way voice -----
+  // The mic stays on while the patient talks. If the resident talks over them,
+  // the patient stops mid-sentence; if the resident keeps talking before the
+  // reply plays, that reply is replaced by one answering their whole thought.
+  /** The exchange waiting on the server. `supersede`: resident kept talking. */
+  const turnRef = useRef<{ residentKey: string; text: string; supersede: boolean } | null>(null);
+  /** Reply to replace on the next send (its resident turn index), and what was said. */
+  const supersedeRef = useRef<{ idx: number; text: string; residentKey: string } | null>(null);
+  /** The resident cut the patient off; only this much was heard. */
+  const interruptedRef = useRef<{ heard: string } | null>(null);
+  /** The previous send, so turns never overlap on the server. */
+  const inFlight = useRef<Promise<void> | null>(null);
+  const duckTimer = useRef<number | null>(null);
+  /** Whether the speech service judges turn ends by meaning (shorter waits) or by silence. */
+  const semanticTurns = useRef(false);
+  const scheduleFlushRef = useRef<(() => void) | null>(null);
+
   const startListening = useCallback(() => {
     if (phaseRef.current === 'ending') return;
     timing.current.patientDoneAt = performance.now();
     timing.current.typingStartAt = null;
     stt.current?.setMuted(false);
     setPhase('listening');
+    // Anything said while the patient was thinking goes out now.
+    if (pending.current.text.length) window.setTimeout(() => scheduleFlushRef.current?.(), 0);
     const next = queuedRef.current;
     if (next) {
       queuedRef.current = null;
@@ -250,7 +274,6 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
       const r = renderer.current;
       if (!r) return;
       setPhase('patient');
-      stt.current?.setMuted(true);
       const audio = await fetchPatientAudio(sessionId, u.idx);
       const key = `p${u.idx}`;
       const p = new ReplyPlayer(r, () =>
@@ -267,10 +290,23 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
   );
 
   const sendTurn = useCallback(
-    async (text: string, source: 'voice' | 'typed', tStartMs?: number) => {
+    async (said: string, source: 'voice' | 'typed', tStartMs?: number) => {
       const r = renderer.current;
-      if (!text.trim() || phaseRef.current === 'ending' || !r) return;
-      addBubble({ key: `r${Date.now()}`, who: 'resident', text });
+      if (!said.trim() || phaseRef.current === 'ending' || !r) return;
+      // One exchange at a time: wait for the previous one to settle.
+      const prev = inFlight.current;
+      let settle!: () => void;
+      inFlight.current = new Promise<void>((res) => (settle = res));
+      if (prev) await prev;
+      const sup = supersedeRef.current;
+      supersedeRef.current = null;
+      const text = sup ? `${sup.text} ${said}` : said;
+      const residentKey = sup?.residentKey ?? `r${Date.now()}`;
+      if (sup) updateBubble(residentKey, { text });
+      else addBubble({ key: residentKey, who: 'resident', text });
+      const cutOff = interruptedRef.current;
+      interruptedRef.current = null;
+      turnRef.current = { residentKey, text, supersede: false };
       setPartial('');
       // Keep listening while the patient thinks: anything said now is held and
       // sent when they finish. The mic mutes only once the patient's voice plays.
@@ -290,6 +326,8 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
           ? { responseGapMs: Math.max(0, Math.round(startedAt - tm.patientDoneAt)) }
           : {}),
         ...(tm.lastAppWaitMs !== null ? { prevAppWaitMs: Math.round(tm.lastAppWaitMs) } : {}),
+        ...(sup ? { supersedes: sup.idx } : {}),
+        ...(cutOff ? { prevInterrupted: cutOff } : {}),
       };
 
       const key = `p${Date.now()}`;
@@ -299,7 +337,6 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
       const p = new ReplyPlayer(r, (sentence) => {
         if (!shown) {
           shown = true;
-          stt.current?.setMuted(true);
           setPhase('patient');
           addBubble({ key, who: 'patient', text: sentence, nonverbal: meta?.nonverbal });
         } else {
@@ -312,6 +349,8 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
       let running: Promise<void> | null = null;
       const run = () => (running ??= p.run(pauseMs));
       const onChunk = (c: PatientChunk) => {
+        // The resident kept talking: this reply will be replaced, so don't play it.
+        if (turnRef.current?.supersede) return;
         if (c.t === 'meta') {
           meta = { nonverbal: c.nonverbal };
           pauseMs = c.delivery.pauseBeforeMs;
@@ -334,20 +373,39 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
           p.say(0, u.text);
           if (audio) p.audio(0, audio);
         }
-        p.finish();
-        await run();
-        // The saved text is the source of truth (it may be tidied up).
-        if (shown) updateBubble(key, { text: u.text, nonverbal: u.nonverbal });
-        if (p.firstSoundAt !== null) {
-          const wait = Math.max(0, p.firstSoundAt - now - pauseMs);
-          tm.lastAppWaitMs = wait;
-          tm.totalAppWaitMs += wait;
+        const replaced = turnRef.current?.supersede || (p.interrupted && p.played.length === 0);
+        if (replaced) {
+          // Nothing was heard yet: drop this reply; the next send answers the whole thought.
+          p.interrupt();
+          setBubbles((xs) => xs.filter((b) => b.key !== key));
+          supersedeRef.current = { idx: u.idx - 1, text, residentKey };
+        } else {
+          p.finish();
+          await run();
+          if (p.interrupted) {
+            // Talked over: the patient only got this far.
+            const heard = p.played.join(' ');
+            interruptedRef.current = { heard };
+            updateBubble(key, { text: `${heard} —`, nonverbal: u.nonverbal });
+          } else if (shown) {
+            // The saved text is the source of truth (it may be tidied up).
+            updateBubble(key, { text: u.text, nonverbal: u.nonverbal });
+          }
+          if (p.firstSoundAt !== null) {
+            const wait = Math.max(0, p.firstSoundAt - now - pauseMs);
+            tm.lastAppWaitMs = wait;
+            tm.totalAppWaitMs += wait;
+          }
         }
-        startListening();
+        turnRef.current = null;
+        if (phaseRef.current !== 'listening') startListening();
       } catch (e) {
         p.finish();
+        turnRef.current = null;
         setNotice(friendlyError(e));
         startListening();
+      } finally {
+        settle();
       }
     },
     [sessionId, setPhase, startListening],
@@ -359,21 +417,18 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     safeStorage.get(SEND_MODE_KEY) === 'tap' ? 'tap' : 'pause',
   );
   const sendModeRef = useRef(sendMode);
+  const cancelAutoSend = useCallback(() => {
+    const p = pending.current;
+    if (p.timer) window.clearTimeout(p.timer);
+    p.timer = null;
+  }, []);
+
   const setSendMode = (m: SendMode) => {
     sendModeRef.current = m;
     setSendModeState(m);
     safeStorage.set(SEND_MODE_KEY, m);
     if (m === 'tap') cancelAutoSend();
   };
-  /** The countdown shown while waiting to auto-send (key restarts the animation). */
-  const [autoSend, setAutoSend] = useState<{ ms: number; key: number } | null>(null);
-
-  const cancelAutoSend = useCallback(() => {
-    const p = pending.current;
-    if (p.timer) window.clearTimeout(p.timer);
-    p.timer = null;
-    setAutoSend(null);
-  }, [setAutoSend]);
 
   const flushVoice = useCallback(() => {
     cancelAutoSend();
@@ -383,24 +438,36 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     p.text = [];
     p.tStart = null;
     setPartial('');
-    if (!text) return;
-    if (phaseRef.current === 'listening') return void sendTurn(text, 'voice', tStart);
-    // The patient is still answering: hold it and send it when they finish.
-    const combined = queuedRef.current ? `${queuedRef.current} ${text}` : text;
-    queuedRef.current = combined;
-    queuedSourceRef.current = 'voice';
-    setQueued(combined);
+    if (text) void sendTurn(text, 'voice', tStart);
   }, [sendTurn, cancelAutoSend]);
 
   const scheduleFlush = useCallback(() => {
     cancelAutoSend();
-    // Spoken while the patient thinks: hold it right away (sent when they finish).
-    if (phaseRef.current !== 'listening') return flushVoice();
+    // While the patient thinks or talks, hold the words; they go out once
+    // the patient finishes or is cut off (startListening).
+    if (phaseRef.current !== 'listening') return;
     if (sendModeRef.current === 'tap') return;
-    const ms = endOfTurnDelayMs(pending.current.text.join(' '));
-    setAutoSend({ ms, key: Date.now() });
+    const text = pending.current.text.join(' ');
+    // The speech service already judged the turn finished by meaning, so only
+    // a short extra wait is needed; with plain silence detection, wait longer.
+    const ms = endOfTurnDelayMs(text) * (semanticTurns.current ? 0.3 : 1);
     pending.current.timer = window.setTimeout(flushVoice, ms);
-  }, [flushVoice, cancelAutoSend, setAutoSend]);
+  }, [flushVoice, cancelAutoSend]);
+
+  useEffect(() => {
+    scheduleFlushRef.current = scheduleFlush;
+  }, [scheduleFlush]);
+
+  /** The resident started talking over the patient: stop the patient mid-sentence. */
+  const bargeIn = useCallback(() => {
+    const p = player.current;
+    if (duckTimer.current) window.clearTimeout(duckTimer.current);
+    renderer.current?.duck(false);
+    if (!p || p.interrupted || phaseRef.current !== 'patient') return;
+    p.interrupt();
+    if (p.played.length === 0 && turnRef.current) turnRef.current.supersede = true;
+    startListening();
+  }, [startListening]);
 
   async function begin() {
     setPhase('connecting');
@@ -429,9 +496,37 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
             cancelAutoSend();
             const p = pending.current;
             p.tStart ??= Math.round(performance.now() - t0.current);
+            if (phaseRef.current === 'patient') {
+              // Maybe the resident is starting to talk: turn the patient down while we check.
+              renderer.current?.duck(true);
+              if (duckTimer.current) window.clearTimeout(duckTimer.current);
+              duckTimer.current = window.setTimeout(() => renderer.current?.duck(false), 1500);
+            }
           },
-          onPartial: (t) => setPartial([...pending.current.text, t].join(' ')),
+          onPartial: (t) => {
+            if (phaseRef.current === 'patient') {
+              // The patient's own voice leaking into the mic isn't the resident.
+              if (!isResidentSpeech(t, player.current?.spokenSoFar ?? '')) return;
+              bargeIn();
+            } else if (
+              phaseRef.current === 'thinking' &&
+              turnRef.current &&
+              t.trim().split(/\s+/).length >= 2
+            ) {
+              turnRef.current.supersede = true;
+            }
+            setPartial([...pending.current.text, t].join(' '));
+          },
           onFinal: (t) => {
+            if (phaseRef.current === 'patient') {
+              if (!isResidentSpeech(t, player.current?.spokenSoFar ?? '')) {
+                renderer.current?.duck(false);
+                return;
+              }
+              bargeIn();
+            } else if (phaseRef.current === 'thinking' && turnRef.current) {
+              turnRef.current.supersede = true;
+            }
             pending.current.text.push(t);
             setPartial(pending.current.text.join(' '));
             scheduleFlush();
@@ -441,8 +536,8 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
             setTyped(true);
           },
         });
+        semanticTurns.current = data.turnDetection === 'semantic';
         await stt.current.start(mic.current, data.value);
-        stt.current.setMuted(true);
       } catch (e) {
         stt.current = null;
         setTyped(true);
@@ -601,26 +696,11 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
               </button>
             </form>
           )}
-          {!typed && phase === 'listening' && partial && (
+          {!typed && sendMode === 'tap' && phase === 'listening' && partial && (
             <div className="send-row">
-              {autoSend ? (
-                <>
-                  <div className="send-countdown" aria-hidden="true">
-                    <span key={autoSend.key} style={{ animationDuration: `${autoSend.ms}ms` }} />
-                  </div>
-                  <button className="btn btn-secondary btn-inline" onClick={cancelAutoSend}>
-                    I’m not done
-                  </button>
-                </>
-              ) : (
-                <span className="muted small">
-                  {sendMode === 'tap'
-                    ? 'Tap send when you’re done.'
-                    : 'Paused. Keep talking, or send.'}
-                </span>
-              )}
+              <span className="muted small">Tap send when you’re done.</span>
               <button className="btn btn-inline" onClick={flushVoice}>
-                {autoSend ? 'Send now' : 'Send'}
+                Send
               </button>
             </div>
           )}

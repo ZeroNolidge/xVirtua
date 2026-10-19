@@ -321,3 +321,53 @@ describe('callable null handling', () => {
     await endSession(db, resident, { sessionId, audioExt: null }, async () => false);
   });
 });
+
+describe('two-way voice', () => {
+  it('replaces an exchange whose reply never played, restoring the cue state', async () => {
+    const brain = new FakeBrain();
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    await patientTurn(db, resident, { sessionId, text: 'Hi Ray.' }, brain);
+    // This one fires the "job worry" cue (mentions a pill)...
+    const r = await patientTurn(db, resident, { sessionId, text: 'We could start a pill.' }, brain);
+    expect(r.patient.cueId).toBe('job-worry');
+    // ...but the resident kept talking before it played: replace that exchange.
+    const r2 = await patientTurn(
+      db,
+      resident,
+      {
+        sessionId,
+        text: 'We could start a pill. It is a small one, taken once a day.',
+        supersedes: 3,
+      },
+      brain,
+    );
+    expect(r2.patient.idx).toBe(4);
+    const turns = (
+      await db.collection(`sessions/${sessionId}/turns`).orderBy('idx').get()
+    ).docs.map((d) => d.data());
+    expect(turns.map((t) => t.idx)).toEqual([0, 1, 2, 3, 4]);
+    expect(turns[3]!.text).toBe('We could start a pill. It is a small one, taken once a day.');
+    // The cue wasn't used up by the replaced reply, so it fires for the real one.
+    expect(r2.patient.cueId).toBe('job-worry');
+    const s = (await db.doc(`sessions/${sessionId}`).get()).data()!;
+    expect(s.turnCount).toBe(5);
+    expect(s.cueState.fired['job-worry']).toBe(1);
+  });
+
+  it('remembers when the resident talked over the patient, and the patient only "said" what was heard', async () => {
+    const brain = new FakeBrain();
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    await patientTurn(db, resident, { sessionId, text: 'Hi Ray.' }, brain);
+    await patientTurn(
+      db,
+      resident,
+      { sessionId, text: 'Sorry, go on.', prevInterrupted: { heard: 'Okay.' } },
+      brain,
+    );
+    const p = (await db.doc(`sessions/${sessionId}/turns/2`).get()).data()!;
+    expect(p).toMatchObject({ interrupted: true, heardText: 'Okay.' });
+    const last = brain.calls.at(-1)!;
+    expect(last.message).toContain('The resident talked over you');
+    expect(last.history.at(-1)!.content).toContain('"text":"Okay. —"');
+  });
+});

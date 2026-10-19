@@ -7,3 +7,4 @@ export * from './jargon.js';
 export * from './cues.js';
 export * from './stream.js';
 export * from './endOfTurn.js';
+export * from './duplex.js';

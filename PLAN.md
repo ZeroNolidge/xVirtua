@@ -20,6 +20,7 @@ Status: **Approved with changes (round 1).** Decisions marked **❓** are still 
 | D13 | **Rewrites never add facts**: rubric v2 forbids new clinical, legal or licensing facts; a server check hides and flags rewrites that add licensing/legal terms, drug names or numbers the resident didn't say. |
 | D14 | **Patient model default: Haiku 5.5** (fastest in the bench, stayed in character). Faculty can switch in Settings. |
 | D15 | **Turn-taking must feel like a real exam room.** The "I'm not done" / "Send now" / tap-to-send controls are a temporary aid. Remove them once turn detection is natural enough: smarter end-of-turn detection (a model judging whether the resident sounds finished, not just silence) and letting the resident talk over the patient (full duplex, see the interruption note). |
+| D16 | (2026-10-19) **Two-way voice, phase 1** (keeps Claude as the patient and Cartesia as the voice): semantic turn detection (OpenAI `semantic_vad`, falls back to silence), mic always on, talking over the patient stops them mid-sentence (they only "said" what was heard; scored under cue responsiveness), and speaking again before the reply plays replaces it. Echo guard: speech that repeats the patient's words is ignored. The countdown / "I'm not done" controls are gone; "Send: when I tap" stays as a fallback. |
 | D11 | Defaults accepted: voice-first + Phase 8 avatar bake-off; all program faculty see all program residents; 5–8 min sessions, soft cap 12; ACGME export shows evidence only. |
 
 Still open, with defaults I'll use unless you say otherwise:
