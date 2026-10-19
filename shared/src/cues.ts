@@ -64,23 +64,28 @@ export const initialCueState = (): CueState => ({
 });
 
 const STOP = new Set(
-  'that this have will with from just like what when your they them then than about there their been were really going want dont'.split(
-    ' ',
-  ),
+  (
+    'the and was had his her you for but not are can did got has him how its our out she who why yes ' +
+    'that this have will with from just like what when your they them then than about there their been were really going want dont ' +
+    'its im ive youre thats okay well'
+  ).split(' '),
 );
-const keyWords = (t: string) => tokenize(t).filter((w) => w.length > 3 && !STOP.has(w));
+const keyWords = (t: string) => tokenize(t).filter((w) => w.length > 2 && !STOP.has(w));
 
 /**
- * True if the patient has already said what this cue would say (most of the
- * line's key words appear in one earlier patient reply), e.g. the patient
+ * True if the patient has already said what this cue would say, e.g. they
  * brought up their dad's stroke on their own before the trigger word came up.
+ * Checked sentence by sentence: if most key words of any sentence of the cue
+ * line ("My dad had a stroke.") appear in one earlier reply, it's been said.
  */
 export function cueAlreadyCovered(cue: CueScriptEntry, patientSaid: string[]): boolean {
-  const want = [...new Set(keyWords(cue.performance.say))];
-  if (want.length < 2) return false;
+  const sentences = cue.performance.say
+    .split(/(?<=[.!?])\s+/)
+    .map((x) => [...new Set(keyWords(x))])
+    .filter((w) => w.length >= 2);
   return patientSaid.some((said) => {
     const have = new Set(keyWords(said));
-    return want.filter((w) => have.has(w)).length / want.length >= 0.6;
+    return sentences.some((want) => want.filter((w) => have.has(w)).length / want.length >= 0.6);
   });
 }
 

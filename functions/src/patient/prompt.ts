@@ -66,7 +66,8 @@ export function buildResidentMessage(
 cueId: ${cue.id}
 line: "${cue.performance.say}"
 delivery: emotion=${d.emotion ?? 'neutral'}, volume=${d.volume ?? 'normal'}, rate=${d.rate ?? 'normal'}, pauseBeforeMs=${d.pauseBeforeMs ?? 0}
-nonverbal: ${cue.performance.nonverbal.join(', ') || 'none'}`;
+nonverbal: ${cue.performance.nonverbal.join(', ') || 'none'}
+If you already told the resident this earlier in the visit, do NOT say it again: respond to what they just said instead, in the same mood.`;
   }
   return msg;
 }

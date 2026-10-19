@@ -139,6 +139,21 @@ describe('cues never repeat what the patient already said', () => {
       cueAlreadyCovered(stroke, ['He was never really the same after it. My dad had a stroke.']),
     ).toBe(true);
   });
+  it('counts it as said when one key sentence was said, even with other words around it', () => {
+    const said = [
+      "So I could be getting worse and not know it. That's not great to hear. My dad had a stroke at sixty, and he didn't see it coming either.",
+    ];
+    expect(cueAlreadyCovered(stroke, said)).toBe(true);
+    const d = decideCue(
+      [stroke],
+      initialCueState(),
+      'Damage can lead to an actual stroke.',
+      m,
+      said,
+    );
+    expect(d.cue).toBeNull();
+  });
+
   it('still fires when the patient has not said it', () => {
     const d = decideCue([stroke], initialCueState(), 'This lowers your stroke risk.', m, [
       'Four months. Okay.',
