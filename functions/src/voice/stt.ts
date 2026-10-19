@@ -1,26 +1,23 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
-import { SEED_JARGON } from '@plainspeak/shared';
 import { parse, type Caller } from '../lib/callable.js';
 import { consumeQuota } from '../lib/quota.js';
 
 export const STT_MODEL = process.env.OPENAI_STT_MODEL ?? 'gpt-4o-transcribe';
 
-const PROMPT_PREFIX =
-  'A doctor talking with a patient in a clinic. Transcribe exactly what is said, including medical terms such as: ';
 /** OpenAI caps the transcription prompt at 1024 characters. */
 export const MAX_STT_PROMPT = 1000;
 
-/** A hint so jargon is transcribed as spoken (not "corrected" into plain words). */
+/**
+ * A short, neutral context hint. We used to list ~100 medical terms here so
+ * jargon was spelled right, but this model can "hear" its prompt in silence or
+ * background noise and invent sentences full of those terms (seen in testing:
+ * a whole line about triglycerides the resident never said). It spells
+ * medical words well without the list.
+ */
 export function sttPrompt(): string {
-  let out = PROMPT_PREFIX;
-  for (const t of SEED_JARGON.filter((t) => t.category !== 'general' && t.term.length > 3)) {
-    const next = `${out}${out === PROMPT_PREFIX ? '' : ', '}${t.term}`;
-    if (next.length + 1 > MAX_STT_PROMPT) break;
-    out = next;
-  }
-  return `${out}.`;
+  return 'A doctor talking with a patient in a family medicine clinic. Transcribe only what is actually said.';
 }
 
 const input = z.object({ sessionId: z.string().min(1).max(64) });

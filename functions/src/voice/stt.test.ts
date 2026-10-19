@@ -8,10 +8,10 @@ import {
 } from './stt.js';
 
 describe('OpenAI transcription config', () => {
-  it('keeps the jargon hint under the 1024-character API limit', () => {
+  it('uses a short neutral hint with no medical word list (lists get "heard" in silence)', () => {
     const p = sttPrompt();
     expect(p.length).toBeLessThanOrEqual(MAX_STT_PROMPT);
-    expect(p).toContain('hypertension');
+    expect(p).not.toMatch(/hypertension|triglycerides|glucose/);
     expect(clientSecretBody().session.audio.input.transcription.prompt).toBe(p);
   });
 });
