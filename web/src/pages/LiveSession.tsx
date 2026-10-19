@@ -19,6 +19,10 @@ type Phase = 'ready' | 'connecting' | 'live' | 'ending';
 const START_TIMEOUT_MS = 12_000;
 /** The resident must still be talking this long after starting over the patient to cut him off (echo blips stop sooner). */
 const BARGE_IN_CONFIRM_MS = 250;
+/** The resident's mic must stay loud this long while the patient talks before he is turned down. */
+const MIC_TALK_MS = 150;
+/** If no words from the resident arrive this long after turning the patient down, it wasn't them. */
+const DUCK_CONFIRM_MS = 1500;
 /** After cutting the patient off, his voice stays muted until it's been quiet this long... */
 const RESUME_QUIET_MS = 600;
 /** ...or this long at most. */
@@ -72,6 +76,8 @@ export function LiveConversation({
   /** Set when the resident cut the patient off: what the patient got out before that. */
   const cutOff = useRef<string | null>(null);
   const muteTimer = useRef<number | null>(null);
+  /** When the patient was turned down because the resident's mic got loud (0: not). */
+  const duckedAt = useRef(0);
   const confirmTimer = useRef<number | null>(null);
   const inFlight = useRef<Promise<void>>(Promise.resolve());
   const lastWaitMs = useRef<number | null>(null);
@@ -91,6 +97,25 @@ export function LiveConversation({
   useEffect(() => {
     if (phase !== 'live') return;
     const t = window.setInterval(() => setSpeaking(!!call.current?.patientAudible(250)), 150);
+    return () => window.clearInterval(t);
+  }, [phase]);
+
+  // The resident starts talking over the patient: turn him down at once, from
+  // the mic's sound alone. The words (a second later) confirm it.
+  useEffect(() => {
+    if (phase !== 'live') return;
+    const t = window.setInterval(() => {
+      const c = call.current;
+      if (!c || cutOff.current !== null) return;
+      const now = performance.now();
+      if (!duckedAt.current && c.patientAudible() && c.micLoudFor() >= MIC_TALK_MS) {
+        duckedAt.current = now;
+        c.duckPatient(true);
+      } else if (duckedAt.current && now - duckedAt.current > DUCK_CONFIRM_MS) {
+        duckedAt.current = 0;
+        c.duckPatient(false);
+      }
+    }, 50);
     return () => window.clearInterval(t);
   }, [phase]);
 
@@ -117,6 +142,7 @@ export function LiveConversation({
     const c = call.current;
     if (!c || cutOff.current !== null) return;
     cutOff.current = spokenBuf.current.trim();
+    duckedAt.current = 0;
     c.mutePatient(true);
     setBubbles((b) => {
       const i = b.map((x) => x.who).lastIndexOf('patient');
@@ -144,9 +170,14 @@ export function LiveConversation({
     heardAt.current = performance.now();
     setHeard(heardBuf.current.trim());
     const c = call.current;
-    if (!c || !c.patientAudible() || cutOff.current !== null || confirmTimer.current) return;
+    if (!c || cutOff.current !== null) return;
+    const ducked = !!duckedAt.current;
+    if (!ducked && !c.patientAudible()) return;
     // The patient's own voice leaking into the mic isn't the resident.
     if (!isResidentSpeech(heardBuf.current, spokenBuf.current)) return;
+    // Already turned down on the mic's sound: these words confirm it.
+    if (ducked) return cutPatientOff();
+    if (confirmTimer.current) return;
     const at = heardAt.current;
     confirmTimer.current = window.setTimeout(() => {
       confirmTimer.current = null;

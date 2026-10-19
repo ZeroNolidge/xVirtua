@@ -31,6 +31,8 @@ vi.mock('../lib/recorder', () => ({
 // Fake GPT-Live call: the test drives its events.
 let cb: LiveCallbacks;
 let audible = false;
+let micLoudMs = 0;
+const ducked: boolean[] = [];
 let failConnect = false;
 const said: [string | null, string][] = [];
 const muted: boolean[] = [];
@@ -48,6 +50,12 @@ vi.mock('../lib/liveVoice', async (orig) => {
       }
       patientAudible() {
         return audible;
+      }
+      micLoudFor() {
+        return micLoudMs;
+      }
+      duckPatient(on: boolean) {
+        ducked.push(on);
       }
       mutePatient(m: boolean) {
         muted.push(m);
@@ -134,6 +142,8 @@ beforeEach(() => {
   muted.length = 0;
   audible = false;
   failConnect = false;
+  micLoudMs = 0;
+  ducked.length = 0;
 });
 
 describe('GPT-Live conversation', () => {
@@ -187,6 +197,38 @@ describe('GPT-Live conversation', () => {
     await vi.waitFor(() => expect(calls).toHaveLength(2));
     expect(calls[1]!.prevInterrupted).toEqual({ heard: 'Will I lose my' });
     expect(calls[1]!.prevSpoken).toBe('Will I lose my');
+  });
+
+  it('turns the patient down as soon as the mic hears the resident, and stops him when the words confirm it', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    await act(async () => cb.onHeard('Let me explain.'));
+    await act(async () => cb.onDelegation('del_1'));
+    await screen.findByText('Will I lose my license? I drive a truck.');
+
+    audible = true;
+    await act(async () => cb.onSpoken('Will I lose '));
+    micLoudMs = 200;
+    await act(async () => new Promise((r) => setTimeout(r, 120)));
+    expect(ducked).toEqual([true]);
+    expect(muted).toEqual([]);
+    // The first words from the resident stop him at once.
+    await act(async () => cb.onHeard('Hang on, what do you do for work?'));
+    expect(muted).toEqual([true]);
+    expect(screen.getByText('Will I lose —')).toBeInTheDocument();
+  });
+
+  it('turns the patient back up if the noise wasn’t the resident talking', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    audible = true;
+    micLoudMs = 200;
+    await act(async () => new Promise((r) => setTimeout(r, 120)));
+    expect(ducked).toEqual([true]);
+    micLoudMs = 0;
+    await act(async () => new Promise((r) => setTimeout(r, 1600)));
+    expect(ducked).toEqual([true, false]);
+    expect(muted).toEqual([]);
   });
 
   it('falls back to the standard voice when GPT-Live can’t connect', async () => {

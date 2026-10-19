@@ -34,12 +34,14 @@ export class LiveVoiceCall {
   private track: MediaStreamTrack | null = null;
   private audioEl: HTMLAudioElement;
   private ctx: AudioContext | null = null;
-  private analyser: AnalyserNode | null = null;
-  private levels: Uint8Array<ArrayBuffer> | null = null;
+  private stopped = false;
   private seq = 0;
   private closing: (() => void) | null = null;
   /** performance.now() when the patient's voice was last audible. */
   lastSoundAt = 0;
+  /** performance.now() when the resident's mic got loud and stayed loud; null when quiet. */
+  private micLoudSince: number | null = null;
+  private micQuietAt = 0;
 
   constructor(private readonly cb: LiveCallbacks) {
     this.audioEl = new Audio();
@@ -65,11 +67,30 @@ export class LiveVoiceCall {
     const pc = new RTCPeerConnection();
     this.pc = pc;
     pc.addTrack(track, new MediaStream([track]));
+    // The mic's own level tells us the resident started talking right away,
+    // well before GPT-Live's transcript of it arrives. Echo cancellation keeps
+    // the patient's voice out of it.
+    this.watchLevel(new MediaStream([track]), 18, (loud) => {
+      const now = performance.now();
+      if (loud) {
+        this.micLoudSince ??= now;
+        this.micQuietAt = 0;
+      } else if (this.micLoudSince !== null) {
+        // Allow short dips between syllables.
+        this.micQuietAt ||= now;
+        if (now - this.micQuietAt > 150) this.micLoudSince = null;
+      }
+    });
+    let remoteWatched = false;
     pc.ontrack = (e) => {
       const stream = e.streams[0] ?? new MediaStream([e.track]);
       this.audioEl.srcObject = stream;
       void this.audioEl.play().catch(() => undefined);
-      this.watchLevel(stream);
+      if (remoteWatched) return;
+      remoteWatched = true;
+      this.watchLevel(stream, 6, (loud) => {
+        if (loud) this.lastSoundAt = performance.now();
+      });
     };
     this.bindChannel(pc.createDataChannel('oai-events'));
     // In case OpenAI opens its own events channel instead.
@@ -88,28 +109,32 @@ export class LiveVoiceCall {
     dc.onmessage = (e) => this.handle(String(e.data));
   }
 
-  /** Measures the patient's voice, to tell when he is audibly talking. */
-  private watchLevel(stream: MediaStream) {
-    if (!this.ctx || this.analyser) return;
+  /** Measures a stream's loudness every 50 ms. */
+  private watchLevel(stream: MediaStream, threshold: number, onLevel: (loud: boolean) => void) {
+    if (!this.ctx) return;
     try {
       const src = this.ctx.createMediaStreamSource(stream);
       const a = this.ctx.createAnalyser();
       a.fftSize = 512;
       src.connect(a);
-      this.analyser = a;
-      this.levels = new Uint8Array(new ArrayBuffer(a.fftSize));
+      const levels = new Uint8Array(new ArrayBuffer(a.fftSize));
       const tick = () => {
-        if (!this.analyser || !this.levels) return;
-        this.analyser.getByteTimeDomainData(this.levels);
+        if (this.stopped) return;
+        a.getByteTimeDomainData(levels);
         let peak = 0;
-        for (const v of this.levels) peak = Math.max(peak, Math.abs(v - 128));
-        if (peak > 6) this.lastSoundAt = performance.now();
+        for (const v of levels) peak = Math.max(peak, Math.abs(v - 128));
+        onLevel(peak > threshold);
         window.setTimeout(tick, 50);
       };
       tick();
     } catch {
-      this.analyser = null;
+      // No meter: we fall back to the transcript alone.
     }
+  }
+
+  /** How long the resident has been audibly talking without a break (0 if not). */
+  micLoudFor(): number {
+    return this.micLoudSince === null ? 0 : performance.now() - this.micLoudSince;
   }
 
   /** True while the patient's voice is coming through (or was, very recently). */
@@ -120,6 +145,21 @@ export class LiveVoiceCall {
   /** Silences the patient on our side (GPT-Live may keep talking after an interruption). */
   mutePatient(muted: boolean) {
     this.audioEl.muted = muted;
+    if (!muted) this.audioEl.volume = 1;
+  }
+
+  /**
+   * Turns the patient almost silent while we check it's really the resident
+   * talking. iPhones ignore volume changes, so there it mutes instead.
+   */
+  duckPatient(on: boolean) {
+    if (!on) {
+      this.audioEl.volume = 1;
+      this.audioEl.muted = false;
+      return;
+    }
+    this.audioEl.volume = 0.08;
+    if (this.audioEl.volume > 0.5) this.audioEl.muted = true;
   }
 
   private send(ev: Record<string, unknown>) {
@@ -181,7 +221,7 @@ export class LiveVoiceCall {
   }
 
   hangUp() {
-    this.analyser = null;
+    this.stopped = true;
     this.track?.stop();
     this.pc?.close();
     this.pc = null;
