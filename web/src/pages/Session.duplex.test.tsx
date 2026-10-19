@@ -151,8 +151,8 @@ describe('two-way voice', () => {
   it('stops the patient mid-reply when the resident talks over him, and tells the server what was heard', async () => {
     await start();
     await say('Your blood pressure is high, so we should treat it.');
-    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 3000 });
-    await screen.findByText('Will I lose my license?');
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 5000 });
+    await screen.findByText('Will I lose my license?', undefined, { timeout: 4000 });
 
     // His own words coming back through the mic are ignored (echo)...
     await act(async () => stt.onPartial('will I lose my license'));
@@ -163,8 +163,10 @@ describe('two-way voice', () => {
     const spy = vi.spyOn(performance, 'now').mockImplementation(() => realNow() + 3000);
     await say('Wait, before you go on, can I ask about your job?');
     spy.mockRestore();
-    expect(await screen.findByText('Will I lose my license? —')).toBeInTheDocument();
-    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 3000 });
+    expect(
+      await screen.findByText('Will I lose my license? —', undefined, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 5000 });
     expect(calls[1]!.prevInterrupted).toEqual({ heard: 'Will I lose my license?' });
     expect(calls[1]!.text).toBe('Wait, before you go on, can I ask about your job?');
   });
@@ -174,12 +176,12 @@ describe('two-way voice', () => {
     let release!: () => void;
     hold = new Promise<void>((r) => (release = r));
     await say('That’s understandable.');
-    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 5000 });
     // Still thinking: the resident goes on.
     await say('I’m sorry about your dad.');
     hold = null;
     await act(async () => release());
-    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 3000 });
+    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 5000 });
     expect(calls[1]!.supersedes).toBe(1);
     expect(calls[1]!.text).toBe('That’s understandable. I’m sorry about your dad.');
     // The unplayed first reply never appears.
@@ -189,16 +191,28 @@ describe('two-way voice', () => {
   it('treats talking again right as the patient starts as finishing a thought, not interrupting', async () => {
     await start();
     await say('I’m glad you feel fine, but we are still worried about your blood pressure.');
-    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 3000 });
-    await screen.findByText('Will I lose my license?');
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 5000 });
+    await screen.findByText('Will I lose my license?', undefined, { timeout: 4000 });
     // A second later the resident carries on with their thought.
     await say('Because high blood pressure can still cause some health issues.');
-    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 3000 });
+    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 5000 });
     expect(calls[1]!.supersedes).toBe(1);
     expect(calls[1]!.prevInterrupted).toBeUndefined();
     expect(calls[1]!.text).toBe(
       'I’m glad you feel fine, but we are still worried about your blood pressure. Because high blood pressure can still cause some health issues.',
     );
     expect(screen.queryByText(/Will I lose my license\? —/)).toBeNull();
+  });
+
+  it('fetches the reply as soon as the words are in, but plays it only after the end-of-turn wait', async () => {
+    await start();
+    await say('We will check your blood pressure again next month.');
+    // Asked for at once...
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 300 });
+    // ...but not played yet: the resident might still be carrying on.
+    expect(screen.queryByText('Will I lose my license?')).toBeNull();
+    expect(
+      await screen.findByText('Will I lose my license?', undefined, { timeout: 4000 }),
+    ).toBeInTheDocument();
   });
 });

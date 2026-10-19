@@ -153,7 +153,7 @@ export class VoiceRenderer {
 
   /** Turn the patient down while we check whether the resident is starting to talk. */
   duck(on: boolean) {
-    this.audio.volume = on ? 0.3 : 1;
+    this.audio.volume = on ? 0.05 : 1;
   }
 
   /** Stops the clip that's playing (play() then returns). */

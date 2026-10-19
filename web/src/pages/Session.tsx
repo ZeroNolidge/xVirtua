@@ -253,6 +253,15 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
   /** Whether the speech service judges turn ends by meaning (shorter waits) or by silence. */
   const semanticTurns = useRef(false);
   const scheduleFlushRef = useRef<(() => void) | null>(null);
+  /**
+   * The reply is fetched as soon as the resident's words are in, but only
+   * plays after the end-of-turn wait. Speech during the wait holds it a bit
+   * longer while we see if they're carrying on (then it's replaced).
+   */
+  const gate = useRef({ openAt: 0, holdUntil: 0 });
+  /** Just after cutting the patient off, they answer sooner. */
+  const quickNext = useRef(false);
+  const [showThinking, setShowThinking] = useState(false);
 
   const startListening = useCallback(() => {
     if (phaseRef.current === 'ending') return;
@@ -296,9 +305,11 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
   );
 
   const sendTurn = useCallback(
-    async (said: string, source: 'voice' | 'typed', tStartMs?: number) => {
+    async (said: string, source: 'voice' | 'typed', tStartMs?: number, holdMs = 0) => {
       const r = renderer.current;
       if (!said.trim() || phaseRef.current === 'ending' || !r) return;
+      gate.current = { openAt: performance.now() + holdMs, holdUntil: 0 };
+      setShowThinking(holdMs === 0);
       // One exchange at a time: wait for the previous one to settle.
       const prev = inFlight.current;
       let settle!: () => void;
@@ -353,7 +364,18 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
       });
       player.current = p;
       let running: Promise<void> | null = null;
-      const run = () => (running ??= p.run(pauseMs));
+      // Wait out the end-of-turn pause (in parallel with the server), then play.
+      const waitForGate = async () => {
+        const g = gate.current;
+        while (performance.now() < Math.max(g.openAt, g.holdUntil) && !turnRef.current?.supersede) {
+          await new Promise((res) => setTimeout(res, 50));
+        }
+        setShowThinking(true);
+      };
+      const run = () =>
+        (running ??= waitForGate().then(() =>
+          turnRef.current?.supersede ? undefined : p.run(pauseMs),
+        ));
       const onChunk = (c: PatientChunk) => {
         // The resident kept talking: this reply will be replaced, so don't play it.
         if (turnRef.current?.supersede) return;
@@ -403,7 +425,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
             updateBubble(key, { text: u.text, nonverbal: u.nonverbal });
           }
           if (p.firstSoundAt !== null) {
-            const wait = Math.max(0, p.firstSoundAt - now - pauseMs);
+            const wait = Math.max(0, p.firstSoundAt - now - pauseMs - holdMs);
             tm.lastAppWaitMs = wait;
             tm.totalAppWaitMs += wait;
           }
@@ -441,16 +463,19 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     if (m === 'tap') cancelAutoSend();
   };
 
-  const flushVoice = useCallback(() => {
-    cancelAutoSend();
-    const p = pending.current;
-    const text = p.text.join(' ').trim();
-    const tStart = p.tStart ?? undefined;
-    p.text = [];
-    p.tStart = null;
-    setPartial('');
-    if (text) void sendTurn(text, 'voice', tStart);
-  }, [sendTurn, cancelAutoSend]);
+  const flushVoice = useCallback(
+    (holdMs = 0) => {
+      cancelAutoSend();
+      const p = pending.current;
+      const text = p.text.join(' ').trim();
+      const tStart = p.tStart ?? undefined;
+      p.text = [];
+      p.tStart = null;
+      setPartial('');
+      if (text) void sendTurn(text, 'voice', tStart, holdMs);
+    },
+    [sendTurn, cancelAutoSend],
+  );
 
   const scheduleFlush = useCallback(() => {
     cancelAutoSend();
@@ -461,8 +486,11 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     const text = pending.current.text.join(' ');
     // The speech service already judged the turn finished by meaning, so only
     // a short extra wait is needed; with plain silence detection, wait longer.
-    const ms = endOfTurnDelayMs(text) * (semanticTurns.current ? 0.6 : 1);
-    pending.current.timer = window.setTimeout(flushVoice, ms);
+    // Right after cutting the patient off, the interjection is short: answer sooner.
+    const factor = quickNext.current ? 0.25 : semanticTurns.current ? 0.6 : 1;
+    quickNext.current = false;
+    // Send now so the reply is ready; it plays once this wait has passed.
+    flushVoice(endOfTurnDelayMs(text) * factor);
   }, [flushVoice, cancelAutoSend]);
 
   useEffect(() => {
@@ -482,6 +510,8 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     const sinceStart = p.firstSoundAt === null ? 0 : performance.now() - p.firstSoundAt;
     if ((p.played.length === 0 || sinceStart < CONTINUE_WINDOW_MS) && turnRef.current) {
       turnRef.current.supersede = true;
+    } else {
+      quickNext.current = true;
     }
     startListening();
   }, [startListening]);
@@ -514,10 +544,14 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
             const p = pending.current;
             p.tStart ??= Math.round(performance.now() - t0.current);
             if (phaseRef.current === 'patient') {
-              // Maybe the resident is starting to talk: turn the patient down while we check.
+              // Maybe the resident is starting to talk: turn the patient almost
+              // silent at once (feels like stopping), back up if it was only echo.
               renderer.current?.duck(true);
               if (duckTimer.current) window.clearTimeout(duckTimer.current);
-              duckTimer.current = window.setTimeout(() => renderer.current?.duck(false), 1500);
+              duckTimer.current = window.setTimeout(() => renderer.current?.duck(false), 1200);
+            } else if (phaseRef.current === 'thinking') {
+              // Talking again before the reply plays: hold it while we see if they're carrying on.
+              gate.current.holdUntil = performance.now() + 1200;
             }
           },
           onPartial: (t) => {
@@ -683,7 +717,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
         <Transcript
           bubbles={bubbles}
           partial={partial}
-          thinking={phase === 'thinking'}
+          thinking={phase === 'thinking' && showThinking}
           patientFirstName={first}
           queued={queued}
         />
@@ -716,7 +750,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
           {!typed && sendMode === 'tap' && phase === 'listening' && partial && (
             <div className="send-row">
               <span className="muted small">Tap send when you’re done.</span>
-              <button className="btn btn-inline" onClick={flushVoice}>
+              <button className="btn btn-inline" onClick={() => flushVoice()}>
                 Send
               </button>
             </div>
