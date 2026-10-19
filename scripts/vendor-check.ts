@@ -151,7 +151,7 @@ async function openai() {
     const t0 = Date.now();
     const r = await mintClientSecret(key);
     lines.push(
-      `✅ Client secret minted for \`${STT_MODEL}\` in ${Date.now() - t0} ms (key starts \`${r.value.slice(0, 3)}…\`).`,
+      `✅ Client secret minted for \`${STT_MODEL}\` in ${Date.now() - t0} ms (key starts \`${r.value.slice(0, 3)}…\`). Turn detection: **${r.turnDetection === 'semantic' ? 'semantic (judges by meaning)' : 'silence only (semantic was rejected)'}**.`,
       '',
     );
   } catch (e) {
