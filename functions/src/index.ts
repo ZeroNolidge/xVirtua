@@ -147,6 +147,9 @@ export const patientTurn = callable(
   },
 );
 
+/** Saves what the patient actually said out loud (cut-offs, GPT-Live's wording). */
+export const saveHeard = callable({}, (req) => session.saveHeard(db(), callerOf(req), req.data));
+
 export const endSession = callable({}, (req) =>
   session.endSession(db(), callerOf(req), req.data, async (path) => {
     const [exists] = await getStorage().bucket().file(path).exists();

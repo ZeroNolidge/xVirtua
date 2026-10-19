@@ -12,8 +12,8 @@ export interface LiveCallbacks {
   onDelegation(id: string): void;
   /** Words GPT-Live heard from the resident (pieces, in order). */
   onHeard(delta: string): void;
-  /** Words GPT-Live actually said as the patient (pieces, in order). */
-  onSpoken(delta: string): void;
+  /** Words GPT-Live actually said as the patient (pieces, in order), with their start time. */
+  onSpoken(delta: string, startMs?: number): void;
   onError(message: string): void;
   onClosed(): void;
 }
@@ -24,9 +24,13 @@ export type Connect = (offerSdp: string) => Promise<string>;
 interface LiveEvent {
   type?: string;
   delta?: string;
+  start_ms?: number;
   delegation?: { id?: string };
   error?: { message?: string };
 }
+
+/** GPT-Live's "the listener cut in here" event, once confirmed in its docs. */
+export const TRUNCATE_EVENT: string | null = null;
 
 export class LiveVoiceCall {
   private pc: RTCPeerConnection | null = null;
@@ -42,6 +46,8 @@ export class LiveVoiceCall {
   /** performance.now() when the resident's mic got loud and stayed loud; null when quiet. */
   private micLoudSince: number | null = null;
   private micQuietAt = 0;
+  /** performance.now() when the resident's mic was last loud. */
+  lastMicLoudAt = 0;
 
   constructor(private readonly cb: LiveCallbacks) {
     this.audioEl = new Audio();
@@ -73,6 +79,7 @@ export class LiveVoiceCall {
     this.watchLevel(new MediaStream([track]), 18, (loud) => {
       const now = performance.now();
       if (loud) {
+        this.lastMicLoudAt = now;
         this.micLoudSince ??= now;
         this.micQuietAt = 0;
       } else if (this.micLoudSince !== null) {
@@ -173,6 +180,17 @@ export class LiveVoiceCall {
     return this.send({ type: 'session.commentary.append', delegation_id: delegationId, content });
   }
 
+  /**
+   * Tells GPT-Live the patient was cut off after `audioEndMs` of the reply had
+   * played, so it knows the rest wasn't heard. Off until we have GPT-Live's
+   * event name for this (TRUNCATE_EVENT); meanwhile the patient is muted on
+   * our side and only the heard words are saved.
+   */
+  truncate(delegationId: string | null, audioEndMs: number) {
+    if (!TRUNCATE_EVENT) return false;
+    return this.send({ type: TRUNCATE_EVENT, delegation_id: delegationId, audio_end_ms: audioEndMs });
+  }
+
   /** Silent context for GPT-Live (not spoken). */
   note(delegationId: string | null, content: string) {
     return this.send({ type: 'session.thinking.append', delegation_id: delegationId, content });
@@ -195,7 +213,8 @@ export class LiveVoiceCall {
         if (ev.delta) this.cb.onHeard(ev.delta);
         return;
       case 'session.output_transcript.delta':
-        if (ev.delta) this.cb.onSpoken(ev.delta);
+        if (ev.delta)
+          this.cb.onSpoken(ev.delta, typeof ev.start_ms === 'number' ? ev.start_ms : undefined);
         return;
       case 'session.closed': {
         const done = this.closing;

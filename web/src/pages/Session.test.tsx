@@ -47,7 +47,11 @@ const streamTurn = vi.fn(async (_input: unknown, onChunk: (c: PatientChunk) => v
   };
 });
 vi.mock('../lib/session', () => ({
-  sessionApi: { end: vi.fn(async () => ({ data: {} })), sttToken: vi.fn() },
+  sessionApi: {
+    saveHeard: vi.fn(async () => ({ data: { ok: true } })),
+    end: vi.fn(async () => ({ data: {} })),
+    sttToken: vi.fn(),
+  },
   streamTurn: (i: unknown, c: (c: PatientChunk) => void) => streamTurn(i, c),
   fetchPatientAudio: vi.fn(async () => null),
   audioFromChunk: vi.fn(),

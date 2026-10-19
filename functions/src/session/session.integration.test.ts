@@ -4,7 +4,7 @@ import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestor
 import { CONSENT_VERSION, DAILY_LIMITS, type PatientChunk } from '@plainspeak/shared';
 import { dayKey } from '../lib/quota.js';
 import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
-import { endSession, patientTurn, startSession } from './session.js';
+import { endSession, patientTurn, saveHeard, startSession } from './session.js';
 import { FakeBrain } from '../patient/fakeBrain.js';
 import type { Caller } from '../lib/callable.js';
 import { startLiveCall } from '../voice/live.js';
@@ -460,6 +460,65 @@ describe('GPT-Live test mode', () => {
     );
     expect((await db.doc(`sessions/${sessionId}/turns/2`).get()).get('liveSpokenText')).toBe(
       'Hey doc, so my pressure is up?',
+    );
+  });
+});
+
+describe('saving what was actually said', () => {
+  it('saves a cut-off right away: only the heard words, ending in "—", kept for scoring and the next reply', async () => {
+    const brain = new FakeBrain();
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    await patientTurn(db, resident, { sessionId, text: 'Hi Ray.' }, brain);
+    const planned = (await db.doc(`sessions/${sessionId}/turns/2`).get()).get('text');
+    await saveHeard(db, resident, { sessionId, idx: 2, cutOff: { heard: 'Well, my dad' } });
+    const p = (await db.doc(`sessions/${sessionId}/turns/2`).get()).data()!;
+    expect(p).toMatchObject({
+      text: 'Well, my dad —',
+      interrupted: true,
+      heardText: 'Well, my dad',
+      plannedText: planned,
+    });
+    // A later spoken-text save can't undo the cut-off.
+    await saveHeard(db, resident, { sessionId, idx: 2, spoken: 'Well, my dad had a stroke.' });
+    expect((await db.doc(`sessions/${sessionId}/turns/2`).get()).get('text')).toBe(
+      'Well, my dad —',
+    );
+    await patientTurn(db, resident, { sessionId, text: 'Sorry, go on.' }, brain);
+    expect(brain.calls.at(-1)!.history.at(-1)!.content).toContain('"text":"Well, my dad —"');
+  });
+
+  it('saves GPT-Live’s wording as the line, and late resident words on the turn before', async () => {
+    const brain = new FakeBrain();
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    await patientTurn(db, resident, { sessionId, text: 'We will check it' }, brain);
+    await saveHeard(db, resident, {
+      sessionId,
+      idx: 2,
+      spoken: 'Okay, sure thing doc.',
+      residentAppend: 'next month.',
+    });
+    const [r, p] = await Promise.all([
+      db.doc(`sessions/${sessionId}/turns/1`).get(),
+      db.doc(`sessions/${sessionId}/turns/2`).get(),
+    ]);
+    expect(r.get('text')).toBe('We will check it next month.');
+    expect(p.get('text')).toBe('Okay, sure thing doc.');
+    expect(p.get('plannedText')).toBeTruthy();
+  });
+
+  it('only the owner, only live sessions, and a replaced turn is a no-op', async () => {
+    const brain = new FakeBrain();
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    await patientTurn(db, resident, { sessionId, text: 'Hi.' }, brain);
+    await expect(
+      saveHeard(db, otherResident, { sessionId, idx: 2, spoken: 'x' }),
+    ).rejects.toMatchObject({ code: 'not-found' });
+    await expect(saveHeard(db, resident, { sessionId, idx: 9, spoken: 'x' })).resolves.toEqual({
+      ok: true,
+    });
+    await endSession(db, resident, { sessionId }, async () => false);
+    await expect(saveHeard(db, resident, { sessionId, idx: 2, spoken: 'x' })).rejects.toMatchObject(
+      { code: 'failed-precondition' },
     );
   });
 });

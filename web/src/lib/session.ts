@@ -51,6 +51,17 @@ export const sessionApi = {
       voiceMode?: VoiceMode;
     }
   >(functions, 'startSession'),
+  /** Saves what the patient actually said (cut-offs, GPT-Live's wording) and late resident words. */
+  saveHeard: httpsCallable<
+    {
+      sessionId: string;
+      idx: number;
+      spoken?: string;
+      cutOff?: { heard: string };
+      residentAppend?: string;
+    },
+    { ok: true }
+  >(functions, 'saveHeard'),
   /** GPT-Live test mode: trades the browser's WebRTC offer for OpenAI's answer. */
   startLiveCall: httpsCallable<{ sessionId: string; sdp: string }, { sdp: string; voice: string }>(
     functions,

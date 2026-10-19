@@ -29,6 +29,7 @@ import { PlainWordSearch } from '../components/PlainWordSearch';
 import { canContinue, type SessionRow } from '../lib/resume';
 import { Loading } from './StatusScreens';
 import { LiveConversation } from './LiveSession';
+import { ECHO_WINDOW_MS } from '../lib/liveReply';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
 export interface Bubble {
@@ -321,6 +322,15 @@ function Conversation({
   /** Just after cutting the patient off, they answer sooner. */
   const quickNext = useRef(false);
   const [showThinking, setShowThinking] = useState(false);
+  /** Cut-off saves still on their way; End waits for them. */
+  const saves = useRef<Promise<unknown>[]>([]);
+  /** What the patient said last, to tell his echo from the resident just after he stops. */
+  const lastPatientSaid = useRef('');
+  /** Mic input this soon after the patient stops may still be his echo. */
+  const echoAfterPatient = (t: string) =>
+    timing.current.patientDoneAt !== null &&
+    performance.now() - timing.current.patientDoneAt < ECHO_WINDOW_MS &&
+    !isResidentSpeech(t, lastPatientSaid.current);
 
   const startListening = useCallback(() => {
     if (phaseRef.current === 'ending') return;
@@ -358,6 +368,7 @@ function Conversation({
       if (audio) p.audio(0, audio);
       p.finish();
       await p.run(u.delivery.pauseBeforeMs);
+      lastPatientSaid.current = p.played.join(' ');
       startListening();
     },
     [sessionId, setPhase, startListening],
@@ -479,6 +490,12 @@ function Conversation({
             const heard = p.played.join(' ');
             interruptedRef.current = { heard };
             updateBubble(key, { text: `${heard} —`, nonverbal: u.nonverbal });
+            // Saved right away, so it survives a reload or an immediate End.
+            saves.current.push(
+              sessionApi
+                .saveHeard({ sessionId, idx: u.idx, cutOff: { heard } })
+                .catch((e: unknown) => reportError('saveHeard', e)),
+            );
           } else if (shown) {
             // The saved text is the source of truth (it may be tidied up).
             updateBubble(key, { text: u.text, nonverbal: u.nonverbal });
@@ -490,6 +507,7 @@ function Conversation({
           }
         }
         turnRef.current = null;
+        lastPatientSaid.current = p.played.join(' ');
         if (phaseRef.current !== 'listening') startListening();
       } catch (e) {
         p.finish();
@@ -614,6 +632,7 @@ function Conversation({
             }
           },
           onPartial: (t) => {
+            if (phaseRef.current === 'listening' && echoAfterPatient(t)) return;
             if (phaseRef.current === 'patient') {
               // The patient's own voice leaking into the mic isn't the resident.
               if (!isResidentSpeech(t, player.current?.spokenSoFar ?? '')) return;
@@ -628,6 +647,10 @@ function Conversation({
             setPartial([...pending.current.text, t].join(' '));
           },
           onFinal: (t) => {
+            if (phaseRef.current === 'listening' && echoAfterPatient(t)) {
+              setPartial(pending.current.text.join(' '));
+              return;
+            }
             if (phaseRef.current === 'patient') {
               if (!isResidentSpeech(t, player.current?.spokenSoFar ?? '')) {
                 renderer.current?.duck(false);
@@ -668,6 +691,10 @@ function Conversation({
     player.current?.finish();
     renderer.current?.dispose();
     setSaving('Saving…');
+    await Promise.race([
+      Promise.allSettled(saves.current),
+      new Promise((r) => setTimeout(r, 4000)),
+    ]);
     try {
       await sessionApi.end({
         sessionId,

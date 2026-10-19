@@ -167,14 +167,46 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
 
 // ---------- turn ----------
 
-/** What the patient model sees of its own earlier reply: only what was heard if cut off. */
+/**
+ * What the patient model sees of its own earlier reply: what was actually
+ * said out loud (only the part before a cut-off, or GPT-Live's wording).
+ */
 function patientHistoryText(t: Record<string, unknown>): string {
-  if (!t.interrupted) return String(t.raw);
+  const said =
+    t.plannedText !== undefined
+      ? String(t.text ?? '')
+      : t.interrupted
+        ? `${String(t.heardText ?? '')} —`
+        : null;
+  if (said === null) return String(t.raw);
   try {
-    return JSON.stringify({ ...JSON.parse(String(t.raw)), text: `${String(t.heardText ?? '')} —` });
+    return JSON.stringify({ ...JSON.parse(String(t.raw)), text: said });
   } catch {
     return String(t.raw);
   }
+}
+
+/**
+ * The saved patient line becomes what was said out loud. Claude's planned
+ * line is kept as plannedText. A cut-off line ends in "—".
+ */
+export function spokenUpdate(
+  turn: Record<string, unknown>,
+  said: { spoken?: string | null; cutOff?: { heard: string } | null },
+): Record<string, unknown> | null {
+  const planned = String(turn.plannedText ?? turn.text ?? '');
+  if (said.cutOff) {
+    const heard = said.cutOff.heard.trim();
+    return {
+      interrupted: true,
+      heardText: heard,
+      text: heard ? `${heard} —` : '—',
+      plannedText: planned,
+    };
+  }
+  const spoken = said.spoken?.trim();
+  if (!spoken || turn.interrupted) return null;
+  return { text: spoken, liveSpokenText: spoken, plannedText: planned };
 }
 
 const ms = z
@@ -341,7 +373,13 @@ export async function patientTurn(
     // Talked over: the patient only "said" what the resident let them say.
     const heard = input.prevInterrupted?.heard.trim();
     const interrupted = !!(prevPatient && prevPatient.idx > 0 && input.prevInterrupted);
-    if (interrupted) Object.assign(prevPatient!, { interrupted: true, heardText: heard ?? '' });
+    if (prevPatient) {
+      const said = spokenUpdate(prevPatient, {
+        spoken: input.prevSpoken,
+        cutOff: interrupted ? { heard: heard ?? '' } : null,
+      });
+      if (said) Object.assign(prevPatient, said);
+    }
 
     const decision = decideCue(
       sc.script.cueScript,
@@ -457,17 +495,19 @@ export async function patientTurn(
     });
     // The wait the app caused before the previous patient reply, measured by the app,
     // and whether the resident talked over it.
-    const spoken = input.prevSpoken?.trim();
-    if (prevPatient && prevPatient.idx > 0 && (input.prevAppWaitMs != null || interrupted)) {
-      batch.update(ref.collection('turns').doc(String(prevPatient.idx)), {
-        ...(input.prevAppWaitMs != null ? { appWaitMs: input.prevAppWaitMs } : {}),
-        ...(interrupted ? { interrupted: true, heardText: heard ?? '' } : {}),
-        ...(spoken ? { liveSpokenText: spoken } : {}),
+    if (prevPatient) {
+      const said = spokenUpdate(prevPatient, {
+        spoken: input.prevSpoken,
+        cutOff: interrupted ? { heard: heard ?? '' } : null,
       });
-    } else if (prevPatient && spoken) {
-      batch.update(ref.collection('turns').doc(String(prevPatient.idx)), {
-        liveSpokenText: spoken,
-      });
+      const update = {
+        ...(prevPatient.idx > 0 && input.prevAppWaitMs != null
+          ? { appWaitMs: input.prevAppWaitMs }
+          : {}),
+        ...said,
+      };
+      if (Object.keys(update).length)
+        batch.update(ref.collection('turns').doc(String(prevPatient.idx)), update);
     }
     batch.set(ref.collection('turns').doc(String(pIdx)), {
       idx: pIdx,
@@ -505,6 +545,54 @@ export async function patientTurn(
     console.error('patientTurn failed', e);
     throw new HttpsError('unavailable', 'The patient didn’t answer. Please try again.');
   }
+}
+
+// ---------- what was actually said ----------
+
+const heardInput = z.object({
+  sessionId: z.string().min(1).max(64),
+  /** The patient turn. */
+  idx: z.number().int().nonnegative(),
+  /** GPT-Live's transcript of what the patient said out loud. */
+  spoken: z.string().max(4000).nullish(),
+  /** The resident cut in: only this much was said. */
+  cutOff: z.object({ heard: z.string().max(2000) }).nullish(),
+  /** Late words from the resident that belong to the turn before this reply. */
+  residentAppend: z.string().max(2000).nullish(),
+});
+
+/**
+ * Saves what the patient actually said (and late resident words) as soon as
+ * it's known, so it survives a reload or an immediate End.
+ */
+export async function saveHeard(db: Firestore, caller: Caller | null, data: unknown) {
+  const me = requireMember(caller);
+  const input = parse(heardInput, data);
+  const ref = db.doc(`sessions/${input.sessionId}`);
+  await db.runTransaction(async (tx) => {
+    const s = (await tx.get(ref)).data() as SessionDoc | undefined;
+    if (!s || s.uid !== me.uid) throw new HttpsError('not-found', 'Session not found.');
+    if (s.status !== 'live')
+      throw new HttpsError('failed-precondition', 'This conversation has ended.');
+    const pRef = ref.collection('turns').doc(String(input.idx));
+    const rRef = ref.collection('turns').doc(String(input.idx - 1));
+    const [pSnap, rSnap] = await Promise.all([
+      tx.get(pRef),
+      input.residentAppend && input.idx > 0 ? tx.get(rRef) : Promise.resolve(null),
+    ]);
+    // The turn may have been replaced (the resident kept talking): nothing to do.
+    if (pSnap.get('speaker') !== 'patient') return;
+    const update = spokenUpdate(pSnap.data()!, input);
+    if (update) tx.update(pRef, update);
+    const extra = input.residentAppend?.trim();
+    if (extra && rSnap?.get('speaker') === 'resident') {
+      tx.update(rRef, {
+        text: `${String(rSnap.get('text') ?? '')} ${extra}`.trim(),
+        lateText: extra,
+      });
+    }
+  });
+  return { ok: true };
 }
 
 // ---------- end ----------

@@ -32,6 +32,8 @@ vi.mock('../lib/recorder', () => ({
 let cb: LiveCallbacks;
 let audible = false;
 let micLoudMs = 0;
+let micLoudAt = -1e9;
+let lastSound = -1e9;
 const ducked: boolean[] = [];
 let failConnect = false;
 const said: [string | null, string][] = [];
@@ -48,8 +50,17 @@ vi.mock('../lib/liveVoice', async (orig) => {
       async start(_mic: MediaStream, connect: (sdp: string) => Promise<string>) {
         await connect('v=0 offer');
       }
+      get lastSoundAt() {
+        return audible ? performance.now() : lastSound;
+      }
+      get lastMicLoudAt() {
+        return micLoudAt;
+      }
       patientAudible() {
         return audible;
+      }
+      truncate() {
+        return false;
       }
       micLoudFor() {
         return micLoudMs;
@@ -76,6 +87,7 @@ vi.mock('../lib/liveVoice', async (orig) => {
 const calls: TurnInput[] = [];
 vi.mock('../lib/session', () => ({
   sessionApi: {
+    saveHeard: vi.fn(async () => ({ data: { ok: true } })),
     end: vi.fn(async () => ({ data: {} })),
     startLiveCall: vi.fn(async () => {
       if (failConnect) throw new Error('unavailable');
@@ -136,15 +148,38 @@ async function start(onFallback = vi.fn()) {
   return onFallback;
 }
 
+const { sessionApi } = await import('../lib/session');
+const saved = () =>
+  (
+    sessionApi.saveHeard as unknown as { mock: { calls: [Record<string, unknown>][] } }
+  ).mock.calls.map((c) => c[0]);
+const sleep = (ms: number) => act(async () => new Promise((r) => setTimeout(r, ms)));
+
 beforeEach(() => {
   calls.length = 0;
   said.length = 0;
   muted.length = 0;
+  ducked.length = 0;
   audible = false;
   failConnect = false;
   micLoudMs = 0;
-  ducked.length = 0;
+  micLoudAt = -1e9;
+  lastSound = -1e9;
+  vi.mocked(sessionApi.saveHeard).mockClear();
 });
+
+/** The resident says something and GPT-Live asks for the reply. */
+async function residentTurn(text: string, id: string) {
+  micLoudAt = performance.now();
+  await act(async () => cb.onHeard(text));
+  await act(async () => cb.onDelegation(id));
+}
+
+/** Ray stops talking (his voice goes quiet). */
+function patientStops() {
+  audible = false;
+  lastSound = performance.now();
+}
 
 describe('GPT-Live conversation', () => {
   it('has GPT-Live say the opening line, then answers each request with Claude’s words and tone', async () => {
@@ -158,7 +193,7 @@ describe('GPT-Live conversation', () => {
       cb.onHeard('but we can treat it.');
     });
     await act(async () => cb.onDelegation('del_1'));
-    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 4000 });
     expect(calls[0]).toMatchObject({
       text: 'Yes, it is a bit high, but we can treat it.',
       live: true,
@@ -168,65 +203,126 @@ describe('GPT-Live conversation', () => {
       ['del_1', 'I drive a truck.'],
     ]);
     expect(await screen.findByText('Will I lose my license? I drive a truck.')).toBeInTheDocument();
-    expect(screen.getByText('Yes, it is a bit high, but we can treat it.')).toBeInTheDocument();
   });
 
-  it('cuts the patient off when the resident keeps talking over him, and tells the server what was heard', async () => {
+  it('waits for the resident’s last words before asking Claude', async () => {
     await start();
     await act(async () => cb.onStarted());
-    await act(async () => cb.onHeard('Let me explain.'));
+    await act(async () => cb.onHeard('So the plan is'));
     await act(async () => cb.onDelegation('del_1'));
+    // The rest of the sentence lands a moment after GPT-Live asked.
+    await sleep(400);
+    await act(async () => cb.onHeard(' to start a small pill.'));
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 4000 });
+    expect(calls[0]!.text).toBe('So the plan is to start a small pill.');
+  });
+
+  it('adds words that arrive after the reply was asked for to that same turn, not the next', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    await residentTurn('We will check it again next month', 'del_1');
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 4000 });
+    // Ray hasn't started talking yet; the last words come in late.
+    await act(async () => cb.onHeard(' at your follow-up.'));
+    expect(
+      screen.getByText('We will check it again next month at your follow-up.'),
+    ).toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(saved()).toContainEqual({
+        sessionId: 's1',
+        idx: 2,
+        residentAppend: 'at your follow-up.',
+      }),
+    );
+    // They don't spill into the next turn.
+    await sleep(2600);
+    await residentTurn('Any questions?', 'del_2');
+    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 4000 });
+    expect(calls[1]!.text).toBe('Any questions?');
+  });
+
+  it('saves what Ray actually said out loud once he’s done, not the planned line', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    await residentTurn('Let me explain.', 'del_1');
+    await screen.findByText('Will I lose my license? I drive a truck.');
+    audible = true;
+    await act(async () => {
+      cb.onSpoken('Am I gonna lose my license? ', 0);
+      cb.onSpoken('I drive trucks.', 1500);
+    });
+    await sleep(100);
+    patientStops();
+    await sleep(1100);
+    expect(saved()).toContainEqual({
+      sessionId: 's1',
+      idx: 2,
+      spoken: 'Am I gonna lose my license? I drive trucks.',
+    });
+    expect(screen.getByText('Am I gonna lose my license? I drive trucks.')).toBeInTheDocument();
+  });
+
+  it('on a cut-off, keeps only the words Ray got out and saves them at once', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    await residentTurn('Let me explain.', 'del_1');
     await screen.findByText('Will I lose my license? I drive a truck.');
 
-    // He's talking...
+    // GPT-Live's transcript runs ahead of his voice.
     audible = true;
-    await act(async () => cb.onSpoken('Will I lose my '));
-    // ...his own words in the mic don't count...
+    await act(async () => {
+      cb.onSpoken('Will ', 0);
+      cb.onSpoken('I ', 300);
+      cb.onSpoken('lose ', 600);
+      cb.onSpoken('my license? ', 1000);
+      cb.onSpoken('I drive a truck.', 2000);
+    });
+    await sleep(800);
+    // His own words in the mic don't count...
     await act(async () => cb.onHeard('will I lose'));
-    await new Promise((r) => setTimeout(r, 300));
     expect(muted).toEqual([]);
-    // ...but the resident talking on does.
-    await act(async () => cb.onHeard(' No wait, can I ask about your job first?'));
-    await act(async () => cb.onHeard(' What kind of trucks?'));
-    await act(async () => new Promise((r) => setTimeout(r, 300)));
+    // ...but the resident talking over him does.
+    micLoudAt = performance.now();
+    await act(async () => cb.onHeard(' no wait, can I ask about your job first?'));
     expect(muted[0]).toBe(true);
-    expect(await screen.findByText('Will I lose my —')).toBeInTheDocument();
-
-    audible = false;
-    await act(async () => cb.onDelegation('del_2'));
-    await vi.waitFor(() => expect(calls).toHaveLength(2));
-    expect(calls[1]!.prevInterrupted).toEqual({ heard: 'Will I lose my' });
-    expect(calls[1]!.prevSpoken).toBe('Will I lose my');
-  });
-
-  it('turns the patient down as soon as the mic hears the resident, and stops him when the words confirm it', async () => {
-    await start();
-    await act(async () => cb.onStarted());
-    await act(async () => cb.onHeard('Let me explain.'));
-    await act(async () => cb.onDelegation('del_1'));
-    await screen.findByText('Will I lose my license? I drive a truck.');
-
-    audible = true;
-    await act(async () => cb.onSpoken('Will I lose '));
-    micLoudMs = 200;
-    await act(async () => new Promise((r) => setTimeout(r, 120)));
-    expect(ducked).toEqual([true]);
-    expect(muted).toEqual([]);
-    // The first words from the resident stop him at once.
-    await act(async () => cb.onHeard('Hang on, what do you do for work?'));
-    expect(muted).toEqual([true]);
     expect(screen.getByText('Will I lose —')).toBeInTheDocument();
+    expect(saved()).toContainEqual({ sessionId: 's1', idx: 2, cutOff: { heard: 'Will I lose' } });
+
+    patientStops();
+    await act(async () => cb.onDelegation('del_2'));
+    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 4000 });
+    expect(calls[1]!.text).toBe('no wait, can I ask about your job first?');
+    // Already saved: not sent again.
+    expect(calls[1]!.prevInterrupted).toBeUndefined();
   });
 
-  it('turns the patient back up if the noise wasn’t the resident talking', async () => {
+  it('ignores Ray’s own echo just after he stops talking', async () => {
     await start();
     await act(async () => cb.onStarted());
     audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(100);
+    patientStops();
+    await act(async () => cb.onHeard('my blood pressure is high'));
+    await act(async () => cb.onDelegation('del_1'));
+    await sleep(1700);
+    expect(calls).toHaveLength(0);
+    // The resident's own reply right after still counts.
+    await residentTurn('Yes, a little. Let’s talk about it.', 'del_2');
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 4000 });
+    expect(calls[0]!.text).toBe('Yes, a little. Let’s talk about it.');
+  });
+
+  it('turns the patient down as soon as the mic hears the resident, and back up if it wasn’t them', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    audible = true;
+    await act(async () => cb.onSpoken('So, my ', 0));
     micLoudMs = 200;
-    await act(async () => new Promise((r) => setTimeout(r, 120)));
+    await sleep(120);
     expect(ducked).toEqual([true]);
     micLoudMs = 0;
-    await act(async () => new Promise((r) => setTimeout(r, 1600)));
+    await sleep(1600);
     expect(ducked).toEqual([true, false]);
     expect(muted).toEqual([]);
   });

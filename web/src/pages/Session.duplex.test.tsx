@@ -62,6 +62,7 @@ const reply = (idx: number, text: string) => ({
 });
 vi.mock('../lib/session', () => ({
   sessionApi: {
+    saveHeard: vi.fn(async () => ({ data: { ok: true } })),
     end: vi.fn(async () => ({ data: {} })),
     sttToken: vi.fn(async () => ({ data: { value: 'ek_test', turnDetection: 'semantic' } })),
   },
