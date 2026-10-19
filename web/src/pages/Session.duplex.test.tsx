@@ -158,8 +158,11 @@ describe('two-way voice', () => {
     await act(async () => stt.onPartial('will I lose my license'));
     expect(screen.getByText('Will I lose my license?')).toBeInTheDocument();
 
-    // ...but the resident talking over him stops him.
+    // ...but the resident talking over him (a few seconds in) stops him.
+    const realNow = performance.now.bind(performance);
+    const spy = vi.spyOn(performance, 'now').mockImplementation(() => realNow() + 3000);
     await say('Wait, before you go on, can I ask about your job?');
+    spy.mockRestore();
     expect(await screen.findByText('Will I lose my license? —')).toBeInTheDocument();
     await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 3000 });
     expect(calls[1]!.prevInterrupted).toEqual({ heard: 'Will I lose my license?' });
@@ -181,5 +184,21 @@ describe('two-way voice', () => {
     expect(calls[1]!.text).toBe('That’s understandable. I’m sorry about your dad.');
     // The unplayed first reply never appears.
     expect(screen.queryByText(/I drive a truck/)).toBeNull();
+  });
+
+  it('treats talking again right as the patient starts as finishing a thought, not interrupting', async () => {
+    await start();
+    await say('I’m glad you feel fine, but we are still worried about your blood pressure.');
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 3000 });
+    await screen.findByText('Will I lose my license?');
+    // A second later the resident carries on with their thought.
+    await say('Because high blood pressure can still cause some health issues.');
+    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 3000 });
+    expect(calls[1]!.supersedes).toBe(1);
+    expect(calls[1]!.prevInterrupted).toBeUndefined();
+    expect(calls[1]!.text).toBe(
+      'I’m glad you feel fine, but we are still worried about your blood pressure. Because high blood pressure can still cause some health issues.',
+    );
+    expect(screen.queryByText(/Will I lose my license\? —/)).toBeNull();
   });
 });

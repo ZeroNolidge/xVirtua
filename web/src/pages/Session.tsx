@@ -41,6 +41,12 @@ interface StartState {
   persona: Persona;
 }
 
+/**
+ * If the resident starts talking again within this long of the patient's first
+ * words, they were still finishing their thought (not interrupting).
+ */
+const CONTINUE_WINDOW_MS = 2500;
+
 /** Remembered per phone: send after a pause (default) or only when tapped. */
 const SEND_MODE_KEY = 'plainspeak.sendMode';
 type SendMode = 'pause' | 'tap';
@@ -373,16 +379,21 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
           p.say(0, u.text);
           if (audio) p.audio(0, audio);
         }
-        const replaced = turnRef.current?.supersede || (p.interrupted && p.played.length === 0);
-        if (replaced) {
-          // Nothing was heard yet: drop this reply; the next send answers the whole thought.
+        // Drop this reply; the next send answers the resident's whole thought.
+        const replace = () => {
           p.interrupt();
           setBubbles((xs) => xs.filter((b) => b.key !== key));
           supersedeRef.current = { idx: u.idx - 1, text, residentKey };
+        };
+        if (turnRef.current?.supersede) {
+          replace();
         } else {
           p.finish();
           await run();
-          if (p.interrupted) {
+          if (turnRef.current?.supersede) {
+            // The resident went on with their thought just as the patient started.
+            replace();
+          } else if (p.interrupted) {
             // Talked over: the patient only got this far.
             const heard = p.played.join(' ');
             interruptedRef.current = { heard };
@@ -450,7 +461,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     const text = pending.current.text.join(' ');
     // The speech service already judged the turn finished by meaning, so only
     // a short extra wait is needed; with plain silence detection, wait longer.
-    const ms = endOfTurnDelayMs(text) * (semanticTurns.current ? 0.3 : 1);
+    const ms = endOfTurnDelayMs(text) * (semanticTurns.current ? 0.6 : 1);
     pending.current.timer = window.setTimeout(flushVoice, ms);
   }, [flushVoice, cancelAutoSend]);
 
@@ -465,7 +476,13 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
     renderer.current?.duck(false);
     if (!p || p.interrupted || phaseRef.current !== 'patient') return;
     p.interrupt();
-    if (p.played.length === 0 && turnRef.current) turnRef.current.supersede = true;
+    // Talking again right as the patient starts means the resident wasn't
+    // finished: the patient yields and answers the whole thought, as people do.
+    // Later on, it's talking over the patient.
+    const sinceStart = p.firstSoundAt === null ? 0 : performance.now() - p.firstSoundAt;
+    if ((p.played.length === 0 || sinceStart < CONTINUE_WINDOW_MS) && turnRef.current) {
+      turnRef.current.supersede = true;
+    }
     startListening();
   }, [startListening]);
 
