@@ -47,5 +47,6 @@ export const DAILY_LIMITS = {
   voice: 500,
   lookups: 100,
   scoring: 30,
+  liveCalls: 30,
 } as const;
 export type DailyLimitKind = keyof typeof DAILY_LIMITS;

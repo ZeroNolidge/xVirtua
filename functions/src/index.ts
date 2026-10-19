@@ -28,6 +28,7 @@ import { handleTts } from './voice/tts.js';
 import { pickVoice, synthesize } from './voice/cartesia.js';
 import type { VoiceService } from './voice/streamVoice.js';
 import { getSttToken as mintSttToken } from './voice/stt.js';
+import { startLiveCall as connectLive } from './voice/live.js';
 import type { Caller } from './lib/callable.js';
 import { APP_CHECK_ENFORCE } from './lib/appCheck.js';
 import { reportClientError as storeClientError } from './lib/clientErrors.js';
@@ -156,6 +157,12 @@ export const endSession = callable({}, (req) =>
 export const getSttToken = callable(
   { secrets: [OPENAI_API_KEY] },
   (req) => warmup(req) ?? mintSttToken(db(), callerOf(req), req.data, OPENAI_API_KEY.value()),
+);
+
+/** GPT-Live test mode: connects the browser's call (see voice/live.ts). */
+export const startLiveCall = callable(
+  { secrets: [OPENAI_API_KEY], timeoutSeconds: 30 },
+  (req) => warmup(req) ?? connectLive(db(), callerOf(req), req.data, keyOf(OPENAI_API_KEY)),
 );
 
 const CORS = [

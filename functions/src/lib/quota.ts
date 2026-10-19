@@ -14,6 +14,7 @@ const MESSAGES: Record<DailyLimitKind, string> = {
   voice: 'You’ve reached today’s limit for the patient’s voice. Their words will show as text.',
   lookups: 'You’ve reached today’s limit for word lookups.',
   scoring: 'You’ve reached today’s limit for feedback reports. Come back tomorrow!',
+  liveCalls: 'You’ve reached today’s limit for live voice calls.',
 };
 
 /**

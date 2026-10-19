@@ -20,6 +20,8 @@ import {
   type PatientChunk,
   type PatientModel,
   type PatientUtterance,
+  type VoiceMode,
+  VOICE_MODES,
 } from '@plainspeak/shared';
 import type { Caller } from '../lib/callable.js';
 import { parse } from '../lib/callable.js';
@@ -52,6 +54,7 @@ export interface SessionDoc {
   durationSec?: number;
   audioPath?: string | null;
   inputMode?: 'voice' | 'typed' | 'mixed';
+  voiceMode?: VoiceMode;
 }
 
 function requireMember(caller: Caller | null) {
@@ -76,14 +79,19 @@ const startInput = z.object({
   scenarioId: z.string().regex(/^[a-z0-9-]{1,80}$/),
   /** Faculty only: try a different patient model for this session. */
   model: z.enum(MODELS).nullish(),
+  /** Faculty only: try the other voice mode for this session. */
+  voiceMode: z.enum(VOICE_MODES).nullish(),
 });
 
 export async function startSession(db: Firestore, caller: Caller | null, data: unknown) {
   const me = requireMember(caller);
-  const { scenarioId, model } = parse(startInput, data);
+  const { scenarioId, model, voiceMode: askedMode } = parse(startInput, data);
   // The patient model is a faculty setting; residents can't pick one per session.
   if (model && me.role !== 'faculty') {
     throw new HttpsError('permission-denied', 'Only faculty can choose the patient model.');
+  }
+  if (askedMode && me.role !== 'faculty') {
+    throw new HttpsError('permission-denied', 'Only faculty can choose the voice mode.');
   }
 
   await consumeQuota(db, me.uid, 'sessions');
@@ -108,6 +116,8 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
   const deleteAfter = new Date();
   deleteAfter.setMonth(deleteAfter.getMonth() + keepMonths);
   const patientModel = me.role === 'faculty' && model ? model : programModel;
+  const programMode = program.get('voiceMode') === 'live' ? 'live' : 'standard';
+  const voiceMode: VoiceMode = askedMode ?? programMode;
 
   const ref = db.collection('sessions').doc();
   const opening: PatientUtterance = {
@@ -128,6 +138,7 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
     persona: sc.briefing.persona,
     status: 'live',
     patientModel,
+    voiceMode,
     cueState: initialCueState(),
     turnCount: 1,
     pending: false,
@@ -150,6 +161,7 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
     opening: { idx: 0, ...opening },
     persona: sc.briefing.persona,
     patientModel,
+    voiceMode,
   };
 }
 
@@ -193,6 +205,10 @@ const turnInput = z.object({
   supersedes: z.number().int().positive().nullish(),
   /** The resident talked over the patient's last reply; only this much was heard. */
   prevInterrupted: z.object({ heard: z.string().max(2000) }).nullish(),
+  /** Live voice: GPT-Live speaks the reply, so no Cartesia voice is made. */
+  live: z.boolean().nullish(),
+  /** Live voice: what GPT-Live actually said for the previous reply (it may reword). */
+  prevSpoken: z.string().max(4000).nullish(),
 });
 
 /** Why a live session can no longer take turns, or null if it can. */
@@ -349,7 +365,7 @@ export async function patientTurn(
     let finishStream: ((finalText: string) => Promise<void>) | undefined;
     if (opts.send) {
       let voiceReady: Promise<string | null> | null = null;
-      if (opts.voice) {
+      if (opts.voice && !input.live) {
         const voice = opts.voice;
         voiceReady = consumeQuota(db, me.uid, 'voice')
           .then(async () => {
@@ -441,10 +457,16 @@ export async function patientTurn(
     });
     // The wait the app caused before the previous patient reply, measured by the app,
     // and whether the resident talked over it.
+    const spoken = input.prevSpoken?.trim();
     if (prevPatient && prevPatient.idx > 0 && (input.prevAppWaitMs != null || interrupted)) {
       batch.update(ref.collection('turns').doc(String(prevPatient.idx)), {
         ...(input.prevAppWaitMs != null ? { appWaitMs: input.prevAppWaitMs } : {}),
         ...(interrupted ? { interrupted: true, heardText: heard ?? '' } : {}),
+        ...(spoken ? { liveSpokenText: spoken } : {}),
+      });
+    } else if (prevPatient && spoken) {
+      batch.update(ref.collection('turns').doc(String(prevPatient.idx)), {
+        liveSpokenText: spoken,
       });
     }
     batch.set(ref.collection('turns').doc(String(pIdx)), {
@@ -473,6 +495,7 @@ export async function patientTurn(
       inputMode: mode,
       lastActivityAt: FieldValue.serverTimestamp(),
       ...(voiceId && !s.voiceId ? { voiceId } : {}),
+      ...(input.live ? { liveTurns: FieldValue.increment(1) } : {}),
     });
     await batch.commit();
     return { patient: { idx: pIdx, ...result.utterance }, latencyMs: result.latencyMs, voiced };

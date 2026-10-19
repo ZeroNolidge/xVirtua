@@ -7,6 +7,31 @@ export type PatientModel = 'claude-opus-5-5' | 'claude-sonnet-5-5' | 'claude-hai
 
 export type ScoringWeights = Record<Metric, number>;
 
+/**
+ * How the patient talks. standard: our speech-to-text, Claude and Cartesia in
+ * turns. live: OpenAI GPT-Live carries the conversation (full duplex) and asks
+ * Claude for every reply. Test mode for now.
+ */
+export const VOICE_MODES = ['standard', 'live'] as const;
+export type VoiceMode = (typeof VOICE_MODES)[number];
+/** GPT-Live's voices (marin is its default). */
+export const LIVE_VOICES = [
+  'marin',
+  'cinder',
+  'stone',
+  'beacon',
+  'delta',
+  'meridian',
+  'tempo',
+  'bossa',
+  'quartz',
+  'ripple',
+  'vesper',
+  'willow',
+  'gleam',
+] as const;
+export type LiveVoice = (typeof LIVE_VOICES)[number];
+
 export interface Program {
   name: string;
   timezone: string;
@@ -15,6 +40,9 @@ export interface Program {
   scoringWeights: ScoringWeights;
   patientModel: PatientModel;
   currentRubricVersion: string;
+  /** Unset means standard. */
+  voiceMode?: VoiceMode;
+  liveVoice?: LiveVoice;
 }
 
 /** Custom claims set on the Firebase Auth token by the server. */

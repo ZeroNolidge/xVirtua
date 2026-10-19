@@ -138,6 +138,15 @@ describe('programs', () => {
     }
   });
 
+  it('faculty can switch the voice mode and live voice, to known values only', async () => {
+    const ref = doc(fs(a.facultyIrmc), 'programs/irmc');
+    await assertSucceeds(updateDoc(ref, { voiceMode: 'live', liveVoice: 'cinder' }));
+    await assertSucceeds(updateDoc(ref, { voiceMode: 'standard' }));
+    await assertFails(updateDoc(ref, { voiceMode: 'turbo' }));
+    await assertFails(updateDoc(ref, { liveVoice: 'alloy' }));
+    await assertFails(updateDoc(doc(fs(a.resA), 'programs/irmc'), { voiceMode: 'live' }));
+  });
+
   it('nobody can create or delete programs from the client', async () => {
     await assertFails(setDoc(doc(fs(a.facultyIrmc), 'programs/new'), program));
     await assertFails(deleteDoc(doc(fs(a.facultyIrmc), 'programs/irmc')));

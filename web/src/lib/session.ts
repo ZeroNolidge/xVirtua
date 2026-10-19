@@ -4,6 +4,7 @@ import type {
   PatientModel,
   PatientUtterance,
   ResidentFeedback,
+  VoiceMode,
 } from '@plainspeak/shared';
 import { appCheckHeaders, auth, functions, usingEmulators } from './firebase';
 
@@ -23,6 +24,10 @@ export interface TurnInput {
   supersedes?: number;
   /** The resident talked over the previous reply; only this much was heard. */
   prevInterrupted?: { heard: string };
+  /** Live voice: GPT-Live speaks the reply (no Cartesia voice). */
+  live?: boolean;
+  /** Live voice: what GPT-Live actually said for the previous reply. */
+  prevSpoken?: string;
 }
 export interface TurnResult {
   patient: Utterance;
@@ -37,14 +42,20 @@ const patientTurn = httpsCallable<TurnInput, TurnResult, PatientChunk>(functions
 
 export const sessionApi = {
   start: httpsCallable<
-    { scenarioId: string; model?: PatientModel },
+    { scenarioId: string; model?: PatientModel; voiceMode?: VoiceMode },
     {
       sessionId: string;
       opening: Utterance;
       persona: { name: string; age: number; pronouns: string };
       patientModel: PatientModel;
+      voiceMode?: VoiceMode;
     }
   >(functions, 'startSession'),
+  /** GPT-Live test mode: trades the browser's WebRTC offer for OpenAI's answer. */
+  startLiveCall: httpsCallable<{ sessionId: string; sdp: string }, { sdp: string; voice: string }>(
+    functions,
+    'startLiveCall',
+  ),
   end: httpsCallable<
     { sessionId: string; audioExt?: string; appWaitSec?: number },
     { sessionId: string; status: 'ended' }

@@ -7,6 +7,7 @@ import {
   isResidentSpeech,
   type NonverbalCue,
   type PatientChunk,
+  type VoiceMode,
 } from '@plainspeak/shared';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
@@ -27,6 +28,7 @@ import { SessionRecorder } from '../lib/recorder';
 import { PlainWordSearch } from '../components/PlainWordSearch';
 import { canContinue, type SessionRow } from '../lib/resume';
 import { Loading } from './StatusScreens';
+import { LiveConversation } from './LiveSession';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
 export interface Bubble {
@@ -39,6 +41,7 @@ type Persona = { name: string; age: number; pronouns: string };
 interface StartState {
   opening: Utterance;
   persona: Persona;
+  voiceMode?: VoiceMode;
 }
 
 /**
@@ -54,7 +57,14 @@ type SendMode = 'pause' | 'tap';
 type Resume =
   | { state: 'loading' }
   | { state: 'missing' }
-  | { state: 'ok'; persona: Persona; scenarioId: string; bubbles: Bubble[]; canContinue: boolean };
+  | {
+      state: 'ok';
+      persona: Persona;
+      scenarioId: string;
+      bubbles: Bubble[];
+      canContinue: boolean;
+      voiceMode: VoiceMode;
+    };
 
 /** Loads a saved conversation, for picking up after a crash or a closed app. */
 function useSavedConversation(sessionId: string, enabled: boolean): Resume {
@@ -94,6 +104,7 @@ function useSavedConversation(sessionId: string, enabled: boolean): Resume {
           scenarioId: s.scenarioId,
           bubbles,
           canContinue: canContinue(s),
+          voiceMode: s.voiceMode === 'live' ? 'live' : 'standard',
         });
     })().catch(() => {
       if (!cancelled) setR({ state: 'missing' });
@@ -118,7 +129,37 @@ export function Session() {
   }, []);
   const saved = useSavedConversation(sessionId, !fresh);
   const [resuming, setResuming] = useState(false);
+  // GPT-Live test mode fell back (or was switched off): what to carry on with.
+  const [standard, setStandard] = useState<{ notice: string; bubbles: Bubble[] | null } | null>(
+    null,
+  );
+  const fallBack = (notice: string, bubbles: Bubble[] | null) => setStandard({ notice, bubbles });
 
+  if (standard) {
+    const persona = fresh?.persona ?? (saved.state === 'ok' ? saved.persona : null);
+    if (persona)
+      return (
+        <Conversation
+          sessionId={sessionId}
+          persona={persona}
+          initialNotice={standard.notice}
+          {...(standard.bubbles
+            ? { resumeFrom: standard.bubbles }
+            : fresh
+              ? { opening: fresh.opening }
+              : { resumeFrom: saved.state === 'ok' ? saved.bubbles : [] })}
+        />
+      );
+  }
+  if (fresh?.voiceMode === 'live')
+    return (
+      <LiveConversation
+        sessionId={sessionId}
+        persona={fresh.persona}
+        opening={fresh.opening}
+        onFallback={fallBack}
+      />
+    );
   if (fresh)
     return <Conversation sessionId={sessionId} persona={fresh.persona} opening={fresh.opening} />;
   if (saved.state === 'loading') return <Loading label="Loading your conversation…" />;
@@ -132,6 +173,16 @@ export function Session() {
           </button>
         </div>
       </section>
+    );
+  }
+  if (resuming && saved.voiceMode === 'live') {
+    return (
+      <LiveConversation
+        sessionId={sessionId}
+        persona={saved.persona}
+        resumeFrom={saved.bubbles}
+        onFallback={fallBack}
+      />
     );
   }
   if (resuming) {
@@ -175,9 +226,17 @@ interface ConversationProps {
   opening?: Utterance;
   /** Picking up: the turns so far. */
   resumeFrom?: Bubble[];
+  /** Shown at the top from the start (e.g. why live voice was switched off). */
+  initialNotice?: string;
 }
 
-function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationProps) {
+function Conversation({
+  sessionId,
+  persona,
+  opening,
+  resumeFrom,
+  initialNotice,
+}: ConversationProps) {
   const nav = useNavigate();
   const { claims, user } = useAuth();
   const first = persona.name.split(' ')[0];
@@ -192,7 +251,7 @@ function Conversation({ sessionId, persona, opening, resumeFrom }: ConversationP
   const [partial, setPartial] = useState('');
   const [typed, setTyped] = useState(false);
   const [draft, setDraft] = useState('');
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
 

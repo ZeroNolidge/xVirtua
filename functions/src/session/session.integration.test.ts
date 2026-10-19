@@ -7,6 +7,7 @@ import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
 import { endSession, patientTurn, startSession } from './session.js';
 import { FakeBrain } from '../patient/fakeBrain.js';
 import type { Caller } from '../lib/callable.js';
+import { startLiveCall } from '../voice/live.js';
 
 const PROJECT_ID = 'demo-plainspeak';
 let app: App;
@@ -369,5 +370,96 @@ describe('two-way voice', () => {
     const last = brain.calls.at(-1)!;
     expect(last.message).toContain('The resident talked over you');
     expect(last.history.at(-1)!.content).toContain('"text":"Okay. —"');
+  });
+});
+
+describe('GPT-Live test mode', () => {
+  const okFetch = (calls: { url: string; body: Record<string, unknown> }[]) =>
+    (async (url: string, init: { body: string }) => {
+      calls.push({ url, body: JSON.parse(init.body) as Record<string, unknown> });
+      return new Response(JSON.stringify({ id: 'live_1', transport: { sdp: 'v=0 answer' } }), {
+        status: 200,
+      });
+    }) as unknown as typeof fetch;
+
+  it('is off unless the program (or faculty, per session) turns it on', async () => {
+    const r = await startSession(db, resident, { scenarioId: htn.id });
+    expect(r.voiceMode).toBe('standard');
+    await expect(
+      startLiveCall(
+        db,
+        resident,
+        { sessionId: r.sessionId, sdp: 'v=0 offer....' },
+        'sk-x',
+        okFetch([]),
+      ),
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
+    await expect(
+      startSession(db, resident, { scenarioId: htn.id, voiceMode: 'live' }),
+    ).rejects.toMatchObject({ code: 'permission-denied' });
+    const f = await startSession(db, faculty, { scenarioId: htn.id, voiceMode: 'live' });
+    expect(f.voiceMode).toBe('live');
+  });
+
+  it('connects the call with client delegation, the program voice, and no hidden script', async () => {
+    await db.doc('programs/irmc').set({ voiceMode: 'live', liveVoice: 'cinder' }, { merge: true });
+    const { sessionId, voiceMode } = await startSession(db, resident, { scenarioId: htn.id });
+    expect(voiceMode).toBe('live');
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    const r = await startLiveCall(
+      db,
+      resident,
+      { sessionId, sdp: 'v=0 offer....' },
+      'sk-x',
+      okFetch(calls),
+    );
+    expect(r.sdp).toBe('v=0 answer');
+    expect(calls[0]!.url).toBe('https://api.openai.com/v1/live/sessions');
+    expect(calls[0]!.body).toMatchObject({
+      model: 'gpt-live-1',
+      delegation: { type: 'client' },
+      audio: { output: { voice: 'cinder' } },
+      transport: { type: 'webrtc', sdp: 'v=0 offer....' },
+    });
+    // GPT-Live only voices the patient: the hidden concern stays with Claude.
+    expect(String(calls[0]!.body.instructions)).not.toContain(htn.script.hiddenConcern);
+    expect((await db.doc(`sessions/${sessionId}`).get()).get('liveCalls')[0].id).toBe('live_1');
+    // Someone else's session is not theirs to call.
+    await expect(
+      startLiveCall(db, otherResident, { sessionId, sdp: 'v=0 offer....' }, 'sk-x', okFetch([])),
+    ).rejects.toMatchObject({ code: 'not-found' });
+  });
+
+  it('skips the Cartesia voice for live turns and keeps what GPT-Live actually said', async () => {
+    await db.doc('programs/irmc').set({ voiceMode: 'live' }, { merge: true });
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    let synthesized = 0;
+    const voice = {
+      voiceId: async () => 'v',
+      synthesize: async () => {
+        synthesized++;
+        return new ArrayBuffer(4);
+      },
+    };
+    const chunks: PatientChunk[] = [];
+    const send = async (c: PatientChunk) => chunks.push(c);
+    const brain = new FakeBrain();
+    await patientTurn(db, resident, { sessionId, text: 'Hi Ray.', live: true }, brain, {
+      send,
+      voice,
+    });
+    expect(synthesized).toBe(0);
+    expect(chunks.some((c) => c.t === 'say')).toBe(true);
+    expect(chunks.some((c) => c.t === 'audio')).toBe(false);
+    await patientTurn(
+      db,
+      resident,
+      { sessionId, text: 'How are you?', live: true, prevSpoken: 'Hey doc, so my pressure is up?' },
+      brain,
+      { send, voice },
+    );
+    expect((await db.doc(`sessions/${sessionId}/turns/2`).get()).get('liveSpokenText')).toBe(
+      'Hey doc, so my pressure is up?',
+    );
   });
 });

@@ -14,6 +14,7 @@ export interface SessionRow {
   durationSec?: number;
   appWaitSec?: number;
   audioPath?: string | null;
+  voiceMode?: 'standard' | 'live';
 }
 
 /** Whether a saved conversation can still take turns (mirrors the server's limits). */

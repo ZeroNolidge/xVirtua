@@ -44,7 +44,8 @@ service cloud.firestore {
       allow read: if inProgram(pid);
       allow update: if facultyOf(pid)
         && onlyChanges(['name', 'timezone', 'audioRetentionMonths',
-                        'transcriptRetentionMonths', 'scoringWeights', 'patientModel'])
+                        'transcriptRetentionMonths', 'scoringWeights', 'patientModel',
+                        'voiceMode', 'liveVoice'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
@@ -58,7 +59,13 @@ service cloud.firestore {
         && request.resource.data.scoringWeights.empathy is number
         && request.resource.data.scoringWeights.cue is number
         && request.resource.data.patientModel in
-             ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
+             ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
+        && (!('voiceMode' in request.resource.data)
+            || request.resource.data.voiceMode in ['standard', 'live'])
+        && (!('liveVoice' in request.resource.data)
+            || request.resource.data.liveVoice in ['marin', 'cinder', 'stone', 'beacon',
+                 'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper',
+                 'willow', 'gleam']);
       allow create, delete: if false;
     }
 

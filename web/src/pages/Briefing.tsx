@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { CueTrigger, PatientModel, ScenarioScript, ScenarioStatus } from '@plainspeak/shared';
+import type {
+  CueTrigger,
+  PatientModel,
+  ScenarioScript,
+  ScenarioStatus,
+  VoiceMode,
+} from '@plainspeak/shared';
 import { useAuth } from '../lib/auth';
 import { useScenario, type ScenarioRow } from '../lib/scenarios';
 import { api, friendlyError } from '../lib/api';
@@ -21,15 +27,20 @@ export function Briefing() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [model, setModel] = useState<PatientModel | ''>('');
+  const [voiceMode, setVoiceMode] = useState<VoiceMode | ''>('');
 
   async function startConversation() {
     if (!id) return;
     setStarting(true);
     setStartError(null);
     try {
-      const { data } = await sessionApi.start({ scenarioId: id, ...(model ? { model } : {}) });
+      const { data } = await sessionApi.start({
+        scenarioId: id,
+        ...(model ? { model } : {}),
+        ...(voiceMode ? { voiceMode } : {}),
+      });
       nav(`/session/${data.sessionId}`, {
-        state: { opening: data.opening, persona: data.persona },
+        state: { opening: data.opening, persona: data.persona, voiceMode: data.voiceMode },
       });
     } catch (e) {
       setStartError(friendlyError(e));
@@ -106,6 +117,19 @@ export function Briefing() {
                 {v}
               </option>
             ))}
+          </select>
+        </label>
+      )}
+      {isFaculty && (
+        <label className="field">
+          <span>Voice (faculty testing)</span>
+          <select
+            value={voiceMode}
+            onChange={(e) => setVoiceMode(e.target.value as VoiceMode | '')}
+          >
+            <option value="">Program default</option>
+            <option value="standard">Standard</option>
+            <option value="live">GPT-Live (test)</option>
           </select>
         </label>
       )}

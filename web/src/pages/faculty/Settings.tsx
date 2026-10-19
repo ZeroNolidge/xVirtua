@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import type { PatientModel, Program } from '@plainspeak/shared';
+import {
+  LIVE_VOICES,
+  type LiveVoice,
+  type PatientModel,
+  type Program,
+  type VoiceMode,
+} from '@plainspeak/shared';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../lib/auth';
 import { MODEL_LABELS } from '../../lib/models';
@@ -17,10 +23,10 @@ export function Settings() {
     );
   }, [claims]);
 
-  async function setModel(m: PatientModel) {
+  async function save(change: Partial<Program>) {
     if (!claims) return;
     setSaved(false);
-    await updateDoc(doc(db, 'programs', claims.programId), { patientModel: m });
+    await updateDoc(doc(db, 'programs', claims.programId), change);
     setSaved(true);
   }
 
@@ -32,7 +38,7 @@ export function Settings() {
         <span>Patient model for residents</span>
         <select
           value={program.patientModel}
-          onChange={(e) => void setModel(e.target.value as PatientModel)}
+          onChange={(e) => void save({ patientModel: e.target.value as PatientModel })}
         >
           {Object.entries(MODEL_LABELS).map(([k, v]) => (
             <option key={k} value={k}>
@@ -41,7 +47,30 @@ export function Settings() {
           ))}
         </select>
       </label>
-      {saved && <p className="ok small">Saved. New conversations use this model.</p>}
+      <label className="field">
+        <span>Patient voice for residents</span>
+        <select
+          value={program.voiceMode ?? 'standard'}
+          onChange={(e) => void save({ voiceMode: e.target.value as VoiceMode })}
+        >
+          <option value="standard">Standard (turn by turn)</option>
+          <option value="live">GPT-Live (test: talks and listens at once)</option>
+        </select>
+      </label>
+      <label className="field">
+        <span>GPT-Live voice (when GPT-Live is on)</span>
+        <select
+          value={program.liveVoice ?? 'marin'}
+          onChange={(e) => void save({ liveVoice: e.target.value as LiveVoice })}
+        >
+          {LIVE_VOICES.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </label>
+      {saved && <p className="ok small">Saved. New conversations use these settings.</p>}
       <p className="muted small">
         Audio kept {program.audioRetentionMonths} months · transcripts kept{' '}
         {program.transcriptRetentionMonths} months
