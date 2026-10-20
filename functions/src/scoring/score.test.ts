@@ -88,6 +88,42 @@ const good: ClaudeScore = {
 };
 
 describe('quote validation', () => {
+  it('replaces a near-miss quote with the exact words, and drops quotes of the patient script', async () => {
+    const scripted = {
+      ...good,
+      empathy: {
+        ...good.empathy,
+        summary: 'When Ray said “my dad had a stroke at fifty” you paused.',
+      },
+      fixes: [
+        {
+          metric: 'cue' as const,
+          turnIdx: 3,
+          quote: 'That sounds stressful. Most people keep their license',
+          note: 'Ray said “I worry I will end up like my dad” and you moved on.',
+          rewrite: 'Tell me more about your dad.',
+        },
+        good.fixes[0]!,
+      ],
+    };
+    const scorer = async () => ({ raw: JSON.stringify(scripted), model: 'm' });
+    const r = await runScoring(scorer, { system: 's', user: 'u' }, turns, 'Ray');
+    // Asked again, still wrong: flagged for review and the bad parts are gone.
+    expect(r.needsReview).toBe(true);
+    expect(r.claude.fixes.map((f) => f.metric)).toEqual(['jargon']);
+    expect(r.claude.empathy.summary).not.toContain('stroke');
+    const fuzzy = validateQuotes(
+      {
+        ...good,
+        highlight: { ...good.highlight, quote: 'That sounds so really stressful' },
+      },
+      turns,
+      'Ray',
+    );
+    expect(fuzzy.bad).toEqual([]);
+    expect(fuzzy.score.highlight.quote).toBe('That sounds really stressful.');
+  });
+
   it('accepts verbatim quotes (ignoring case and punctuation) and fixes wrong turn numbers', () => {
     expect(locateQuote('that sounds REALLY stressful', 3, turns)).toBe(3);
     expect(locateQuote('That sounds really stressful', 1, turns)).toBe(3);
@@ -151,9 +187,13 @@ describe('scoring prompt and result', () => {
       turns,
       jargon,
     });
-    expect(p.user).toContain(
-      '[T2] PATIENT (CUE job-worry: Hints he is worried about his job; asked a question)',
+    expect(p.user).toContain('[T2] PATIENT (CUE job-worry; asked a question)');
+    // The cue's description is in the script section, never in the transcript.
+    expect(p.user).toMatch(
+      /script: cues that fired \(what Ray MIGHT say; this is NOT the transcript\)/,
     );
+    const transcript = p.user.slice(p.user.indexOf('# Transcript'));
+    expect(transcript).not.toContain('Hints he is worried about his job');
     expect(p.user).toContain('began ~1.2s after Ray finished');
     expect(p.user).toContain('understanding check: teachback');
     expect(p.user).toContain('"hypertension"');

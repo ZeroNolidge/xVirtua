@@ -7,7 +7,7 @@ export const CONSENT_VERSION = 2;
 // v2: rewrites may only change how something is said, never add clinical,
 // legal or licensing facts.
 // v3: judges talking over the patient (two-way voice).
-export const RUBRIC_VERSION = '2026-11-v3';
+export const RUBRIC_VERSION = '2026-11-v4';
 
 /** D4: equal weights across the four metrics. */
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {

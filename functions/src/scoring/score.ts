@@ -27,6 +27,8 @@ import { consumeQuota } from '../lib/quota.js';
 import { loadScenario } from '../session/scenario.js';
 import { RUBRIC, SCORE_JSON_SCHEMA } from './rubric.js';
 import { checkRewrites, distinctFixes, toResidentFeedback } from './feedback.js';
+import { badInlineQuotes, findQuote } from './quotes.js';
+import { classifyCutoffs, limitInterruptionNotes } from './interruptions.js';
 
 export const SCORING_MODEL = 'claude-opus-5-5';
 
@@ -161,13 +163,19 @@ export interface PromptInput {
 export function buildScoringPrompt(p: PromptInput): { system: string; user: string } {
   const cueById = new Map(p.cues.map((c) => [c.id, c]));
   const firstName = p.scenario.patientName.split(' ')[0];
+  const cuts = classifyCutoffs(p.turns);
   const lines = p.turns.map((t) => {
     if (t.speaker === 'patient') {
       const tags: string[] = [];
       const cue = t.cueId ? cueById.get(t.cueId) : undefined;
-      if (cue) tags.push(`CUE ${cue.id}: ${cue.cue}`);
+      if (cue) tags.push(`CUE ${cue.id}`);
       if (t.askedQuestion) tags.push('asked a question');
-      if (t.interrupted) tags.push('cut off: the resident talked over them');
+      const cut = cuts.get(t.idx);
+      if (cut === 'counts') tags.push('cut off: the resident talked over them');
+      else if (cut === 'backchannel')
+        tags.push('brief overlap: the resident only said a listening word; not an interruption');
+      else if (cut === 'app')
+        tags.push('app timing: the reply started while the resident was still talking; ignore');
       const said = t.interrupted ? `${t.heardText ?? ''} —` : t.text;
       return `[T${t.idx}] PATIENT${tags.length ? ` (${tags.join('; ')})` : ''}: ${said}`;
     }
@@ -182,7 +190,7 @@ export function buildScoringPrompt(p: PromptInput): { system: string; user: stri
     ? fired
         .map((t) => {
           const c = cueById.get(t.cueId!)!;
-          return `- ${c.id} at T${t.idx}: ${c.cue}. Expected response: ${c.expectedResidentResponse}`;
+          return `- ${c.id} (fired at T${t.idx}). What ${firstName} might be signaling: ${c.cue}. Expected response: ${c.expectedResidentResponse}`;
         })
         .join('\n')
     : '- (no scripted cues fired)';
@@ -200,7 +208,8 @@ ${p.scenario.title}. The resident's task: ${p.scenario.residentTask}
 Learning objectives:
 ${p.scenario.learningObjectives.map((o) => `- ${o}`).join('\n')}
 
-# Scripted cues that fired
+# ${firstName}'s script: cues that fired (what ${firstName} MIGHT say; this is NOT the transcript)
+These describe the scenario's plan. Never quote them and never treat them as words anyone said. Only the Transcript below is what was said.
 ${cueBlock}
 
 # Jargon the app already flagged (scored separately; use it for fixes if it matters most)
@@ -209,7 +218,7 @@ ${jargonBlock}
 # Possible steamrolls (automatic hint, confirm or reject)
 ${hints.length ? hints.map((h) => `- patient T${h.patientTurnIdx} → resident T${h.residentTurnIdx}`).join('\n') : '- none'}
 
-# Transcript
+# Transcript (the only record of what was said)
 ${lines.join('\n')}
 
 Score this conversation using the rubric. Return JSON only.`;
@@ -219,27 +228,13 @@ Score this conversation using the rubric. Return JSON only.`;
 
 // ---------- quote validation ----------
 
-const norm = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[^a-z0-9' ]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
 /**
  * Checks a quote against the cited resident turn. If it's verbatim in a
  * different resident turn, the turn number is corrected. Returns the turn it
  * was found in, or null.
  */
 export function locateQuote(quote: string, turnIdx: number, turns: Turn[]): number | null {
-  const q = norm(quote);
-  if (!q) return null;
-  const resident = turns.filter((t) => t.speaker === 'resident');
-  const cited = resident.find((t) => t.idx === turnIdx);
-  if (cited && norm(cited.text).includes(q)) return cited.idx;
-  return resident.find((t) => norm(t.text).includes(q))?.idx ?? null;
+  return findQuote(quote, turnIdx, turns, 'resident')?.idx ?? null;
 }
 
 export interface Validated {
@@ -247,24 +242,43 @@ export interface Validated {
   bad: string[];
 }
 
-/** Drops (and reports) any quote that isn't in the transcript. Fixes wrong turn numbers. */
-export function validateQuotes(c: ClaudeScore, turns: Turn[]): Validated {
+/** Shown in place of a summary that quoted words nobody said. */
+export const FALLBACK_SUMMARY = 'The examples below show what went well and what to try.';
+
+/**
+ * Checks every quote against this session's saved turns: quotes must be the
+ * resident's own words (small wording differences allowed; the exact words
+ * replace them), and words quoted inside notes and summaries must have been
+ * said by whoever they're attributed to. Drops (and reports) anything that
+ * fails. Fixes wrong turn numbers.
+ */
+export function validateQuotes(c: ClaudeScore, turns: Turn[], patientFirstName = ''): Validated {
   const bad: string[] = [];
-  const check = <T extends { turnIdx: number; quote: string }>(x: T, where: string): T | null => {
-    const at = locateQuote(x.quote, x.turnIdx, turns);
+  const noteOk = (text: string, where: string) => {
+    const b = badInlineQuotes(text, turns, patientFirstName);
+    for (const q of b) bad.push(`${where} (in the note): "${q}"`);
+    return !b.length;
+  };
+  const check = <T extends { turnIdx: number; quote: string; note?: string }>(
+    x: T,
+    where: string,
+  ): T | null => {
+    const at = findQuote(x.quote, x.turnIdx, turns, 'resident');
     if (at === null) {
       bad.push(`${where}: "${x.quote}" (T${x.turnIdx})`);
       return null;
     }
-    return { ...x, turnIdx: at };
+    if (x.note !== undefined && !noteOk(x.note, where)) return null;
+    return { ...x, turnIdx: at.idx, quote: at.quote };
   };
   const checkTti = (t: ClaudeScore['clarity']['tryThisInstead'], where: string) => {
     if (!t) return null;
-    const r = check({ ...t, quote: t.original }, where);
-    return r ? { turnIdx: r.turnIdx, original: t.original, rewrite: t.rewrite } : null;
+    const r = check({ turnIdx: t.turnIdx, quote: t.original }, where);
+    return r ? { turnIdx: r.turnIdx, original: r.quote, rewrite: t.rewrite } : null;
   };
   const fixMetric = <M extends ClaudeScore['clarity']>(m: M, name: string): M => ({
     ...m,
+    summary: noteOk(m.summary, `${name}.summary`) ? m.summary : FALLBACK_SUMMARY,
     score: Math.round(Math.min(100, Math.max(0, m.score))),
     evidence: m.evidence
       .map((e, i) => check(e, `${name}.evidence[${i}]`))
@@ -279,9 +293,11 @@ export function validateQuotes(c: ClaudeScore, turns: Turn[]): Validated {
       ...fixMetric(c.cue, 'cue'),
       cueResults: c.cue.cueResults.map((r, i) => {
         if (!r.quote || r.residentTurnIdx === null) return { ...r, quote: null };
-        const at = locateQuote(r.quote, r.residentTurnIdx, turns);
+        const at = findQuote(r.quote, r.residentTurnIdx, turns, 'resident');
         if (at === null) bad.push(`cue.cueResults[${i}]: "${r.quote}"`);
-        return at === null ? { ...r, quote: null } : { ...r, residentTurnIdx: at };
+        return at === null
+          ? { ...r, quote: null }
+          : { ...r, residentTurnIdx: at.idx, quote: at.quote };
       }),
       steamrolls: c.cue.steamrolls,
     },
@@ -292,7 +308,8 @@ export function validateQuotes(c: ClaudeScore, turns: Turn[]): Validated {
       .filter((f) => f !== null),
   };
   const h = check(c.highlight, 'highlight');
-  if (h) score.highlight = h;
+  // An unchecked highlight is dropped later (assembleScore re-checks it).
+  score.highlight = h ?? { ...c.highlight, quote: '', turnIdx: -1 };
   return { score, bad };
 }
 
@@ -369,7 +386,7 @@ export function assembleScore(args: {
     cue: { ...strip(c.cue), cueResults, steamrolls: c.cue.steamrolls },
   };
   const highlight: Moment | null =
-    locateQuote(c.highlight.quote, c.highlight.turnIdx, turns) !== null
+    c.highlight.quote && locateQuote(c.highlight.quote, c.highlight.turnIdx, turns) !== null
       ? {
           metric: c.highlight.metric,
           turnIdx: c.highlight.turnIdx,
@@ -411,6 +428,7 @@ export async function runScoring(
   scorer: Scorer,
   prompt: { system: string; user: string },
   turns: Turn[],
+  patientFirstName = '',
 ): Promise<{ claude: ClaudeScore; model: string; needsReview: boolean }> {
   let user = prompt.user;
   let last: { claude: ClaudeScore; model: string } | null = null;
@@ -426,14 +444,43 @@ export async function runScoring(
       if (attempt === 0) continue;
       throw e;
     }
-    const v = validateQuotes(parsed, turns);
+    const v = validateQuotes(parsed, turns, patientFirstName);
     last = { claude: v.score, model };
     if (!v.bad.length) return { ...last, needsReview: false };
-    user = `${prompt.user}\n\nYour previous answer quoted words that are not in the transcript:\n${v.bad.map((b) => `- ${b}`).join('\n')}\nQuote the resident's words exactly as written.`;
+    user = `${prompt.user}\n\nYour previous answer quoted words that are not in the transcript:\n${v.bad.map((b) => `- ${b}`).join('\n')}\nQuote only words that are in the Transcript, exactly as written, and only the resident's words as evidence. Never quote the scenario script.`;
   }
   if (!last) throw new Error('Scoring failed');
   return { ...last, needsReview: true };
 }
+
+/**
+ * Two fixes from two areas, and at most one note about talking over the
+ * patient (only for a cut-off that counts; it always offers a way back).
+ */
+export function limitInterruptions<S extends Omit<ScoreDoc, 'createdAt'>>(s: S, turns: Turn[]): S {
+  const evidenceOf = (x: S) =>
+    METRIC_KEYS.flatMap((m) =>
+      x.metrics[m].evidence.map((e, i) => ({ key: `${m}:${i}`, turnIdx: e.turnIdx, note: e.note })),
+    );
+  const dropFrom = (x: S, drop: Set<string>): S => {
+    if (!drop.size) return x;
+    const metrics = { ...x.metrics } as S['metrics'];
+    for (const m of METRIC_KEYS) {
+      metrics[m] = {
+        ...metrics[m],
+        evidence: metrics[m].evidence.filter((_, i) => !drop.has(`${m}:${i}`)),
+      } as never;
+    }
+    return { ...x, metrics };
+  };
+  const a = limitInterruptionNotes(distinctFixes(s), evidenceOf(s), turns);
+  const s1 = dropFrom({ ...s, fixes: a.fixes }, a.dropEvidence);
+  // A dropped fix is replaced from another area; check the result once more.
+  const b = limitInterruptionNotes(distinctFixes(s1), evidenceOf(s1), turns);
+  return dropFrom({ ...s1, fixes: b.fixes }, b.dropEvidence);
+}
+
+const METRIC_KEYS = ['jargon', 'clarity', 'empathy', 'cue'] as const;
 
 // ---------- callable ----------
 
@@ -585,7 +632,7 @@ export async function scoreSession(
 
     let result;
     try {
-      result = await runScoring(scorer, prompt, turns);
+      result = await runScoring(scorer, prompt, turns, sc.briefing.persona.name.split(' ')[0]);
     } catch (e) {
       console.error('scoring failed', e);
       throw new HttpsError(
@@ -605,10 +652,10 @@ export async function scoreSession(
     });
     // Rewrites must not add facts; then make sure the two fixes cover two areas.
     const checked = checkRewrites(assembled, residentTurns.map((t) => t.text).join(' \n '));
+    const limited = limitInterruptions(checked, turns);
     const prev = await previousOverall(db, s.uid, sessionId, s.startedAt);
     const full: ScoreDoc = {
-      ...checked,
-      fixes: distinctFixes(checked),
+      ...limited,
       previousOverall: prev,
       createdAt: new Date().toISOString(),
     };
