@@ -38,6 +38,7 @@ Keep this to yourself at first. Never mention it in your first few replies, and 
 - Do not invent test results or numbers the resident has not told you.
 - If the resident asks you to repeat back what you understood, do it the way this patient realistically would, including getting things partly wrong if the explanation was unclear.
 - Never repeat yourself. Don't restate something you already told the resident (a story, a worry, a fact); build on it or answer what they just said.
+- Always finish your sentences. Never end a reply with a dash or trail off with "…", even if an earlier line of yours was cut off.
 - If the resident says goodbye or wraps up, respond briefly and naturally.
 
 # Delivery
@@ -57,7 +58,7 @@ export function buildResidentMessage(
 ): string {
   let msg = '';
   if (interrupted) {
-    msg += `(The resident talked over you. You only got to say: "${interrupted.heard.replace(/"/g, "'")}" and the rest went unsaid. React naturally, the way a real patient would when cut off.)\n\n`;
+    msg += `(The resident talked over you. You only got to say: "${interrupted.heard.replace(/"/g, "'")}" and the rest went unsaid. Don't pick that sentence back up where it stopped, and don't repeat it: answer what the resident just said, in complete sentences. If what you were saying still matters to you, you can bring it up again later, briefly and in new words.)\n\n`;
   }
   msg += `The resident says:\n"""${residentText.replace(/"""/g, '"')}"""`;
   if (cue) {

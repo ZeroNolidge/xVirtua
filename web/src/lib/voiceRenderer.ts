@@ -24,6 +24,8 @@ export class ReplyPlayer {
   firstSoundAt: number | null = null;
   /** Sentences the resident actually heard (started playing). */
   readonly played: string[] = [];
+  /** Sentences that played as text only (their voice never arrived). */
+  readonly noVoice: string[] = [];
   /** The resident talked over the patient; playback stopped. */
   interrupted = false;
 
@@ -90,6 +92,7 @@ export class ReplyPlayer {
       this.firstSoundAt ??= performance.now();
       this.played.push(it.text);
       this.onSentence(it.text, i);
+      if (!it.audio) this.noVoice.push(it.text);
       await this.renderer.play(it.audio ?? null, it.text);
       if (this.interrupted) return;
     }

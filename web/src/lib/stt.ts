@@ -4,8 +4,9 @@
  */
 export interface SttCallbacks {
   onSpeechStart(): void;
-  onPartial(text: string): void;
-  onFinal(text: string): void;
+  /** `startedAt`: performance.now() when this piece of speech began, if known. */
+  onPartial(text: string, startedAt?: number): void;
+  onFinal(text: string, startedAt?: number): void;
   onError(message: string): void;
 }
 
@@ -13,6 +14,8 @@ export class OpenAIRealtimeStt {
   private pc: RTCPeerConnection | null = null;
   private track: MediaStreamTrack | null = null;
   private partials = new Map<string, string>();
+  /** When each piece of speech started (performance.now()), by item. */
+  private started = new Map<string, number>();
   private muted = false;
 
   constructor(private readonly cb: SttCallbacks) {}
@@ -58,17 +61,23 @@ export class OpenAIRealtimeStt {
     const type = ev.type ?? '';
     if (type === 'error') return this.cb.onError(ev.error?.message ?? 'Speech error');
     if (this.muted) return;
-    if (type.endsWith('speech_started')) return this.cb.onSpeechStart();
+    if (type.endsWith('speech_started')) {
+      if (ev.item_id) this.started.set(ev.item_id, performance.now());
+      return this.cb.onSpeechStart();
+    }
     if (type.endsWith('input_audio_transcription.delta') && ev.delta) {
       const id = ev.item_id ?? 'x';
       const text = (this.partials.get(id) ?? '') + ev.delta;
       this.partials.set(id, text);
-      return this.cb.onPartial(text);
+      return this.cb.onPartial(text, this.started.get(id));
     }
     if (type.endsWith('input_audio_transcription.completed')) {
-      this.partials.delete(ev.item_id ?? 'x');
+      const id = ev.item_id ?? 'x';
+      this.partials.delete(id);
+      const startedAt = this.started.get(id);
+      this.started.delete(id);
       const text = (ev.transcript ?? '').trim();
-      if (text) this.cb.onFinal(text);
+      if (text) this.cb.onFinal(text, startedAt);
     }
   }
 

@@ -31,6 +31,7 @@ import { canContinue, type SessionRow } from '../lib/resume';
 import { Loading } from './StatusScreens';
 import { LiveConversation } from './LiveSession';
 import { ECHO_WINDOW_MS } from '../lib/liveReply';
+import { MicMeter } from '../lib/micMeter';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
 export interface Bubble {
@@ -323,6 +324,7 @@ function Conversation({
   /** Just after cutting the patient off, they answer sooner. */
   const quickNext = useRef(false);
   const [showThinking, setShowThinking] = useState(false);
+  const micMeter = useRef<MicMeter | null>(null);
   /** Cut-off saves still on their way; End waits for them. */
   const saves = useRef<Promise<unknown>[]>([]);
   /** What the patient said last, to tell his echo from the resident just after he stops. */
@@ -509,6 +511,9 @@ function Conversation({
         }
         turnRef.current = null;
         lastPatientSaid.current = p.played.join(' ');
+        // So a silent sentence can be traced (missing voice vs. something else).
+        if (p.noVoice.length)
+          reportError('voice.missing', new Error(`${p.noVoice.length} sentence(s) had no voice`));
         if (phaseRef.current !== 'listening') startListening();
       } catch (e) {
         p.finish();
@@ -576,23 +581,33 @@ function Conversation({
   }, [scheduleFlush]);
 
   /** The resident started talking over the patient: stop the patient mid-sentence. */
-  const bargeIn = useCallback(() => {
-    const p = player.current;
-    if (duckTimer.current) window.clearTimeout(duckTimer.current);
-    renderer.current?.duck(false);
-    if (!p || p.interrupted || phaseRef.current !== 'patient') return;
-    p.interrupt();
-    // Talking again right as the patient starts means the resident wasn't
-    // finished: the patient yields and answers the whole thought, as people do.
-    // Later on, it's talking over the patient.
-    const sinceStart = p.firstSoundAt === null ? 0 : performance.now() - p.firstSoundAt;
-    if ((p.played.length === 0 || sinceStart < CONTINUE_WINDOW_MS) && turnRef.current) {
-      turnRef.current.supersede = true;
-    } else {
-      quickNext.current = true;
-    }
-    startListening();
-  }, [startListening]);
+  const bargeIn = useCallback(
+    (startedAt?: number) => {
+      const p = player.current;
+      if (duckTimer.current) window.clearTimeout(duckTimer.current);
+      renderer.current?.duck(false);
+      if (!p || p.interrupted || phaseRef.current !== 'patient') return;
+      p.interrupt();
+      // Talking again right as the patient starts means the resident wasn't
+      // finished: the patient yields and answers the whole thought, as people do.
+      // Later on, it's talking over the patient.
+      const sinceStart = p.firstSoundAt === null ? 0 : performance.now() - p.firstSoundAt;
+      // Speech that began before the patient did is the end of the resident's
+      // last turn arriving late (the speech service split it), never a cut-in.
+      const startedFirst =
+        startedAt !== undefined && p.firstSoundAt !== null && startedAt < p.firstSoundAt;
+      if (
+        (p.played.length === 0 || sinceStart < CONTINUE_WINDOW_MS || startedFirst) &&
+        turnRef.current
+      ) {
+        turnRef.current.supersede = true;
+      } else {
+        quickNext.current = true;
+      }
+      startListening();
+    },
+    [startListening],
+  );
 
   async function begin() {
     setPhase('connecting');
@@ -607,6 +622,7 @@ function Conversation({
       });
       recorder.current = new SessionRecorder(mic.current);
       recorder.current.start();
+      micMeter.current = new MicMeter(mic.current);
     } catch {
       setTyped(true);
       setNotice('No microphone access, so you can type your side for now.');
@@ -621,7 +637,12 @@ function Conversation({
             cancelAutoSend();
             const p = pending.current;
             p.tStart ??= Math.round(performance.now() - t0.current);
-            if (phaseRef.current === 'patient') {
+            // Only when the mic itself is loud: the speech service also "hears"
+            // the patient's own voice from the speaker, and turning him down for
+            // that made whole sentences near-silent.
+            const meter = micMeter.current;
+            const resident = !meter?.working || meter.loudWithin(300);
+            if (phaseRef.current === 'patient' && resident) {
               // Maybe the resident is starting to talk: turn the patient almost
               // silent at once (feels like stopping), back up if it was only echo.
               renderer.current?.duck(true);
@@ -632,12 +653,12 @@ function Conversation({
               gate.current.holdUntil = performance.now() + 1200;
             }
           },
-          onPartial: (t) => {
+          onPartial: (t, startedAt) => {
             if (phaseRef.current === 'listening' && echoAfterPatient(t)) return;
             if (phaseRef.current === 'patient') {
               // The patient's own voice leaking into the mic isn't the resident.
               if (!isCutIn(t, player.current?.spokenSoFar ?? '')) return;
-              bargeIn();
+              bargeIn(startedAt);
             } else if (
               phaseRef.current === 'thinking' &&
               turnRef.current &&
@@ -647,7 +668,7 @@ function Conversation({
             }
             setPartial([...pending.current.text, t].join(' '));
           },
-          onFinal: (t) => {
+          onFinal: (t, startedAt) => {
             if (phaseRef.current === 'listening' && echoAfterPatient(t)) {
               setPartial(pending.current.text.join(' '));
               return;
@@ -658,7 +679,7 @@ function Conversation({
                 renderer.current?.duck(false);
                 return;
               }
-              bargeIn();
+              bargeIn(startedAt);
             } else if (phaseRef.current === 'thinking' && turnRef.current) {
               turnRef.current.supersede = true;
             }
@@ -704,6 +725,7 @@ function Conversation({
       });
       const blob = await recorder.current?.stop();
       mic.current?.getTracks().forEach((t) => t.stop());
+      micMeter.current?.stop();
       if (blob && claims && user) {
         setSaving('Saving your recording…');
         const ext = recorder.current!.ext;
@@ -727,6 +749,7 @@ function Conversation({
       player.current?.finish();
       renderer.current?.dispose();
       mic.current?.getTracks().forEach((t) => t.stop());
+      micMeter.current?.stop();
     };
   }, []);
 

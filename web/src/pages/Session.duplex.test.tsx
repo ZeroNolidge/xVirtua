@@ -35,7 +35,11 @@ vi.mock('../lib/recorder', () => ({
 }));
 
 // Fake speech-to-text: the test drives its callbacks.
-type Cb = { onSpeechStart(): void; onPartial(t: string): void; onFinal(t: string): void };
+type Cb = {
+  onSpeechStart(): void;
+  onPartial(t: string, startedAt?: number): void;
+  onFinal(t: string, startedAt?: number): void;
+};
 let stt: Cb;
 vi.mock('../lib/stt', () => ({
   OpenAIRealtimeStt: class {
@@ -183,6 +187,27 @@ describe('two-way voice', () => {
     spy.mockRestore();
     expect(screen.queryByText('Will I lose my license? —')).toBeNull();
     expect(calls).toHaveLength(1);
+  });
+
+  it('the late second half of what the resident said is never a cut-in, even seconds later', async () => {
+    await start();
+    // The resident keeps talking; the speech service splits it in two.
+    const secondHalfStarted = performance.now();
+    await say('I’m glad you feel fine,');
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 5000 });
+    await screen.findByText('Will I lose my license?', undefined, { timeout: 4000 });
+    // Its words only arrive 3s into the reply, but that speech began before he did.
+    const realNow = performance.now.bind(performance);
+    const spy = vi.spyOn(performance, 'now').mockImplementation(() => realNow() + 3000);
+    await act(async () => {
+      stt.onPartial('but we are still worried about your pressure', secondHalfStarted);
+      stt.onFinal('but we are still worried about your pressure', secondHalfStarted);
+    });
+    spy.mockRestore();
+    await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 5000 });
+    expect(calls[1]!.supersedes).toBe(1);
+    expect(calls[1]!.prevInterrupted).toBeUndefined();
+    expect(screen.queryByText(/Will I lose my license\? —/)).toBeNull();
   });
 
   it('replaces a reply that has not played yet when the resident keeps talking', async () => {

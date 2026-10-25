@@ -55,10 +55,17 @@ const replySchema = z.object({
   nonverbal: z.array(z.enum(NONVERBAL_CUES)).max(4),
 });
 
+/** The patient never trails off: a reply ending in "—" or "…" ends with a period instead. */
+export function finishSentence(text: string): string {
+  const t = text.replace(/\s*(?:[—–-]+|\.{2,}|…)\s*$/u, '').trim();
+  if (!t) return '';
+  return /[.!?"'”’)]$/.test(t) ? t : `${t}.`;
+}
+
 /** Parses and sanitizes Claude's JSON. Throws on anything malformed. */
 export function parsePatientReply(raw: string): PatientUtterance {
   const r = replySchema.parse(JSON.parse(raw));
-  const text = stripStageDirections(r.text);
+  const text = finishSentence(stripStageDirections(r.text));
   if (!text) throw new Error('Reply had no spoken words');
   const u: PatientUtterance = {
     text,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
-import { parsePatientReply } from './schema.js';
+import { finishSentence, parsePatientReply } from './schema.js';
 import { applyCue } from './brain.js';
 import { buildPatientSystemPrompt, buildResidentMessage } from './prompt.js';
 
@@ -63,5 +63,22 @@ describe('prompts', () => {
     expect(m).toContain(`cueId: ${cue.id}`);
     expect(m).toContain(cue.performance.say);
     expect(m.match(/"""/g)?.length).toBe(2);
+  });
+});
+
+describe('after a cut-off', () => {
+  it('never trails off: a reply ending in a dash or "…" ends with a period', () => {
+    expect(finishSentence('My dad had a stroke and I —')).toBe('My dad had a stroke and I.');
+    expect(finishSentence('I just worry…')).toBe('I just worry.');
+    expect(finishSentence('Okay?')).toBe('Okay?');
+    expect(finishSentence('Sure thing')).toBe('Sure thing.');
+    const u = parsePatientReply(JSON.stringify({ ...reply, text: 'Well, I was going to say —' }));
+    expect(u.text).toBe('Well, I was going to say.');
+  });
+
+  it('tells the patient to answer the resident, not pick the old sentence back up', () => {
+    const m = buildResidentMessage('Sorry, go on.', null, { heard: 'My dad had a' });
+    expect(m).toContain('You only got to say: "My dad had a"');
+    expect(m).toContain("Don't pick that sentence back up where it stopped");
   });
 });
