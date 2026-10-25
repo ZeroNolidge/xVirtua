@@ -13,3 +13,20 @@ export function isResidentSpeech(heard: string, patientSaying: string): boolean 
   const novel = words.filter((w) => !patient.has(w));
   return novel.length >= 2 && novel.length / words.length >= 0.5;
 }
+
+const BACKCHANNEL = new Set(
+  'sorry mm mmm hm hmm mhm mm-hm mm-hmm uh-huh uhhuh right okay ok yeah yes yep sure oh ah i see go on gotcha got it true'.split(
+    ' ',
+  ),
+);
+
+/** "Sorry", "mm-hm", "right, go on": listening sounds, never a real cut-in. */
+export function isBackchannel(text: string): boolean {
+  const w = text.toLowerCase().match(/[a-z]+(?:-[a-z]+)*/g) ?? [];
+  return w.length > 0 && w.length <= 4 && w.every((x) => BACKCHANNEL.has(x));
+}
+
+/** The resident is really cutting in: their own words, and more than a listening sound. */
+export function isCutIn(heard: string, patientSaying: string): boolean {
+  return isResidentSpeech(heard, patientSaying) && !isBackchannel(heard);
+}

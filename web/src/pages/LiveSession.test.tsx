@@ -175,6 +175,13 @@ async function residentTurn(text: string, id: string) {
   await act(async () => cb.onDelegation(id));
 }
 
+/** Waits until Ray's line has gone out to GPT-Live. */
+async function lineSent(n: number) {
+  await vi.waitFor(() => expect(said.filter(([id]) => id !== null)).toHaveLength(n), {
+    timeout: 4000,
+  });
+}
+
 /** Ray stops talking (his voice goes quiet). */
 function patientStops() {
   audible = false;
@@ -186,8 +193,15 @@ describe('GPT-Live conversation', () => {
     await start();
     await act(async () => cb.onStarted());
     expect(said[0]).toEqual([null, 'So, my blood pressure is high?']);
+    // Nothing shows until he says it, then his words appear as he speaks.
+    expect(screen.queryByText(opening.text)).toBeNull();
+    audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(120);
     expect(screen.getByText(opening.text)).toBeInTheDocument();
+    patientStops();
 
+    micLoudAt = performance.now();
     await act(async () => {
       cb.onHeard('Yes, it is a bit high, ');
       cb.onHeard('but we can treat it.');
@@ -198,11 +212,13 @@ describe('GPT-Live conversation', () => {
       text: 'Yes, it is a bit high, but we can treat it.',
       live: true,
     });
-    expect(said.slice(1)).toEqual([
-      ['del_1', '[worried, quiet] Will I lose my license?'],
-      ['del_1', 'I drive a truck.'],
-    ]);
-    expect(await screen.findByText('Will I lose my license? I drive a truck.')).toBeInTheDocument();
+    // The whole line goes out at once.
+    await vi.waitFor(() =>
+      expect(said.slice(1)).toEqual([
+        ['del_1', '[worried, quiet] Will I lose my license? I drive a truck.'],
+      ]),
+    );
+    expect(screen.queryByText(/Will I lose my license/)).toBeNull();
   });
 
   it('waits for the resident’s last words before asking Claude', async () => {
@@ -245,7 +261,7 @@ describe('GPT-Live conversation', () => {
     await start();
     await act(async () => cb.onStarted());
     await residentTurn('Let me explain.', 'del_1');
-    await screen.findByText('Will I lose my license? I drive a truck.');
+    await lineSent(1);
     audible = true;
     await act(async () => {
       cb.onSpoken('Am I gonna lose my license? ', 0);
@@ -266,7 +282,7 @@ describe('GPT-Live conversation', () => {
     await start();
     await act(async () => cb.onStarted());
     await residentTurn('Let me explain.', 'del_1');
-    await screen.findByText('Will I lose my license? I drive a truck.');
+    await lineSent(1);
 
     // GPT-Live's transcript runs ahead of his voice.
     audible = true;
@@ -325,6 +341,41 @@ describe('GPT-Live conversation', () => {
     await sleep(1600);
     expect(ducked).toEqual([true, false]);
     expect(muted).toEqual([]);
+  });
+
+  it('a “mm-hm” while Ray talks doesn’t cut him off', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high? ', 0));
+    await sleep(120);
+    micLoudAt = performance.now();
+    await act(async () => cb.onHeard('Mm-hm.'));
+    await act(async () => cb.onHeard(' Right.'));
+    expect(muted).toEqual([]);
+    expect(saved().some((x) => 'cutOff' in x)).toBe(false);
+  });
+
+  it('after a cut-off, keeps Ray muted until GPT-Live has stopped the old line', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    await residentTurn('Let me explain.', 'del_1');
+    await lineSent(1);
+    audible = true;
+    await act(async () => cb.onSpoken('Will I lose my license? ', 0));
+    await sleep(300);
+    micLoudAt = performance.now();
+    await act(async () => cb.onHeard('Hold on, what do you do for work?'));
+    expect(muted).toEqual([true]);
+    // GPT-Live keeps going with the old line, with a pause between sentences.
+    await act(async () => cb.onSpoken('I drive a truck. ', 1500));
+    audible = false;
+    lastSound = performance.now();
+    await sleep(700);
+    expect(muted).toEqual([true]);
+    // Then it really stops.
+    await sleep(1000);
+    expect(muted).toEqual([true, false]);
   });
 
   it('falls back to the standard voice when GPT-Live can’t connect', async () => {

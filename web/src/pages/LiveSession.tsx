@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ref, uploadBytes } from 'firebase/storage';
-import { isResidentSpeech, type PatientChunk } from '@plainspeak/shared';
+import { isCutIn } from '@plainspeak/shared';
 import { storage } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
 import { friendlyError } from '../lib/api';
@@ -31,10 +31,16 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const MIC_TALK_MS = 150;
 /** If no words from the resident arrive this long after turning the patient down, it wasn't them. */
 const DUCK_CONFIRM_MS = 1500;
-/** After cutting the patient off, his voice stays muted until it's been quiet this long... */
-const RESUME_QUIET_MS = 600;
+/**
+ * After a cut-off, GPT-Live may keep saying the rest of the old line. The
+ * patient stays muted until it has stopped (no voice and no new words for
+ * this long), or his next line starts...
+ */
+const RESUME_QUIET_MS = 1200;
 /** ...or this long at most. */
-const MAX_MUTE_MS = 6000;
+const MAX_MUTE_MS = 15_000;
+/** No transcript of the patient's speech this long after his line went out: show the line itself. */
+const NO_TRANSCRIPT_MS = 4000;
 
 export interface LiveConversationProps {
   sessionId: string;
@@ -106,6 +112,18 @@ export function LiveConversation({
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [bubbles, heard, thinking]);
 
+  /** Shows (or updates) the patient's bubble for this reply. */
+  function showPatient(r: LiveReply, text: string) {
+    if (r.idx === null) return;
+    const key = `t${r.idx}`;
+    r.shown = text;
+    setBubbles((b) =>
+      b.some((x) => x.key === key)
+        ? b.map((x) => (x.key === key ? { ...x, text } : x))
+        : [...b, { key, who: 'patient', text, nonverbal: r.nonverbal }],
+    );
+  }
+
   /** Saves what was actually said, right away (survives a reload or an immediate End). */
   function save(r: LiveReply) {
     if (r.idx === null) return;
@@ -142,7 +160,19 @@ export function LiveConversation({
       const audible = c.patientAudible();
       if (++tick % 3 === 0) setSpeaking(c.patientAudible(250));
       const r = reply.current;
-      if (r && r.firstAudibleAt === null && audible && r.pieces.length) r.firstAudibleAt = now;
+      if (r && r.firstAudibleAt === null && audible && r.pieces.length) {
+        r.firstAudibleAt = now;
+        setThinking(false);
+      }
+      // His words appear as he says them, not before.
+      if (r && r.idx !== null && r.cut === null && !r.saved) {
+        let text = r.heardSoFar(now);
+        if (!r.pieces.length && r.sentAt !== null && now - r.sentAt > NO_TRANSCRIPT_MS) {
+          text = r.planned;
+          setThinking(false);
+        }
+        if (text && text !== r.shown) showPatient(r, text);
+      }
       // Done talking: what he said out loud becomes the saved line.
       if (
         r &&
@@ -154,7 +184,7 @@ export function LiveConversation({
         !c.patientAudible(800)
       ) {
         save(r);
-        setBubbleText(`t${r.idx}`, r.spoken);
+        showPatient(r, r.spoken);
       }
       // Words held as possible echo that never turned out to be the resident.
       if (suspect.current.length && !audible && now - c.lastSoundAt > ECHO_WINDOW_MS)
@@ -196,16 +226,25 @@ export function LiveConversation({
     if (!c || !r || r.cut !== null) return;
     const heardText = r.cutOff();
     c.truncate(delegationOf.current, r.cutAtMs ?? 0);
+    c.note(
+      delegationOf.current,
+      'The doctor just started talking over you. Stop speaking now and listen. Do not finish or come back to this line.',
+    );
     duckedAt.current = 0;
     c.mutePatient(true);
     if (r.idx !== null) {
-      setBubbleText(`t${r.idx}`, heardText ? `${heardText} —` : '—');
+      showPatient(r, heardText ? `${heardText} —` : '—');
       save(r);
     }
     const mutedAt = performance.now();
     const check = () => {
-      const quiet = !c.patientAudible(RESUME_QUIET_MS);
-      if (quiet || performance.now() - mutedAt > MAX_MUTE_MS) {
+      const now = performance.now();
+      // Done with the old line: no voice and no new words for a while.
+      const oldDone = !c.patientAudible(RESUME_QUIET_MS) && now - r.lastPieceAt > RESUME_QUIET_MS;
+      // Or his next line has started.
+      const next = reply.current;
+      const nextStarted = next !== r && !!next?.pieces.length;
+      if (oldDone || nextStarted || now - mutedAt > MAX_MUTE_MS) {
         c.mutePatient(false);
         muteTimer.current = null;
         return;
@@ -242,8 +281,9 @@ export function LiveConversation({
     if (inEcho && r?.cut == null) {
       suspect.current.push(delta);
       const his = `${r?.spoken ?? ''} ${prevSpoken.current}`;
+      // "Mm-hm" or "right" while he talks is listening, not cutting in.
       const theirs =
-        isResidentSpeech(suspect.current.join(''), his) &&
+        isCutIn(suspect.current.join(''), his) &&
         (!!duckedAt.current || now - c.lastMicLoudAt < MIC_EVIDENCE_MS);
       if (!theirs) return;
       // Keep the resident's words; drop pieces that were only his echo.
@@ -304,48 +344,35 @@ export function LiveConversation({
       ...(lastWaitMs.current != null ? { prevAppWaitMs: lastWaitMs.current } : {}),
     };
     const r = new LiveReply(null, residentKey);
+    const wasCut = prev?.cut != null;
     reply.current = r;
     delegationOf.current = delegationId;
     lastWaitMs.current = null;
     setThinking(true);
-    let tone = '';
-    let sent = 0;
-    const sayLine = (line: string) => {
-      if (!sent) {
-        lastWaitMs.current = Math.round(performance.now() - askedAt);
-        totalWaitMs.current += lastWaitMs.current;
-      }
-      c.say(delegationId, (sent ? '' : tone) + line);
-      sent++;
-    };
     try {
-      const result = await streamTurn(input, (chunk: PatientChunk) => {
-        if (chunk.t === 'meta') tone = toneNote(chunk.delivery);
-        else if (chunk.t === 'say') sayLine(chunk.text);
-      });
-      if (!sent) {
-        tone = toneNote(result.patient.delivery);
-        sayLine(result.patient.text);
-      }
-      r.idx = result.patient.idx;
-      const shown =
-        r.cut !== null ? (r.cut ? `${r.cut} —` : '—') : r.saved ? r.spoken : result.patient.text;
-      setBubbles((b) => [
-        ...b,
-        {
-          key: `t${result.patient.idx}`,
-          who: 'patient',
-          text: shown,
-          nonverbal: result.patient.nonverbal,
-        },
-      ]);
+      // The whole line goes to GPT-Live at once: lines sent in pieces were
+      // sometimes cut short (a later piece arriving while it was talking).
+      const result = await streamTurn(input, () => undefined);
+      const u = result.patient;
+      r.idx = u.idx;
+      r.planned = u.text;
+      r.nonverbal = u.nonverbal;
+      lastWaitMs.current = Math.round(performance.now() - askedAt);
+      totalWaitMs.current += lastWaitMs.current;
+      if (wasCut)
+        c.note(
+          delegationId,
+          'You were cut off earlier. Never finish or repeat that line. Say only this new line.',
+        );
+      c.say(delegationId, toneNote(u.delivery) + u.text);
+      r.sentAt = performance.now();
       // Cut off (or late words) before the server answered: save now.
+      if (r.cut !== null) showPatient(r, r.cut ? `${r.cut} —` : '—');
       save(r);
     } catch (e) {
       reportError('live.turn', e);
       setNotice(friendlyError(e));
       c.say(delegationId, 'Sorry, what was that?');
-    } finally {
       setThinking(false);
     }
   }
@@ -359,13 +386,13 @@ export function LiveConversation({
         started.current = true;
         setPhase('live');
         if (opening) {
-          reply.current = new LiveReply(0, null);
+          const r = new LiveReply(0, null);
+          r.planned = opening.text;
+          r.nonverbal = opening.nonverbal;
+          reply.current = r;
           delegationOf.current = null;
           c.say(null, toneNote(opening.delivery) + opening.text);
-          setBubbles((b) => [
-            ...b,
-            { key: 't0', who: 'patient', text: opening.text, nonverbal: opening.nonverbal },
-          ]);
+          r.sentAt = performance.now();
         } else if (bubblesRef.current.length) {
           const recent = bubblesRef.current
             .slice(-8)

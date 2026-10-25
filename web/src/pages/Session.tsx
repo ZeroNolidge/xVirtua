@@ -4,6 +4,7 @@ import { collection, doc, getDoc, getDocs, orderBy, query } from 'firebase/fires
 import { ref, uploadBytes } from 'firebase/storage';
 import {
   endOfTurnDelayMs,
+  isCutIn,
   isResidentSpeech,
   type NonverbalCue,
   type PatientChunk,
@@ -635,7 +636,7 @@ function Conversation({
             if (phaseRef.current === 'listening' && echoAfterPatient(t)) return;
             if (phaseRef.current === 'patient') {
               // The patient's own voice leaking into the mic isn't the resident.
-              if (!isResidentSpeech(t, player.current?.spokenSoFar ?? '')) return;
+              if (!isCutIn(t, player.current?.spokenSoFar ?? '')) return;
               bargeIn();
             } else if (
               phaseRef.current === 'thinking' &&
@@ -652,7 +653,8 @@ function Conversation({
               return;
             }
             if (phaseRef.current === 'patient') {
-              if (!isResidentSpeech(t, player.current?.spokenSoFar ?? '')) {
+              // His own echo, or "mm-hm" while he talks (listening, not a reply).
+              if (!isCutIn(t, player.current?.spokenSoFar ?? '')) {
                 renderer.current?.duck(false);
                 return;
               }

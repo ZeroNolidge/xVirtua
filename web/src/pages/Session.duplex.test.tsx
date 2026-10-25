@@ -172,6 +172,19 @@ describe('two-way voice', () => {
     expect(calls[1]!.text).toBe('Wait, before you go on, can I ask about your job?');
   });
 
+  it('a “mm-hm” over the patient is listening, not cutting him off', async () => {
+    await start();
+    await say('Your blood pressure is high, so we should treat it.');
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 5000 });
+    await screen.findByText('Will I lose my license?', undefined, { timeout: 4000 });
+    const realNow = performance.now.bind(performance);
+    const spy = vi.spyOn(performance, 'now').mockImplementation(() => realNow() + 3000);
+    await say('Mm-hm.');
+    spy.mockRestore();
+    expect(screen.queryByText('Will I lose my license? —')).toBeNull();
+    expect(calls).toHaveLength(1);
+  });
+
   it('replaces a reply that has not played yet when the resident keeps talking', async () => {
     await start();
     let release!: () => void;

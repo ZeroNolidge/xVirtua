@@ -27,6 +27,13 @@ export class LiveReply {
   late = '';
   lateSaved = false;
   readonly takenAt: number;
+  /** Claude's line, sent to GPT-Live (shown only if GPT-Live sends no transcript). */
+  planned = '';
+  nonverbal: string[] = [];
+  /** performance.now() when the line went to GPT-Live. */
+  sentAt: number | null = null;
+  /** What the bubble shows now. */
+  shown = '';
 
   constructor(
     idx: number | null,
@@ -58,6 +65,13 @@ export class LiveReply {
         .map((p) => p.text)
         .join(''),
     );
+  }
+
+  /** What the resident has heard so far, as the patient speaks. */
+  heardSoFar(now = performance.now()): string {
+    if (this.cut !== null) return this.cut;
+    if (this.firstAudibleAt === null) return '';
+    return this.heardBy(now - this.firstAudibleAt);
   }
 
   /** Cuts the reply off now; returns what was heard. */

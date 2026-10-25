@@ -4,7 +4,9 @@
  * where the patient had barely started is the app's timing (it began the reply
  * while the resident was still talking), not the resident's.
  */
-import type { Moment } from '@plainspeak/shared';
+import { isBackchannel, type Moment } from '@plainspeak/shared';
+
+export { isBackchannel };
 
 export type CutKind = 'counts' | 'backchannel' | 'app';
 
@@ -16,18 +18,7 @@ interface T {
   heardText?: string;
 }
 
-const BACKCHANNEL = new Set(
-  'sorry mm mmm hm hmm mhm mm-hm mm-hmm uh-huh uhhuh right okay ok yeah yes yep sure oh ah i see go on gotcha got it true'.split(
-    ' ',
-  ),
-);
 const words = (s: string) => s.toLowerCase().match(/[a-z]+(?:-[a-z]+)*/g) ?? [];
-
-/** "Sorry", "mm-hm", "right, go on": listening sounds, never a real cut-in. */
-export function isBackchannel(text: string): boolean {
-  const w = words(text);
-  return w.length > 0 && w.length <= 4 && w.every((x) => BACKCHANNEL.has(x));
-}
 
 /** The patient had said fewer words than this when cut off: the app's timing. */
 export const MIN_HEARD_WORDS = 2;
