@@ -548,6 +548,74 @@ export async function patientTurn(
   }
 }
 
+// ---------- GPT-Live answered on its own ----------
+
+const exchangeInput = z.object({
+  sessionId: z.string().min(1).max(64),
+  /** What the resident said. */
+  resident: z.string().trim().min(1).max(LIMITS.maxTurnChars),
+  /** What GPT-Live said back, without asking Claude. */
+  patient: z.string().trim().max(4000),
+});
+
+/**
+ * Saves an exchange GPT-Live handled itself (it replied without asking us for
+ * the line), so the conversation is still complete for review and scoring.
+ * The patient turn is marked `selfReply` (no scripted cue, no Claude).
+ */
+export async function saveLiveExchange(db: Firestore, caller: Caller | null, data: unknown) {
+  const me = requireMember(caller);
+  const input = parse(exchangeInput, data);
+  const ref = db.doc(`sessions/${input.sessionId}`);
+  await consumeQuota(db, me.uid, 'patientTurns');
+  return db.runTransaction(async (tx) => {
+    const s = (await tx.get(ref)).data() as SessionDoc | undefined;
+    if (!s || s.uid !== me.uid) throw new HttpsError('not-found', 'Session not found.');
+    if (s.status !== 'live')
+      throw new HttpsError('failed-precondition', 'This conversation has ended.');
+    if (s.voiceMode !== 'live')
+      throw new HttpsError('failed-precondition', 'Live voice is off for this conversation.');
+    if (s.pending) throw new HttpsError('aborted', 'The patient is still answering.');
+    const facts = decideCue([], s.cueState, input.resident, matcher).turnFacts;
+    const rIdx = s.turnCount;
+    const pIdx = rIdx + 1;
+    tx.set(ref.collection('turns').doc(String(rIdx)), {
+      idx: rIdx,
+      speaker: 'resident',
+      text: input.resident,
+      prompt: input.resident,
+      source: 'voice',
+      ...facts,
+      afterPatientCueId: null,
+      afterPatientQuestion: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    const said = input.patient || '…';
+    const utterance: PatientUtterance = {
+      text: said,
+      askedQuestion: /\?\s*$/.test(said),
+      delivery: NEUTRAL,
+      nonverbal: [],
+    };
+    tx.set(ref.collection('turns').doc(String(pIdx)), {
+      idx: pIdx,
+      speaker: 'patient',
+      ...utterance,
+      raw: JSON.stringify(utterance),
+      selfReply: true,
+      liveSpokenText: said,
+      cueStateBefore: s.cueState,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    tx.update(ref, {
+      turnCount: pIdx + 1,
+      lastActivityAt: FieldValue.serverTimestamp(),
+      liveSelfReplies: FieldValue.increment(1),
+    });
+    return { residentIdx: rIdx, patientIdx: pIdx };
+  });
+}
+
 // ---------- what was actually said ----------
 
 const heardInput = z.object({

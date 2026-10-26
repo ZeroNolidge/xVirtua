@@ -16,6 +16,17 @@ type Phase = 'ready' | 'connecting' | 'live' | 'ending';
 
 /** How long GPT-Live gets to answer the call before we fall back to the standard voice. */
 const START_TIMEOUT_MS = 12_000;
+/** Events we handle; samples of any others are sent with the diagnostics. */
+const KNOWN_EVENTS = new Set([
+  'session.started',
+  'session.delegation.created',
+  'session.input_transcript.delta',
+  'session.output_transcript.delta',
+  'session.output_audio.delta',
+  'session.closed',
+  'error',
+]);
+
 /** Resident words this soon after a reply was asked for (before the patient speaks) finish that turn. */
 const LATE_WORDS_MS = 2500;
 /** The resident is done once no new words (and no mic sound) for this long... */
@@ -96,6 +107,14 @@ export function LiveConversation({
   const lastWaitMs = useRef<number | null>(null);
   const totalWaitMs = useRef(0);
   const delegationOf = useRef<string | null>(null);
+  /** A reply is being fetched from Claude (GPT-Live asked for it). */
+  const answering = useRef(false);
+  const selfReplies = useRef(0);
+  /** Which events GPT-Live sent, for diagnostics. */
+  const census = useRef<{ counts: Record<string, number>; samples: string[] }>({
+    counts: {},
+    samples: [],
+  });
   const bottom = useRef<HTMLDivElement>(null);
 
   const setBubbles = (f: (b: Bubble[]) => Bubble[]) => {
@@ -111,8 +130,8 @@ export function LiveConversation({
 
   /** Shows (or updates) the patient's bubble for this reply. */
   function showPatient(r: LiveReply, text: string) {
-    if (r.idx === null) return;
-    const key = `t${r.idx}`;
+    if (r.idx === null && !r.key) return;
+    const key = r.key ?? `t${r.idx}`;
     r.shown = text;
     setBubbles((b) =>
       b.some((x) => x.key === key)
@@ -121,8 +140,49 @@ export function LiveConversation({
     );
   }
 
+  /**
+   * GPT-Live answered the resident itself (it never asked us for the line).
+   * Saves the exchange so the conversation is complete for scoring.
+   */
+  function saveSelfReply(r: LiveReply) {
+    if (r.saved) return;
+    r.saved = true;
+    const resident = r.residentText.trim();
+    const patient = (r.cut !== null ? (r.cut ? `${r.cut} —` : '') : r.spoken).trim();
+    if (!resident) return;
+    saves.current.push(
+      sessionApi
+        .saveLiveExchange({ sessionId, resident, patient })
+        .catch((e: unknown) => reportError('live.selfReply', e)),
+    );
+  }
+
+  /** Words GPT-Live is speaking while we didn't ask: it's answering on its own. */
+  function onSpoken(delta: string, startMs?: number) {
+    const cur = reply.current;
+    // Still the tail of a line the resident cut off (muted on our side): not a new reply.
+    if (cur?.cut != null && muteTimer.current !== null) return void cur.add(delta, startMs);
+    if (!answering.current && (!cur || cur.finished)) {
+      selfReplies.current++;
+      const text = heardBuf.current.trim();
+      heardBuf.current = '';
+      setHeard('');
+      const residentKey = text ? `r${Date.now()}` : null;
+      if (text && residentKey)
+        setBubbles((b) => [...b, { key: residentKey, who: 'resident', text }]);
+      if (cur) prevSpoken.current = cur.cut ?? cur.spoken;
+      const r = new LiveReply(null, null);
+      r.selfReply = true;
+      r.key = `s${Date.now()}`;
+      r.residentText = text;
+      reply.current = r;
+    }
+    reply.current!.add(delta, startMs);
+  }
+
   /** Saves what was actually said, right away (survives a reload or an immediate End). */
   function save(r: LiveReply) {
+    if (r.selfReply) return void saveSelfReply(r);
     if (r.idx === null) return;
     const jobs: Parameters<typeof sessionApi.saveHeard>[0][] = [];
     if (!r.saved && (r.cut !== null || r.spoken)) {
@@ -162,7 +222,7 @@ export function LiveConversation({
         setThinking(false);
       }
       // His words appear as he says them, not before.
-      if (r && r.idx !== null && r.cut === null && !r.saved) {
+      if (r && (r.idx !== null || r.key) && r.cut === null && !r.saved) {
         let text = r.heardSoFar(now);
         if (!r.pieces.length && r.sentAt !== null && now - r.sentAt > NO_TRANSCRIPT_MS) {
           text = r.planned;
@@ -173,7 +233,7 @@ export function LiveConversation({
       // Done talking: what he said out loud becomes the saved line.
       if (
         r &&
-        r.idx !== null &&
+        (r.idx !== null || r.selfReply) &&
         !r.saved &&
         r.cut === null &&
         r.pieces.length &&
@@ -229,7 +289,7 @@ export function LiveConversation({
     );
     duckedAt.current = 0;
     c.mutePatient(true);
-    if (r.idx !== null) {
+    if (r.idx !== null || r.selfReply) {
       showPatient(r, heardText ? `${heardText} —` : '—');
       save(r);
     }
@@ -311,6 +371,15 @@ export function LiveConversation({
   }
 
   async function answer(delegationId: string) {
+    answering.current = true;
+    try {
+      await answerInner(delegationId);
+    } finally {
+      answering.current = false;
+    }
+  }
+
+  async function answerInner(delegationId: string) {
     const c = call.current;
     if (!c || ended.current) return;
     const askedAt = performance.now();
@@ -382,6 +451,7 @@ export function LiveConversation({
         if (started.current) return;
         started.current = true;
         setPhase('live');
+        window.setTimeout(() => !ended.current && reportCensus('first 30s'), 30_000);
         if (opening) {
           const r = new LiveReply(0, null);
           r.planned = opening.text;
@@ -405,8 +475,12 @@ export function LiveConversation({
         inFlight.current = inFlight.current.then(() => answer(id)).catch(() => undefined);
       },
       onHeard,
-      onSpoken: (d, startMs) => {
-        reply.current?.add(d, startMs);
+      onSpoken,
+      onEvent: (type, ev) => {
+        const n = (census.current.counts[type] ?? 0) + 1;
+        census.current.counts[type] = n;
+        if (!KNOWN_EVENTS.has(type) && n <= 2)
+          census.current.samples.push(JSON.stringify(ev).slice(0, 300));
       },
       onError: (m) => {
         reportError('live.call', new Error(m));
@@ -451,6 +525,19 @@ export function LiveConversation({
     }
   }
 
+  /** Tells us which events GPT-Live sent and how often it answered on its own. */
+  function reportCensus(when: string) {
+    const { counts, samples } = census.current;
+    const e = new Error(
+      `GPT-Live events (${when}): ${selfReplies.current} self-replies; ${JSON.stringify(counts)}`.slice(
+        0,
+        500,
+      ),
+    );
+    e.stack = samples.join('\n').slice(0, 2000);
+    reportError('live.events', e);
+  }
+
   /** Saves whatever the patient said so far, and waits (briefly) for every save. */
   async function flushSaves() {
     await Promise.race([inFlight.current, wait(3000)]);
@@ -465,6 +552,7 @@ export function LiveConversation({
     setPhase('ending');
     setSaving('Saving…');
     await flushSaves();
+    reportCensus('end');
     await call.current?.close().catch(() => undefined);
     release();
     try {

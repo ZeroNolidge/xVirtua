@@ -4,7 +4,7 @@ import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestor
 import { CONSENT_VERSION, DAILY_LIMITS, type PatientChunk } from '@plainspeak/shared';
 import { dayKey } from '../lib/quota.js';
 import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
-import { endSession, patientTurn, saveHeard, startSession } from './session.js';
+import { endSession, patientTurn, saveHeard, saveLiveExchange, startSession } from './session.js';
 import { FakeBrain } from '../patient/fakeBrain.js';
 import type { Caller } from '../lib/callable.js';
 import { startLiveCall } from '../voice/live.js';
@@ -566,5 +566,56 @@ describe('GPT-Live request layout', () => {
       startLiveCall(db, resident, { sessionId, sdp: 'v=0 offer....' }, 'sk-x', doFetch),
     ).rejects.toMatchObject({ code: 'unavailable', details: { tries: [{ status: 403 }] } });
     expect(n).toBe(1);
+  });
+});
+
+describe('GPT-Live voice and self-replies', () => {
+  it('uses the voice faculty chose for the patient’s pronouns', async () => {
+    await db
+      .doc('programs/irmc')
+      .set(
+        { voiceMode: 'live', liveVoice: 'marin', liveVoices: { he: 'stone', she: 'willow' } },
+        { merge: true },
+      );
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const bodies: Record<string, unknown>[] = [];
+    const doFetch = (async (_u: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response(JSON.stringify({ transport: { sdp: 'v=0 ok' } }));
+    }) as unknown as typeof fetch;
+    const r = await startLiveCall(
+      db,
+      resident,
+      { sessionId, sdp: 'v=0 offer....' },
+      'sk-x',
+      doFetch,
+    );
+    expect(htn.briefing.persona.pronouns).toMatch(/he/);
+    expect(r.voice).toBe('stone');
+  });
+
+  it('saves an exchange GPT-Live answered on its own, for scoring', async () => {
+    await db.doc('programs/irmc').set({ voiceMode: 'live' }, { merge: true });
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const r = await saveLiveExchange(db, resident, {
+      sessionId,
+      resident: 'Your blood pressure is a little high.',
+      patient: 'Oh, okay. Is that bad?',
+    });
+    expect(r).toEqual({ residentIdx: 1, patientIdx: 2 });
+    const [t1, t2, s] = await Promise.all([
+      db.doc(`sessions/${sessionId}/turns/1`).get(),
+      db.doc(`sessions/${sessionId}/turns/2`).get(),
+      db.doc(`sessions/${sessionId}`).get(),
+    ]);
+    expect(t1.data()).toMatchObject({
+      speaker: 'resident',
+      text: 'Your blood pressure is a little high.',
+    });
+    expect(t2.data()).toMatchObject({ speaker: 'patient', selfReply: true, askedQuestion: true });
+    expect(s.get('turnCount')).toBe(3);
+    await expect(
+      saveLiveExchange(db, otherResident, { sessionId, resident: 'x', patient: 'y' }),
+    ).rejects.toMatchObject({ code: 'not-found' });
   });
 });

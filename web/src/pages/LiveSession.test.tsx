@@ -92,6 +92,7 @@ const calls: TurnInput[] = [];
 vi.mock('../lib/session', () => ({
   sessionApi: {
     saveHeard: vi.fn(async () => ({ data: { ok: true } })),
+    saveLiveExchange: vi.fn(async () => ({ data: { residentIdx: 1, patientIdx: 2 } })),
     end: vi.fn(async () => ({ data: {} })),
     startLiveCall: vi.fn(async () => {
       if (failConnect) throw new Error('unavailable');
@@ -380,6 +381,33 @@ describe('GPT-Live conversation', () => {
     // Then it really stops.
     await sleep(1000);
     expect(muted).toEqual([true, false]);
+  });
+
+  it('when GPT-Live answers on its own, shows both sides and saves the exchange', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(100);
+    patientStops();
+    await sleep(1000);
+    // The resident answers; GPT-Live replies without asking us.
+    micLoudAt = performance.now();
+    await act(async () => cb.onHeard('Yes, a little, but we can treat it.'));
+    await sleep(1600);
+    audible = true;
+    await act(async () => cb.onSpoken('Okay. Is that bad?', 5000));
+    await sleep(120);
+    expect(screen.getByText('Yes, a little, but we can treat it.')).toBeInTheDocument();
+    expect(screen.getByText('Okay. Is that bad?')).toBeInTheDocument();
+    patientStops();
+    await sleep(1100);
+    expect(sessionApi.saveLiveExchange).toHaveBeenCalledWith({
+      sessionId: 's1',
+      resident: 'Yes, a little, but we can treat it.',
+      patient: 'Okay. Is that bad?',
+    });
+    expect(calls).toHaveLength(0);
   });
 
   it('falls back to the standard voice when GPT-Live can’t connect', async () => {

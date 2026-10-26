@@ -45,7 +45,7 @@ service cloud.firestore {
       allow update: if facultyOf(pid)
         && onlyChanges(['name', 'timezone', 'audioRetentionMonths',
                         'transcriptRetentionMonths', 'scoringWeights', 'patientModel',
-                        'voiceMode', 'liveVoice'])
+                        'voiceMode', 'liveVoice', 'liveVoices'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
@@ -65,8 +65,17 @@ service cloud.firestore {
         && (!('liveVoice' in request.resource.data)
             || request.resource.data.liveVoice in ['marin', 'cinder', 'stone', 'beacon',
                  'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper',
-                 'willow', 'gleam']);
+                 'willow', 'gleam'])
+        && (!('liveVoices' in request.resource.data)
+            || validLiveVoices(request.resource.data.liveVoices));
       allow create, delete: if false;
+    }
+
+    function validLiveVoices(v) {
+      return v is map && v.keys().hasOnly(['he', 'she', 'they'])
+        && (!('he' in v) || v.he in ['marin', 'cinder', 'stone', 'beacon', 'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper', 'willow', 'gleam'])
+        && (!('she' in v) || v.she in ['marin', 'cinder', 'stone', 'beacon', 'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper', 'willow', 'gleam'])
+        && (!('they' in v) || v.they in ['marin', 'cinder', 'stone', 'beacon', 'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper', 'willow', 'gleam']);
     }
 
     // ---------- invites (written by Functions) ----------

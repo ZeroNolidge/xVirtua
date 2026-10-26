@@ -31,6 +31,14 @@ export const LIVE_VOICES = [
   'gleam',
 ] as const;
 export type LiveVoice = (typeof LIVE_VOICES)[number];
+/** Which voice set a patient uses, from their pronouns. */
+export type VoiceGroup = 'he' | 'she' | 'they';
+export function voiceGroupOf(pronouns: string): VoiceGroup {
+  const p = pronouns.toLowerCase();
+  if (/\bhe\b|\bhim\b|\bhis\b/.test(p)) return 'he';
+  if (/\bshe\b|\bher\b|\bhers\b/.test(p)) return 'she';
+  return 'they';
+}
 
 export interface Program {
   name: string;
@@ -43,6 +51,8 @@ export interface Program {
   /** Unset means standard. */
   voiceMode?: VoiceMode;
   liveVoice?: LiveVoice;
+  /** GPT-Live voice by the patient's pronouns (falls back to liveVoice). */
+  liveVoices?: Partial<Record<VoiceGroup, LiveVoice>>;
 }
 
 /** Custom claims set on the Firebase Auth token by the server. */

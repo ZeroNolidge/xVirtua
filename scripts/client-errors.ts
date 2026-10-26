@@ -15,7 +15,13 @@ for (const d of snap.docs) {
     `--- ${e.createdAt?.toDate?.().toISOString()} ${e.kind} ${e.path ?? ''} uid=${e.uid ?? '-'}`,
   );
   console.log(e.message);
-  if (e.stack) console.log(String(e.stack).split('\n').slice(0, 6).join('\n'));
+  if (e.stack)
+    console.log(
+      String(e.stack)
+        .split('\n')
+        .slice(0, e.kind === 'live.events' ? 40 : 6)
+        .join('\n'),
+    );
   if (e.componentStack) console.log(String(e.componentStack).split('\n').slice(0, 6).join('\n'));
   console.log(e.userAgent ?? '');
 }

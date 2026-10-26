@@ -16,6 +16,8 @@ export interface LiveCallbacks {
   onSpoken(delta: string, startMs?: number): void;
   onError(message: string): void;
   onClosed(): void;
+  /** Every event GPT-Live sends (for diagnostics). */
+  onEvent?(type: string, ev: Record<string, unknown>): void;
 }
 
 /** Exchanges the browser's offer for OpenAI's answer, through our server. */
@@ -203,6 +205,7 @@ export class LiveVoiceCall {
     } catch {
       return;
     }
+    this.cb.onEvent?.(String(ev.type ?? '?'), ev as Record<string, unknown>);
     switch (ev.type) {
       case 'session.started':
         return this.cb.onStarted();

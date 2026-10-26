@@ -34,6 +34,16 @@ export class LiveReply {
   sentAt: number | null = null;
   /** What the bubble shows now. */
   shown = '';
+  /** GPT-Live answered on its own (it never asked us for this line). */
+  selfReply = false;
+  /** For a self-reply: what the resident had said. */
+  residentText = '';
+  /** Bubble key, for a reply not saved on the server yet. */
+  key: string | null = null;
+  /** GPT-Live has finished this reply (or it was cut off). */
+  get finished() {
+    return this.saved || this.cut !== null;
+  }
 
   constructor(
     idx: number | null,

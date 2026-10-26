@@ -5,11 +5,18 @@ import {
   type LiveVoice,
   type PatientModel,
   type Program,
+  type VoiceGroup,
   type VoiceMode,
 } from '@plainspeak/shared';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../lib/auth';
 import { MODEL_LABELS } from '../../lib/models';
+
+const VOICE_GROUPS: [VoiceGroup, string][] = [
+  ['he', 'Patients who use he/him'],
+  ['she', 'Patients who use she/her'],
+  ['they', 'Patients who use they/them'],
+];
 
 export function Settings() {
   const { claims } = useAuth();
@@ -57,19 +64,31 @@ export function Settings() {
           <option value="live">GPT-Live (test: talks and listens at once)</option>
         </select>
       </label>
-      <label className="field">
-        <span>GPT-Live voice (when GPT-Live is on)</span>
-        <select
-          value={program.liveVoice ?? 'marin'}
-          onChange={(e) => void save({ liveVoice: e.target.value as LiveVoice })}
-        >
-          {LIVE_VOICES.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
-      </label>
+      <fieldset className="field">
+        <legend>GPT-Live voices (each patient gets the one for their pronouns)</legend>
+        {VOICE_GROUPS.map(([group, label]) => (
+          <label key={group} className="field">
+            <span>{label}</span>
+            <select
+              value={program.liveVoices?.[group] ?? program.liveVoice ?? 'marin'}
+              onChange={(e) =>
+                void save({
+                  liveVoices: { ...program.liveVoices, [group]: e.target.value as LiveVoice },
+                })
+              }
+            >
+              {LIVE_VOICES.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+        <p className="muted small">
+          OpenAI doesn’t say which voices sound male or female, so try a few in practice.
+        </p>
+      </fieldset>
       {saved && <p className="ok small">Saved. New conversations use these settings.</p>}
       <p className="muted small">
         Audio kept {program.audioRetentionMonths} months · transcripts kept{' '}

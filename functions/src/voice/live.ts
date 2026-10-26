@@ -3,6 +3,7 @@ import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 import {
   LIVE_VOICES,
+  voiceGroupOf,
   type LiveVoice,
   type ScenarioBriefing,
   type ScenarioScript,
@@ -133,7 +134,11 @@ export async function startLiveCall(
   const sc = await loadScenario(db, s.scenarioId, s.scenarioVersion);
   if (!sc) throw new HttpsError('not-found', 'Scenario not found.');
   const program = await db.doc(`programs/${s.programId}`).get();
-  const voice = liveVoiceOf(program.get('liveVoice'));
+  // The voice matches the patient: one per pronoun group, chosen by faculty.
+  const byGroup = (program.get('liveVoices') ?? {}) as Record<string, unknown>;
+  const voice = liveVoiceOf(
+    byGroup[voiceGroupOf(sc.briefing.persona.pronouns)] ?? program.get('liveVoice'),
+  );
 
   const tries: { shape: string; status: number; detail: string }[] = [];
   let res: Response | null = null;
