@@ -39,6 +39,12 @@ jobs:
           gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING' \
             --project "$PROJECT_ID" --freshness=1d --limit=40 \
             --format='table[no-heading](timestamp,resource.labels.service_name,severity,textPayload,jsonPayload.message)' || true
+      - name: Recent function errors with full details (last 24h)
+        continue-on-error: true
+        run: |
+          gcloud logging read 'resource.type="cloud_run_revision" AND severity>=ERROR' \
+            --project "$PROJECT_ID" --freshness=1d --limit=6 \
+            --format='value(timestamp,resource.labels.service_name,textPayload,jsonPayload)' || true
       - name: Recent requests (last 6h)
         continue-on-error: true
         run: |

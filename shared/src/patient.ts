@@ -48,7 +48,9 @@ export interface PatientUtterance {
 export type PatientChunk =
   | { t: 'meta'; delivery: Delivery; nonverbal: NonverbalCue[] }
   | { t: 'say'; seq: number; text: string }
-  | { t: 'audio'; seq: number; b64: string; mime: string };
+  | { t: 'audio'; seq: number; b64: string; mime: string }
+  /** Sent last, so the final audio isn't the last thing on the wire (it was sometimes lost). */
+  | { t: 'end'; sentences: number };
 
 export interface RendererCapabilities {
   video: boolean;

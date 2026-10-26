@@ -474,6 +474,8 @@ function Conversation({
           p.say(0, u.text);
           if (audio) p.audio(0, audio);
         }
+        // Any sentence whose voice didn't arrive is fetched on its own.
+        p.fillVoice = (sentence) => fetchPatientAudio(sessionId, u.idx, sentence);
         // Drop this reply; the next send answers the resident's whole thought.
         const replace = () => {
           p.interrupt();

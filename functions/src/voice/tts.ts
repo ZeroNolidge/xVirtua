@@ -9,12 +9,19 @@ import { appCheckOk } from '../lib/appCheck.js';
 
 /**
  * POST { sessionId, turnIdx } with "Authorization: Bearer <Firebase ID token>".
- * Speaks a stored patient turn only, so the endpoint can't be used as a
+ * Add `sentence` to speak just one sentence of that turn (it must be part of
+ * the stored line). Speaks stored patient turns only, so the endpoint can't be used as a
  * general-purpose TTS proxy. Returns audio/mpeg.
  *
  * POST { warmup: true } (also signed in) just wakes the server: it returns 204
  * before any paid call.
  */
+const squash = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
 export async function handleTts(
   req: Request,
   res: Response,
@@ -36,7 +43,12 @@ export async function handleTts(
     return void res.status(401).json({ error: 'unauthenticated' });
   }
 
-  const body = (req.body ?? {}) as { sessionId?: unknown; turnIdx?: unknown; warmup?: unknown };
+  const body = (req.body ?? {}) as {
+    sessionId?: unknown;
+    turnIdx?: unknown;
+    warmup?: unknown;
+    sentence?: unknown;
+  };
   if (body.warmup === true) return void res.status(204).end();
   const { sessionId, turnIdx } = body;
   if (
@@ -52,6 +64,14 @@ export async function handleTts(
   if (!s || !canHear) return void res.status(404).json({ error: 'not-found' });
   const turn = (await ref.collection('turns').doc(String(turnIdx)).get()).data();
   if (!turn || turn.speaker !== 'patient') return void res.status(404).json({ error: 'not-found' });
+  let text = turn.text as string;
+  if (body.sentence !== undefined) {
+    const said = [turn.text, turn.plannedText].map((x) => squash(String(x ?? '')));
+    const sentence = typeof body.sentence === 'string' ? body.sentence.trim() : '';
+    if (!sentence || sentence.length > 600 || !said.some((x) => x.includes(squash(sentence))))
+      return void res.status(400).json({ error: 'invalid-argument' });
+    text = sentence;
+  }
 
   try {
     await consumeQuota(db, uid, 'voice');
@@ -65,7 +85,7 @@ export async function handleTts(
       voiceId = await pickVoice(key, sc?.briefing.persona.pronouns ?? 'they', s.scenarioId);
       await ref.update({ voiceId });
     }
-    const audio = await synthesize(key, voiceId, turn.text as string, turn.delivery as Delivery);
+    const audio = await synthesize(key, voiceId, text, turn.delivery as Delivery);
     res.set('Content-Type', 'audio/mpeg');
     res.set('Cache-Control', 'private, max-age=3600');
     res.send(Buffer.from(audio));

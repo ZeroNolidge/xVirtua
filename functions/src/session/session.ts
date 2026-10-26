@@ -452,6 +452,7 @@ export async function patientTurn(
           if (clean) voicer!.add(clean);
         }
         await voicer!.flush().catch(() => undefined);
+        await send({ t: 'end', sentences: voicer!.sentences }).catch(() => undefined);
       };
     }
 

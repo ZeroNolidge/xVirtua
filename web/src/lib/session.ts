@@ -146,12 +146,17 @@ async function voiceHeaders(): Promise<Record<string, string>> {
 }
 
 /** Fetches the patient's voice for a stored turn. Returns null if voice is unavailable. */
-export async function fetchPatientAudio(sessionId: string, turnIdx: number): Promise<Blob | null> {
+export async function fetchPatientAudio(
+  sessionId: string,
+  turnIdx: number,
+  /** Just this sentence of the turn (when its voice didn't arrive with the reply). */
+  sentence?: string,
+): Promise<Blob | null> {
   try {
     const res = await fetch(ttsUrl(), {
       method: 'POST',
       headers: await voiceHeaders(),
-      body: JSON.stringify({ sessionId, turnIdx }),
+      body: JSON.stringify({ sessionId, turnIdx, ...(sentence ? { sentence } : {}) }),
     });
     if (!res.ok) return null;
     const blob = await res.blob();

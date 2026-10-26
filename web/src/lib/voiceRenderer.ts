@@ -24,6 +24,8 @@ export class ReplyPlayer {
   firstSoundAt: number | null = null;
   /** Sentences the resident actually heard (started playing). */
   readonly played: string[] = [];
+  /** Fetches a sentence's voice that didn't arrive with the reply. */
+  fillVoice: ((text: string) => Promise<Blob | null>) | null = null;
   /** Sentences that played as text only (their voice never arrived). */
   readonly noVoice: string[] = [];
   /** The resident talked over the patient; playback stopped. */
@@ -89,6 +91,15 @@ export class ReplyPlayer {
       }
       if (this.renderer.stopped || this.interrupted) return;
       const it = this.items[i]!;
+      // Its voice never came with the reply: fetch it now rather than skip it.
+      if (it.audio === null && this.fillVoice) {
+        const fill = this.fillVoice;
+        it.audio = await Promise.race([
+          fill(it.text).catch(() => null),
+          sleep(5000).then(() => null),
+        ]);
+        if (this.renderer.stopped || this.interrupted) return;
+      }
       this.firstSoundAt ??= performance.now();
       this.played.push(it.text);
       this.onSentence(it.text, i);

@@ -257,11 +257,12 @@ describe('patientTurn', () => {
       'I hate pills.',
     ]);
     expect(spoken.join(' ')).not.toContain('(frowns)');
-    // Every sentence's audio follows its text, in order.
+    // Every sentence's audio follows its text, in order, then an end marker
+    // (so the last audio is never the last thing sent).
     const order = chunks
       .filter((c) => c.t !== 'meta')
       .map((c) => `${c.t}${'seq' in c ? c.seq : ''}`);
-    expect(order).toEqual(['say0', 'audio0', 'say1', 'audio1', 'say2', 'audio2']);
+    expect(order).toEqual(['say0', 'audio0', 'say1', 'audio1', 'say2', 'audio2', 'end']);
 
     const s = (await db.doc(`sessions/${sessionId}`).get()).data()!;
     expect(s.voiceId).toBe('voice-1');
