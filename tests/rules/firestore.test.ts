@@ -149,6 +149,8 @@ describe('programs', () => {
     await assertFails(updateDoc(ref, { liveVoices: { robot: 'marin' } }));
     await assertSucceeds(updateDoc(ref, { liveBrain: 'claude' }));
     await assertFails(updateDoc(ref, { liveBrain: 'gpt' }));
+    await assertSucceeds(updateDoc(ref, { liveVoiceTags: { cinder: 'male', marin: 'female' } }));
+    await assertFails(updateDoc(ref, { liveVoiceTags: { alloy: 'male' } }));
     await assertFails(updateDoc(doc(fs(a.resA), 'programs/irmc'), { voiceMode: 'live' }));
   });
 

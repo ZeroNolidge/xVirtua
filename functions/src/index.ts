@@ -30,6 +30,7 @@ import { pickVoice, synthesize } from './voice/cartesia.js';
 import type { VoiceService } from './voice/streamVoice.js';
 import { getSttToken as mintSttToken } from './voice/stt.js';
 import { startLiveCall as connectLive } from './voice/live.js';
+import { voiceSample as makeVoiceSample } from './voice/voiceSample.js';
 import type { Caller } from './lib/callable.js';
 import { APP_CHECK_ENFORCE } from './lib/appCheck.js';
 import { reportClientError as storeClientError } from './lib/clientErrors.js';
@@ -175,6 +176,23 @@ export const getSttToken = callable(
 export const startLiveCall = callable(
   { secrets: [OPENAI_API_KEY], timeoutSeconds: 30 },
   (req) => warmup(req) ?? connectLive(db(), callerOf(req), req.data, keyOf(OPENAI_API_KEY)),
+);
+
+/** Faculty tool: a short sample of a GPT-Live voice (made once, then kept in storage). */
+export const voiceSample = callable({ secrets: [OPENAI_API_KEY], timeoutSeconds: 60 }, (req) =>
+  makeVoiceSample(callerOf(req), req.data, keyOf(OPENAI_API_KEY), {
+    async get(voice) {
+      const f = getStorage().bucket().file(`voiceSamples/${voice}.wav`);
+      const [exists] = await f.exists();
+      return exists ? (await f.download())[0] : null;
+    },
+    async put(voice, wav) {
+      await getStorage()
+        .bucket()
+        .file(`voiceSamples/${voice}.wav`)
+        .save(wav, { contentType: 'audio/wav' });
+    },
+  }),
 );
 
 const CORS = [

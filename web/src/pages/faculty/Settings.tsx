@@ -12,6 +12,8 @@ import {
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../lib/auth';
 import { MODEL_LABELS } from '../../lib/models';
+import { VoiceSamples } from './VoiceSamples';
+import { TAG_LABEL } from './voiceTags';
 
 const VOICE_GROUPS: [VoiceGroup, string][] = [
   ['he', 'Patients who use he/him'],
@@ -91,14 +93,21 @@ export function Settings() {
               {LIVE_VOICES.map((v) => (
                 <option key={v} value={v}>
                   {v}
+                  {program.liveVoiceTags?.[v] ? ` (${TAG_LABEL[program.liveVoiceTags[v]!]})` : ''}
                 </option>
               ))}
             </select>
           </label>
         ))}
-        <p className="muted small">
-          OpenAI doesn’t say which voices sound male or female, so try a few in practice.
-        </p>
+        <details>
+          <summary>Hear the voices</summary>
+          <VoiceSamples
+            tags={program.liveVoiceTags ?? {}}
+            onTag={(voice, tag) =>
+              void save({ liveVoiceTags: { ...program.liveVoiceTags, [voice]: tag } })
+            }
+          />
+        </details>
       </fieldset>
       {saved && <p className="ok small">Saved. New conversations use these settings.</p>}
       <p className="muted small">

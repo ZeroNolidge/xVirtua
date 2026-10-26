@@ -818,3 +818,19 @@ p {
     transform: scaleX(0);
   }
 }
+
+/* Faculty: GPT-Live voice samples */
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+.voice-row .voice-name {
+  min-width: 5.5em;
+  font-weight: 600;
+}
+.voice-row label {
+  margin-right: 10px;
+}

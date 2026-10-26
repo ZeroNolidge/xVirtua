@@ -63,6 +63,8 @@ export interface Program {
   liveVoices?: Partial<Record<VoiceGroup, LiveVoice>>;
   /** Unset means steer. */
   liveBrain?: LiveBrain;
+  /** Faculty's own notes on how each GPT-Live voice sounds. */
+  liveVoiceTags?: Partial<Record<LiveVoice, 'male' | 'female' | 'neutral'>>;
 }
 
 /** Custom claims set on the Firebase Auth token by the server. */

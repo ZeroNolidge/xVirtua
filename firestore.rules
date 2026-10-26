@@ -45,7 +45,8 @@ service cloud.firestore {
       allow update: if facultyOf(pid)
         && onlyChanges(['name', 'timezone', 'audioRetentionMonths',
                         'transcriptRetentionMonths', 'scoringWeights', 'patientModel',
-                        'voiceMode', 'liveVoice', 'liveVoices', 'liveBrain'])
+                        'voiceMode', 'liveVoice', 'liveVoices', 'liveBrain',
+                        'liveVoiceTags'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
@@ -66,6 +67,9 @@ service cloud.firestore {
             || request.resource.data.liveVoice in ['marin', 'cinder', 'stone', 'beacon',
                  'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper',
                  'willow', 'gleam'])
+        && (!('liveVoiceTags' in request.resource.data)
+            || (request.resource.data.liveVoiceTags is map
+                && request.resource.data.liveVoiceTags.keys().hasOnly(['marin', 'cinder', 'stone', 'beacon', 'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper', 'willow', 'gleam'])))
         && (!('liveBrain' in request.resource.data)
             || request.resource.data.liveBrain in ['steer', 'claude'])
         && (!('liveVoices' in request.resource.data)
