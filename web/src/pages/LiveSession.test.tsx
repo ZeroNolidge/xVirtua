@@ -42,6 +42,7 @@ const ducked: boolean[] = [];
 let failConnect = false;
 const said: [string | null, string][] = [];
 const muted: boolean[] = [];
+const notes: string[] = [];
 vi.mock('../lib/liveVoice', async (orig) => {
   const m = await orig<typeof import('../lib/liveVoice')>();
   return {
@@ -79,7 +80,8 @@ vi.mock('../lib/liveVoice', async (orig) => {
         said.push([id, text]);
         return true;
       }
-      note() {
+      note(_id: string | null, text: string) {
+        notes.push(text);
         return true;
       }
       async close() {}
@@ -92,7 +94,13 @@ const calls: TurnInput[] = [];
 vi.mock('../lib/session', () => ({
   sessionApi: {
     saveHeard: vi.fn(async () => ({ data: { ok: true } })),
-    saveLiveExchange: vi.fn(async () => ({ data: { residentIdx: 1, patientIdx: 2 } })),
+    saveLiveExchange: vi.fn(async () => ({
+      data: {
+        residentIdx: 1,
+        patientIdx: 2,
+        note: 'If asked about other worries, bring up your license.',
+      },
+    })),
     end: vi.fn(async () => ({ data: {} })),
     startLiveCall: vi.fn(async () => {
       if (failConnect) throw new Error('unavailable');
@@ -408,6 +416,12 @@ describe('GPT-Live conversation', () => {
       patient: 'Okay. Is that bad?',
     });
     expect(calls).toHaveLength(0);
+    // Claude's note steers the next reply, privately.
+    await vi.waitFor(() =>
+      expect(
+        notes.some((n) => n.includes('bring up your license') && n.includes('never say it aloud')),
+      ).toBe(true),
+    );
   });
 
   it('falls back to the standard voice when GPT-Live can’t connect', async () => {

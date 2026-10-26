@@ -24,6 +24,7 @@ import * as scenarios from './content/scenarios.js';
 import * as session from './session/session.js';
 import { ClaudeBrain, type PatientBrain } from './patient/brain.js';
 import { FakeBrain } from './patient/fakeBrain.js';
+import { ClaudeDirector, FakeDirector, type Director } from './patient/director.js';
 import { handleTts } from './voice/tts.js';
 import { pickVoice, synthesize } from './voice/cartesia.js';
 import type { VoiceService } from './voice/streamVoice.js';
@@ -151,9 +152,12 @@ export const patientTurn = callable(
 export const saveHeard = callable({}, (req) => session.saveHeard(db(), callerOf(req), req.data));
 
 /** Saves a GPT-Live exchange the voice model answered on its own. */
-export const saveLiveExchange = callable({}, (req) =>
-  session.saveLiveExchange(db(), callerOf(req), req.data),
-);
+let director: Director | null = null;
+export const saveLiveExchange = callable({ secrets: [ANTHROPIC_API_KEY] }, (req) => {
+  const key = keyOf(ANTHROPIC_API_KEY);
+  director ??= inEmulator && !key ? new FakeDirector() : new ClaudeDirector(key);
+  return session.saveLiveExchange(db(), callerOf(req), req.data, director);
+});
 
 export const endSession = callable({}, (req) =>
   session.endSession(db(), callerOf(req), req.data, async (path) => {

@@ -153,6 +153,14 @@ export function LiveConversation({
     saves.current.push(
       sessionApi
         .saveLiveExchange({ sessionId, resident, patient })
+        .then(({ data }) => {
+          // Claude's private note steers the patient's next reply (never spoken).
+          if (data.note)
+            call.current?.note(
+              null,
+              `Director note for your next reply (private; never say it aloud): ${data.note}`,
+            );
+        })
         .catch((e: unknown) => reportError('live.selfReply', e)),
     );
   }

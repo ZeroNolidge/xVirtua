@@ -21,6 +21,8 @@ import {
   type PatientModel,
   type PatientUtterance,
   type VoiceMode,
+  type LiveBrain,
+  cueAlreadyCovered,
   VOICE_MODES,
 } from '@plainspeak/shared';
 import type { Caller } from '../lib/callable.js';
@@ -30,6 +32,7 @@ import { consumeQuota } from '../lib/quota.js';
 import { SentenceVoicer, type VoiceService } from '../voice/streamVoice.js';
 import type { OnText, PatientBrain } from '../patient/brain.js';
 import { buildPatientSystemPrompt, buildResidentMessage } from '../patient/prompt.js';
+import type { Director } from '../patient/director.js';
 import { loadScenario } from './scenario.js';
 
 const MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const;
@@ -55,6 +58,9 @@ export interface SessionDoc {
   audioPath?: string | null;
   inputMode?: 'voice' | 'typed' | 'mixed';
   voiceMode?: VoiceMode;
+  liveBrain?: LiveBrain;
+  /** Steer mode: the cue the last director note asked for. */
+  directedCueId?: string | null;
 }
 
 function requireMember(caller: Caller | null) {
@@ -118,6 +124,7 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
   const patientModel = me.role === 'faculty' && model ? model : programModel;
   const programMode = program.get('voiceMode') === 'live' ? 'live' : 'standard';
   const voiceMode: VoiceMode = askedMode ?? programMode;
+  const liveBrain: LiveBrain = program.get('liveBrain') === 'claude' ? 'claude' : 'steer';
 
   const ref = db.collection('sessions').doc();
   const opening: PatientUtterance = {
@@ -139,6 +146,7 @@ export async function startSession(db: Firestore, caller: Caller | null, data: u
     status: 'live',
     patientModel,
     voiceMode,
+    ...(voiceMode === 'live' ? { liveBrain } : {}),
     cueState: initialCueState(),
     turnCount: 1,
     pending: false,
@@ -563,12 +571,22 @@ const exchangeInput = z.object({
  * the line), so the conversation is still complete for review and scoring.
  * The patient turn is marked `selfReply` (no scripted cue, no Claude).
  */
-export async function saveLiveExchange(db: Firestore, caller: Caller | null, data: unknown) {
+export async function saveLiveExchange(
+  db: Firestore,
+  caller: Caller | null,
+  data: unknown,
+  director: Director | null = null,
+) {
   const me = requireMember(caller);
   const input = parse(exchangeInput, data);
   const ref = db.doc(`sessions/${input.sessionId}`);
   await consumeQuota(db, me.uid, 'patientTurns');
-  return db.runTransaction(async (tx) => {
+  const first = (await ref.get()).data() as SessionDoc | undefined;
+  const [sc, prior] = await Promise.all([
+    first ? loadScenario(db, first.scenarioId, first.scenarioVersion) : null,
+    ref.collection('turns').orderBy('idx').get(),
+  ]);
+  const saved = await db.runTransaction(async (tx) => {
     const s = (await tx.get(ref)).data() as SessionDoc | undefined;
     if (!s || s.uid !== me.uid) throw new HttpsError('not-found', 'Session not found.');
     if (s.status !== 'live')
@@ -576,7 +594,35 @@ export async function saveLiveExchange(db: Firestore, caller: Caller | null, dat
     if (s.voiceMode !== 'live')
       throw new HttpsError('failed-precondition', 'Live voice is off for this conversation.');
     if (s.pending) throw new HttpsError('aborted', 'The patient is still answering.');
-    const facts = decideCue([], s.cueState, input.resident, matcher).turnFacts;
+    // Steer mode: did the patient just perform the cue the last note asked for?
+    const directed = s.directedCueId
+      ? sc?.script.cueScript.find((c) => c.id === s.directedCueId)
+      : undefined;
+    const squash = (t: string) =>
+      t
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    const performed =
+      directed &&
+      input.patient &&
+      (cueAlreadyCovered(directed, [input.patient]) ||
+        squash(input.patient).includes(squash(directed.performance.say)))
+        ? directed
+        : null;
+    const patientSaid = [
+      ...prior.docs.filter((d) => d.get('speaker') === 'patient').map((d) => String(d.get('text'))),
+      input.patient,
+    ];
+    // Which cue (if any) should come next, given what the resident just said.
+    const decision = decideCue(
+      sc && s.liveBrain !== 'claude' ? sc.script.cueScript : [],
+      s.cueState,
+      input.resident,
+      matcher,
+      patientSaid,
+    );
+    const facts = decision.turnFacts;
     const rIdx = s.turnCount;
     const pIdx = rIdx + 1;
     tx.set(ref.collection('turns').doc(String(rIdx)), {
@@ -604,16 +650,38 @@ export async function saveLiveExchange(db: Firestore, caller: Caller | null, dat
       raw: JSON.stringify(utterance),
       selfReply: true,
       liveSpokenText: said,
+      ...(performed ? { cueId: performed.id } : {}),
       cueStateBefore: s.cueState,
       createdAt: FieldValue.serverTimestamp(),
     });
     tx.update(ref, {
       turnCount: pIdx + 1,
+      cueState: decision.next,
+      directedCueId: decision.cue?.id ?? null,
       lastActivityAt: FieldValue.serverTimestamp(),
       liveSelfReplies: FieldValue.increment(1),
     });
-    return { residentIdx: rIdx, patientIdx: pIdx };
+    return { residentIdx: rIdx, patientIdx: pIdx, cue: decision.cue };
   });
+  // Steer mode: a private note for the patient's next reply (never blocks the call).
+  let note: string | null = null;
+  if (director && sc && first?.liveBrain !== 'claude') {
+    const transcript = [
+      ...prior.docs
+        .map((d) => d.data())
+        .filter((t) => t.idx > 0 || t.speaker === 'patient')
+        .map((t) => ({ speaker: t.speaker as 'resident' | 'patient', text: String(t.text ?? '') })),
+      { speaker: 'resident' as const, text: input.resident },
+      { speaker: 'patient' as const, text: input.patient },
+    ];
+    note = await director
+      .note({ briefing: sc.briefing, script: sc.script, transcript, cue: saved.cue })
+      .catch((e: unknown) => {
+        console.warn('director note failed', e instanceof Error ? e.message : e);
+        return null;
+      });
+  }
+  return { residentIdx: saved.residentIdx, patientIdx: saved.patientIdx, note };
 }
 
 // ---------- what was actually said ----------

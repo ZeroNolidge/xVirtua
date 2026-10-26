@@ -8,6 +8,7 @@ import { endSession, patientTurn, saveHeard, saveLiveExchange, startSession } fr
 import { FakeBrain } from '../patient/fakeBrain.js';
 import type { Caller } from '../lib/callable.js';
 import { startLiveCall } from '../voice/live.js';
+import { FakeDirector } from '../patient/director.js';
 
 const PROJECT_ID = 'demo-plainspeak';
 let app: App;
@@ -403,7 +404,9 @@ describe('GPT-Live test mode', () => {
   });
 
   it('connects the call with client delegation, the program voice, and no hidden script', async () => {
-    await db.doc('programs/irmc').set({ voiceMode: 'live', liveVoice: 'cinder' }, { merge: true });
+    await db
+      .doc('programs/irmc')
+      .set({ voiceMode: 'live', liveVoice: 'cinder', liveBrain: 'claude' }, { merge: true });
     const { sessionId, voiceMode } = await startSession(db, resident, { scenarioId: htn.id });
     expect(voiceMode).toBe('live');
     const calls: { url: string; body: Record<string, unknown> }[] = [];
@@ -602,7 +605,7 @@ describe('GPT-Live voice and self-replies', () => {
       resident: 'Your blood pressure is a little high.',
       patient: 'Oh, okay. Is that bad?',
     });
-    expect(r).toEqual({ residentIdx: 1, patientIdx: 2 });
+    expect(r).toEqual({ residentIdx: 1, patientIdx: 2, note: null });
     const [t1, t2, s] = await Promise.all([
       db.doc(`sessions/${sessionId}/turns/1`).get(),
       db.doc(`sessions/${sessionId}/turns/2`).get(),
@@ -617,5 +620,58 @@ describe('GPT-Live voice and self-replies', () => {
     await expect(
       saveLiveExchange(db, otherResident, { sessionId, resident: 'x', patient: 'y' }),
     ).rejects.toMatchObject({ code: 'not-found' });
+  });
+});
+
+describe('GPT-Live steer mode', () => {
+  const okFetch = (bodies: Record<string, unknown>[]) =>
+    (async (_u: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response(JSON.stringify({ transport: { sdp: 'v=0 ok' } }));
+    }) as unknown as typeof fetch;
+
+  it('gives GPT-Live the whole character, hidden concern included', async () => {
+    await db.doc('programs/irmc').set({ voiceMode: 'live' }, { merge: true });
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    expect((await db.doc(`sessions/${sessionId}`).get()).get('liveBrain')).toBe('steer');
+    const bodies: Record<string, unknown>[] = [];
+    await startLiveCall(db, resident, { sessionId, sdp: 'v=0 offer....' }, 'sk-x', okFetch(bodies));
+    const instructions = String((bodies[0]!.session as Record<string, unknown>).instructions);
+    expect(instructions).toContain(htn.script.hiddenConcern);
+    expect(instructions).toContain('Director notes');
+  });
+
+  it('after each exchange, picks the next cue and returns Claude’s private note; marks a cue performed', async () => {
+    await db.doc('programs/irmc').set({ voiceMode: 'live' }, { merge: true });
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const director = new FakeDirector();
+    // Enough turns for a turn-count cue to fire.
+    let fired: { note: string | null } | null = null;
+    for (let i = 0; i < 8 && !fired?.note; i++) {
+      fired = await saveLiveExchange(
+        db,
+        resident,
+        { sessionId, resident: `Turn ${i}: we will keep an eye on it.`, patient: 'Okay.' },
+        director,
+      );
+    }
+    expect(fired?.note).toMatch(/^Next, in your own words: /);
+    const cueId = (await db.doc(`sessions/${sessionId}`).get()).get('directedCueId') as string;
+    const cue = htn.script.cueScript.find((c) => c.id === cueId)!;
+    // The patient says it in the next reply: that turn is marked as the cue.
+    const r = await saveLiveExchange(
+      db,
+      resident,
+      { sessionId, resident: 'Go on.', patient: cue.performance.say },
+      director,
+    );
+    expect((await db.doc(`sessions/${sessionId}/turns/${r.patientIdx}`).get()).get('cueId')).toBe(
+      cueId,
+    );
+    // Claude saw the conversation so far.
+    expect(director.calls.at(-1)!.transcript.at(-1)).toEqual({
+      speaker: 'patient',
+      text: cue.performance.say,
+    });
   });
 });

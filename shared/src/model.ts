@@ -31,6 +31,14 @@ export const LIVE_VOICES = [
   'gleam',
 ] as const;
 export type LiveVoice = (typeof LIVE_VOICES)[number];
+/**
+ * Who writes the patient's words in GPT-Live mode. steer: GPT-Live answers at
+ * once, in character, and Claude steers it with private notes between turns.
+ * claude: GPT-Live asks Claude for every line (slower, follows the script exactly).
+ */
+export const LIVE_BRAINS = ['steer', 'claude'] as const;
+export type LiveBrain = (typeof LIVE_BRAINS)[number];
+
 /** Which voice set a patient uses, from their pronouns. */
 export type VoiceGroup = 'he' | 'she' | 'they';
 export function voiceGroupOf(pronouns: string): VoiceGroup {
@@ -53,6 +61,8 @@ export interface Program {
   liveVoice?: LiveVoice;
   /** GPT-Live voice by the patient's pronouns (falls back to liveVoice). */
   liveVoices?: Partial<Record<VoiceGroup, LiveVoice>>;
+  /** Unset means steer. */
+  liveBrain?: LiveBrain;
 }
 
 /** Custom claims set on the Firebase Auth token by the server. */

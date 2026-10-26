@@ -65,7 +65,7 @@ export const sessionApi = {
   /** Saves an exchange GPT-Live answered on its own. */
   saveLiveExchange: httpsCallable<
     { sessionId: string; resident: string; patient: string },
-    { residentIdx: number; patientIdx: number }
+    { residentIdx: number; patientIdx: number; note: string | null }
   >(functions, 'saveLiveExchange'),
   /** GPT-Live test mode: trades the browser's WebRTC offer for OpenAI's answer. */
   startLiveCall: httpsCallable<{ sessionId: string; sdp: string }, { sdp: string; voice: string }>(

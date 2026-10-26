@@ -11,6 +11,7 @@ import {
 import { parse, type Caller } from '../lib/callable.js';
 import { consumeQuota } from '../lib/quota.js';
 import { loadScenario } from '../session/scenario.js';
+import { buildLivePersona } from '../patient/prompt.js';
 
 /**
  * GPT-Live test mode. GPT-Live is OpenAI's full-duplex voice model: it
@@ -144,7 +145,11 @@ export async function startLiveCall(
   let res: Response | null = null;
   let raw = '';
   let shape = '';
-  for (const r of liveRequests(buildLiveInstructions(sc.briefing, sc.script), voice, sdp)) {
+  const instructions =
+    s.liveBrain === 'claude'
+      ? buildLiveInstructions(sc.briefing, sc.script)
+      : buildLivePersona(sc.briefing, sc.script);
+  for (const r of liveRequests(instructions, voice, sdp)) {
     res = await doFetch(r.url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
