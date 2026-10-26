@@ -444,7 +444,12 @@ export function LiveConversation({
         return data.sdp;
       });
     } catch (e) {
-      reportError('live.start', e);
+      // Include OpenAI's reason (status and message) so the cause shows up in diagnostics.
+      const details = (e as { details?: unknown }).details;
+      reportError(
+        'live.start',
+        details ? new Error(`${(e as Error).message} ${JSON.stringify(details)}`) : e,
+      );
       fallBack('GPT-Live isn’t available right now, so this uses the standard voice.');
     }
   }

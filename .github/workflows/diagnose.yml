@@ -43,8 +43,7 @@ jobs:
         continue-on-error: true
         run: |
           gcloud logging read 'resource.type="cloud_run_revision" AND severity>=ERROR' \
-            --project "$PROJECT_ID" --freshness=1d --limit=6 \
-            --format='value(timestamp,resource.labels.service_name,textPayload,jsonPayload)' || true
+            --project "$PROJECT_ID" --freshness=1d --limit=3 --format=json || true
       - name: Recent requests (last 6h)
         continue-on-error: true
         run: |
