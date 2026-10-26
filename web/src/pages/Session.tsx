@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, getDoc, getDocs, orderBy, query } from 'firebase/firestore';
-import { ref, uploadBytes } from 'firebase/storage';
 import {
   endOfTurnDelayMs,
   isCutIn,
@@ -10,8 +9,7 @@ import {
   type PatientChunk,
   type VoiceMode,
 } from '@plainspeak/shared';
-import { db, storage } from '../lib/firebase';
-import { useAuth } from '../lib/auth';
+import { db } from '../lib/firebase';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
 import { safeStorage } from '../lib/storage';
@@ -32,6 +30,8 @@ import { Loading } from './StatusScreens';
 import { LiveConversation } from './LiveSession';
 import { ECHO_WINDOW_MS } from '../lib/liveReply';
 import { MicMeter } from '../lib/micMeter';
+import { useRecordingUpload } from '../lib/useRecordingUpload';
+import { UploadRetry } from '../components/UploadRetry';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
 export interface Bubble {
@@ -240,8 +240,7 @@ function Conversation({
   resumeFrom,
   initialNotice,
 }: ConversationProps) {
-  const nav = useNavigate();
-  const { claims, user } = useAuth();
+  const upload = useRecordingUpload(sessionId);
   const first = persona.name.split(' ')[0];
 
   const [phase, setPhaseState] = useState<Phase>('ready');
@@ -725,21 +724,15 @@ function Conversation({
         sessionId,
         appWaitSec: Math.round(timing.current.totalAppWaitMs / 1000),
       });
-      const blob = await recorder.current?.stop();
-      mic.current?.getTracks().forEach((t) => t.stop());
-      micMeter.current?.stop();
-      if (blob && claims && user) {
-        setSaving('Saving your recording…');
-        const ext = recorder.current!.ext;
-        const path = `audio/${claims.programId}/${user.uid}/${sessionId}/recording.${ext}`;
-        await uploadBytes(ref(storage, path), blob, { contentType: blob.type || 'audio/webm' });
-        await sessionApi.end({ sessionId, audioExt: ext });
-      }
     } catch (e) {
-      // The transcript is already saved; a failed audio upload shouldn't block feedback.
-      console.warn('end/upload failed', e);
+      // The transcript is already saved; scoring ends the session if this didn't.
+      console.warn('end failed', e);
     }
-    nav(`/session/${sessionId}/done`, { replace: true });
+    const blob = await recorder.current?.stop().catch(() => null);
+    mic.current?.getTracks().forEach((t) => t.stop());
+    micMeter.current?.stop();
+    setSaving('Saving your recording…');
+    await upload.save(blob, recorder.current?.ext ?? 'webm');
   }
 
   // Release the mic, voice and speech connection when leaving the screen.
@@ -836,6 +829,10 @@ function Conversation({
         />
       )}
       <div ref={bottom} />
+
+      {upload.failed && (
+        <UploadRetry busy={upload.busy} onRetry={upload.retry} onSkip={upload.skip} />
+      )}
 
       {phase !== 'ready' && phase !== 'ending' && (
         <div className="session-controls">

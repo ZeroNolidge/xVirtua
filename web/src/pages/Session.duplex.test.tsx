@@ -19,7 +19,11 @@ vi.mock('firebase/firestore', () => ({
   orderBy: vi.fn(),
   query: vi.fn(),
 }));
-vi.mock('firebase/storage', () => ({ ref: vi.fn(), uploadBytes: vi.fn() }));
+vi.mock('firebase/storage', () => ({
+  ref: vi.fn(),
+  uploadBytes: vi.fn(),
+  uploadBytesResumable: vi.fn(),
+}));
 vi.mock('../lib/auth', () => ({
   useAuth: () => ({ claims: { role: 'resident', programId: 'irmc' }, user: { uid: 'u1' } }),
 }));

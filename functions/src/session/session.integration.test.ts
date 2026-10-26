@@ -417,13 +417,16 @@ describe('GPT-Live test mode', () => {
     expect(r.sdp).toBe('v=0 answer');
     expect(calls[0]!.url).toBe('https://api.openai.com/v1/live/sessions');
     expect(calls[0]!.body).toMatchObject({
-      model: 'gpt-live-1',
-      delegation: { type: 'client' },
-      audio: { output: { voice: 'cinder' } },
+      session: {
+        model: 'gpt-live-1',
+        delegation: { type: 'client' },
+        audio: { output: { voice: 'cinder' } },
+      },
       transport: { type: 'webrtc', sdp: 'v=0 offer....' },
     });
     // GPT-Live only voices the patient: the hidden concern stays with Claude.
-    expect(String(calls[0]!.body.instructions)).not.toContain(htn.script.hiddenConcern);
+    const session = calls[0]!.body.session as Record<string, unknown>;
+    expect(String(session.instructions)).not.toContain(htn.script.hiddenConcern);
     expect((await db.doc(`sessions/${sessionId}`).get()).get('liveCalls')[0].id).toBe('live_1');
     // Someone else's session is not theirs to call.
     await expect(
@@ -521,5 +524,47 @@ describe('saving what was actually said', () => {
     await expect(saveHeard(db, resident, { sessionId, idx: 2, spoken: 'x' })).rejects.toMatchObject(
       { code: 'failed-precondition' },
     );
+  });
+});
+
+describe('GPT-Live request layout', () => {
+  it('tries the next layout when OpenAI rejects one, and records the one that worked', async () => {
+    await db.doc('programs/irmc').set({ voiceMode: 'live' }, { merge: true });
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const urls: string[] = [];
+    const doFetch = (async (url: string) => {
+      urls.push(url);
+      if (urls.length === 1)
+        return new Response('{"error":{"message":"json: unknown field \\"session\\""}}', {
+          status: 400,
+        });
+      return new Response(JSON.stringify({ id: 'live_2', transport: { sdp: 'v=0 ok' } }));
+    }) as unknown as typeof fetch;
+    const r = await startLiveCall(
+      db,
+      resident,
+      { sessionId, sdp: 'v=0 offer....' },
+      'sk-x',
+      doFetch,
+    );
+    expect(r.sdp).toBe('v=0 ok');
+    expect(urls[1]).toContain('?model=gpt-live-1');
+    expect((await db.doc(`sessions/${sessionId}`).get()).get('liveCalls')[0].shape).toBe(
+      'flat+query',
+    );
+  });
+
+  it('stops at a real error (not a layout problem) and reports every try', async () => {
+    await db.doc('programs/irmc').set({ voiceMode: 'live' }, { merge: true });
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    let n = 0;
+    const doFetch = (async () => {
+      n++;
+      return new Response('{"error":{"message":"model not available"}}', { status: 403 });
+    }) as unknown as typeof fetch;
+    await expect(
+      startLiveCall(db, resident, { sessionId, sdp: 'v=0 offer....' }, 'sk-x', doFetch),
+    ).rejects.toMatchObject({ code: 'unavailable', details: { tries: [{ status: 403 }] } });
+    expect(n).toBe(1);
   });
 });

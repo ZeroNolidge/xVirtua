@@ -62,15 +62,35 @@ export function liveVoiceOf(v: unknown): LiveVoice {
   return (LIVE_VOICES as readonly string[]).includes(String(v)) ? (v as LiveVoice) : 'marin';
 }
 
-export function liveSessionBody(instructions: string, voice: LiveVoice, sdp: string) {
-  return {
-    model: LIVE_MODEL,
-    instructions,
-    audio: { output: { voice } },
-    delegation: { type: 'client' },
-    transport: { type: 'webrtc', sdp },
-  };
+/**
+ * The request layouts we try, in order. OpenAI rejected a top-level "model"
+ * ("unknown field"), so the session settings go under "session" first (the
+ * same shape as GPT-Live's session.start event), with the model moved to the
+ * URL in later tries. The first layout OpenAI accepts is used and recorded.
+ */
+export function liveRequests(instructions: string, voice: LiveVoice, sdp: string) {
+  const settings = { instructions, audio: { output: { voice } }, delegation: { type: 'client' } };
+  const transport = { type: 'webrtc', sdp };
+  const withModel = `${LIVE_SESSIONS_URL}?model=${encodeURIComponent(LIVE_MODEL)}`;
+  return [
+    {
+      shape: 'session',
+      url: LIVE_SESSIONS_URL,
+      body: { session: { model: LIVE_MODEL, ...settings }, transport },
+    },
+    { shape: 'flat+query', url: withModel, body: { ...settings, transport } },
+    { shape: 'session+query', url: withModel, body: { session: settings, transport } },
+    {
+      shape: 'session+sdp',
+      url: LIVE_SESSIONS_URL,
+      body: { session: { model: LIVE_MODEL, ...settings }, sdp },
+    },
+  ];
 }
+
+/** OpenAI didn't accept this request's layout (worth trying the next one). */
+const layoutRejected = (status: number, raw: string) =>
+  status === 400 && /unknown field|invalid_json|unrecognized|missing required/i.test(raw);
 
 /** The SDP answer, wherever this API version puts it. */
 export function answerSdp(body: unknown, raw: string): string | null {
@@ -115,21 +135,29 @@ export async function startLiveCall(
   const program = await db.doc(`programs/${s.programId}`).get();
   const voice = liveVoiceOf(program.get('liveVoice'));
 
-  const res = await doFetch(LIVE_SESSIONS_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(
-      liveSessionBody(buildLiveInstructions(sc.briefing, sc.script), voice, sdp),
-    ),
-  }).catch((e: unknown) => {
-    console.error('GPT-Live unreachable', e);
-    throw new HttpsError('unavailable', 'Live voice unreachable.');
-  });
-  const raw = await res.text();
-  if (!res.ok) {
-    const detail = raw.slice(0, 500);
-    console.error('GPT-Live session failed', res.status, detail);
-    throw new HttpsError('unavailable', 'Live voice unavailable.', { status: res.status, detail });
+  const tries: { shape: string; status: number; detail: string }[] = [];
+  let res: Response | null = null;
+  let raw = '';
+  let shape = '';
+  for (const r of liveRequests(buildLiveInstructions(sc.briefing, sc.script), voice, sdp)) {
+    res = await doFetch(r.url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(r.body),
+    }).catch((e: unknown) => {
+      console.error('GPT-Live unreachable', e);
+      throw new HttpsError('unavailable', 'Live voice unreachable.');
+    });
+    raw = await res.text();
+    shape = r.shape;
+    if (res.ok || !layoutRejected(res.status, raw)) break;
+    tries.push({ shape, status: res.status, detail: raw.slice(0, 300) });
+  }
+  if (!res || !res.ok) {
+    const last = { shape, status: res?.status ?? 0, detail: raw.slice(0, 300) };
+    if (!tries.some((t) => t.shape === shape)) tries.push(last);
+    console.error('GPT-Live session failed', JSON.stringify(tries));
+    throw new HttpsError('unavailable', 'Live voice unavailable.', { tries });
   }
   let body: unknown = null;
   try {
@@ -146,7 +174,7 @@ export async function startLiveCall(
   const liveId =
     typeof b.id === 'string' ? b.id : typeof b.session?.id === 'string' ? b.session.id : null;
   await ref.update({
-    liveCalls: FieldValue.arrayUnion({ id: liveId, at: Date.now(), voice }),
+    liveCalls: FieldValue.arrayUnion({ id: liveId, at: Date.now(), voice, shape }),
   });
   return { sdp: answer, voice };
 }

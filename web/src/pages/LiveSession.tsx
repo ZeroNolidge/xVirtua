@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ref, uploadBytes } from 'firebase/storage';
 import { isCutIn } from '@plainspeak/shared';
-import { storage } from '../lib/firebase';
-import { useAuth } from '../lib/auth';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
 import { sessionApi, streamTurn, type TurnInput, type Utterance } from '../lib/session';
@@ -11,6 +7,8 @@ import { LiveVoiceCall, toneNote } from '../lib/liveVoice';
 import { ECHO_WINDOW_MS, isEcho, LiveReply, MIC_EVIDENCE_MS } from '../lib/liveReply';
 import { SessionRecorder } from '../lib/recorder';
 import { PlainWordSearch } from '../components/PlainWordSearch';
+import { UploadRetry } from '../components/UploadRetry';
+import { useRecordingUpload } from '../lib/useRecordingUpload';
 import { Transcript, type Bubble } from './Session';
 
 type Persona = { name: string; age: number; pronouns: string };
@@ -65,8 +63,7 @@ export function LiveConversation({
   onFallback,
 }: LiveConversationProps) {
   const first = persona.name.split(' ')[0];
-  const nav = useNavigate();
-  const { claims, user } = useAuth();
+  const upload = useRecordingUpload(sessionId);
   const [phase, setPhase] = useState<Phase>('ready');
   const [bubbles, setBubblesState] = useState<Bubble[]>(resumeFrom ?? []);
   const bubblesRef = useRef<Bubble[]>(resumeFrom ?? []);
@@ -472,18 +469,12 @@ export function LiveConversation({
     release();
     try {
       await sessionApi.end({ sessionId, appWaitSec: Math.round(totalWaitMs.current / 1000) });
-      const blob = await recorder.current?.stop();
-      if (blob && claims && user) {
-        setSaving('Saving your recording…');
-        const ext = recorder.current!.ext;
-        const path = `audio/${claims.programId}/${user.uid}/${sessionId}/recording.${ext}`;
-        await uploadBytes(ref(storage, path), blob, { contentType: blob.type || 'audio/webm' });
-        await sessionApi.end({ sessionId, audioExt: ext });
-      }
     } catch (e) {
-      console.warn('end/upload failed', e);
+      console.warn('end failed', e);
     }
-    nav(`/session/${sessionId}/done`, { replace: true });
+    const blob = await recorder.current?.stop().catch(() => null);
+    setSaving('Saving your recording…');
+    await upload.save(blob, recorder.current?.ext ?? 'webm');
   }
 
   useEffect(
@@ -554,6 +545,10 @@ export function LiveConversation({
         />
       )}
       <div ref={bottom} />
+
+      {upload.failed && (
+        <UploadRetry busy={upload.busy} onRetry={upload.retry} onSkip={upload.skip} />
+      )}
 
       {phase !== 'ready' && phase !== 'ending' && (
         <div className="session-controls">
