@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./firebase', () => ({ storage: {} }));
-const end = vi.fn(async () => ({ data: {} }));
+const end = vi.fn(async (_x: unknown) => ({ data: {} }));
 vi.mock('./session', () => ({ sessionApi: { end: (x: unknown) => end(x) } }));
 let behave: 'ok' | 'stall' = 'ok';
 const cancel = vi.fn();
