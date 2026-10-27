@@ -1,5 +1,13 @@
 import { reportError } from './errorReport';
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { onIdTokenChanged, signOut as fbSignOut, type User } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import type { UserClaims, UserDoc } from '@plainspeak/shared';

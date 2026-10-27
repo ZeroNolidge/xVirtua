@@ -21,5 +21,7 @@ export function reportError(kind: string, err: unknown, extra: Record<string, un
 
 export function installGlobalErrorReporting() {
   window.addEventListener('error', (ev) => reportError('window.error', ev.error ?? ev.message));
-  window.addEventListener('unhandledrejection', (ev) => reportError('unhandledrejection', ev.reason));
+  window.addEventListener('unhandledrejection', (ev) =>
+    reportError('unhandledrejection', ev.reason),
+  );
 }

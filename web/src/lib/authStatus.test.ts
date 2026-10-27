@@ -11,7 +11,13 @@ const doc = (consent: UserDoc['consent']): UserDoc => ({
   consent,
   createdAt: '',
 });
-const base: AuthInputs = { authReady: true, signedIn: true, notInvited: false, claims, userDoc: doc(null) };
+const base: AuthInputs = {
+  authReady: true,
+  signedIn: true,
+  notInvited: false,
+  claims,
+  userDoc: doc(null),
+};
 
 describe('resolveAuthStatus', () => {
   it('walks the sign-in flow in order', () => {
@@ -27,7 +33,10 @@ describe('resolveAuthStatus', () => {
 
   it('re-asks for consent when the version is bumped', () => {
     expect(
-      resolveAuthStatus({ ...base, userDoc: doc({ version: CONSENT_VERSION - 1, acceptedAt: 'x' }) }),
+      resolveAuthStatus({
+        ...base,
+        userDoc: doc({ version: CONSENT_VERSION - 1, acceptedAt: 'x' }),
+      }),
     ).toBe('needsConsent');
   });
 
@@ -38,7 +47,10 @@ describe('resolveAuthStatus', () => {
 
 describe('claimsFrom', () => {
   it('accepts only known roles with a program', () => {
-    expect(claimsFrom({ role: 'faculty', programId: 'irmc' })).toEqual({ role: 'faculty', programId: 'irmc' });
+    expect(claimsFrom({ role: 'faculty', programId: 'irmc' })).toEqual({
+      role: 'faculty',
+      programId: 'irmc',
+    });
     expect(claimsFrom({ role: 'admin', programId: 'irmc' })).toBeNull();
     expect(claimsFrom({ role: 'resident' })).toBeNull();
   });

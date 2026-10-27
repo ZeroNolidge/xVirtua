@@ -10,8 +10,13 @@ vi.mock('firebase/firestore', () => ({
   query: vi.fn(),
   where: vi.fn(),
   getDocs: vi.fn(() => new Promise(() => {})),
+  doc: vi.fn(),
+  getDoc: vi.fn(async () => ({ data: () => ({ liveVoiceTags: { stone: 'male' } }) })),
 }));
-vi.mock('../lib/api', () => ({ api: { setScenarioStatus: vi.fn() }, friendlyError: () => 'x' }));
+vi.mock('../lib/api', () => ({
+  api: { setScenarioStatus: vi.fn(), setScenarioVoice: vi.fn(async () => ({ data: {} })) },
+  friendlyError: () => 'x',
+}));
 vi.mock('../lib/session', () => ({ sessionApi: {}, prewarmConversation: vi.fn() }));
 vi.mock('../lib/auth', () => ({
   useAuth: () => ({
@@ -82,5 +87,17 @@ describe('Briefing', () => {
     expect(screen.getByText(seed.script.hiddenConcern)).toBeInTheDocument();
     expect(screen.getByText(seed.script.cueScript[0]!.cue)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /publish to residents/i })).toBeInTheDocument();
+  });
+
+  it('lets faculty pick this patient’s GPT-Live voice, showing their voice tags', async () => {
+    role.current = 'faculty';
+    renderBriefing();
+    const pick = screen.getByLabelText(/patient voice \(gpt-live\)/i);
+    expect(await screen.findByRole('option', { name: 'stone (Male)' })).toBeInTheDocument();
+    fireEvent.change(pick, { target: { value: 'stone' } });
+    const { api } = await import('../lib/api');
+    await vi.waitFor(() =>
+      expect(api.setScenarioVoice).toHaveBeenCalledWith({ scenarioId: seed.id, voice: 'stone' }),
+    );
   });
 });

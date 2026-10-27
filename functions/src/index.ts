@@ -112,6 +112,9 @@ export const acceptConsent = callable({}, (req) =>
 export const setScenarioStatus = callable({}, (req) =>
   scenarios.setScenarioStatus(db(), callerOf(req), req.data),
 );
+export const setScenarioVoice = callable({}, (req) =>
+  scenarios.setScenarioVoice(db(), callerOf(req), req.data),
+);
 
 // ----- live conversation -----
 export const startSession = callable(

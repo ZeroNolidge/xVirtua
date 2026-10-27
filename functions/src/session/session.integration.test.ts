@@ -595,6 +595,16 @@ describe('GPT-Live voice and self-replies', () => {
     );
     expect(htn.briefing.persona.pronouns).toMatch(/he/);
     expect(r.voice).toBe('stone');
+    // The patient's own voice wins over the pronoun default.
+    await db.doc(`scenarios/${htn.id}`).update({ liveVoice: 'cinder' });
+    const r2 = await startLiveCall(
+      db,
+      resident,
+      { sessionId, sdp: 'v=0 offer....' },
+      'sk-x',
+      doFetch,
+    );
+    expect(r2.voice).toBe('cinder');
   });
 
   it('saves an exchange GPT-Live answered on its own, for scoring', async () => {

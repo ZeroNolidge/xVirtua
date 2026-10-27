@@ -148,6 +148,8 @@ export interface ScenarioDoc {
   patientAge: number;
   reasonForVisit: string;
   tags: string[];
+  /** GPT-Live voice for this patient, chosen by faculty (else the pronoun default). */
+  liveVoice?: LiveVoice | null;
 }
 
 export interface ScenarioSeed {

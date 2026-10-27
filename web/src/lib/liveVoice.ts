@@ -83,18 +83,19 @@ export class LiveVoiceCall {
     // The mic's own level tells us the resident started talking right away,
     // well before GPT-Live's transcript of it arrives. Echo cancellation keeps
     // the patient's voice out of it.
-    if (this.track) this.watchLevel(new MediaStream([this.track]), 18, (loud) => {
-      const now = performance.now();
-      if (loud) {
-        this.lastMicLoudAt = now;
-        this.micLoudSince ??= now;
-        this.micQuietAt = 0;
-      } else if (this.micLoudSince !== null) {
-        // Allow short dips between syllables.
-        this.micQuietAt ||= now;
-        if (now - this.micQuietAt > 150) this.micLoudSince = null;
-      }
-    });
+    if (this.track)
+      this.watchLevel(new MediaStream([this.track]), 18, (loud) => {
+        const now = performance.now();
+        if (loud) {
+          this.lastMicLoudAt = now;
+          this.micLoudSince ??= now;
+          this.micQuietAt = 0;
+        } else if (this.micLoudSince !== null) {
+          // Allow short dips between syllables.
+          this.micQuietAt ||= now;
+          if (now - this.micQuietAt > 150) this.micLoudSince = null;
+        }
+      });
     let remoteWatched = false;
     pc.ontrack = (e) => {
       const stream = e.streams[0] ?? new MediaStream([e.track]);
@@ -195,7 +196,11 @@ export class LiveVoiceCall {
    */
   truncate(delegationId: string | null, audioEndMs: number) {
     if (!TRUNCATE_EVENT) return false;
-    return this.send({ type: TRUNCATE_EVENT, delegation_id: delegationId, audio_end_ms: audioEndMs });
+    return this.send({
+      type: TRUNCATE_EVENT,
+      delegation_id: delegationId,
+      audio_end_ms: audioEndMs,
+    });
   }
 
   /** Silent context for GPT-Live (not spoken). */
@@ -267,4 +272,3 @@ export function toneNote(d: Delivery | undefined): string {
   ].filter(Boolean);
   return parts.length ? `[${parts.join(', ')}] ` : '';
 }
-

@@ -39,7 +39,10 @@ export interface ScenarioDetail {
 }
 
 export function useScenario(id: string | undefined, isFaculty: boolean) {
-  const [state, setState] = useState<{ detail: ScenarioDetail | null; status: 'loading' | 'ok' | 'missing' }>({
+  const [state, setState] = useState<{
+    detail: ScenarioDetail | null;
+    status: 'loading' | 'ok' | 'missing';
+  }>({
     detail: null,
     status: 'loading',
   });

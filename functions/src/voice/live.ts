@@ -137,8 +137,11 @@ export async function startLiveCall(
   const program = await db.doc(`programs/${s.programId}`).get();
   // The voice matches the patient: one per pronoun group, chosen by faculty.
   const byGroup = (program.get('liveVoices') ?? {}) as Record<string, unknown>;
+  // This patient's own voice first, then the default for their pronouns.
   const voice = liveVoiceOf(
-    byGroup[voiceGroupOf(sc.briefing.persona.pronouns)] ?? program.get('liveVoice'),
+    sc.doc.liveVoice ??
+      byGroup[voiceGroupOf(sc.briefing.persona.pronouns)] ??
+      program.get('liveVoice'),
   );
 
   const instructions =

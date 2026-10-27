@@ -52,7 +52,13 @@ export class OpenAIRealtimeStt {
   }
 
   private handle(raw: string) {
-    let ev: { type?: string; item_id?: string; delta?: string; transcript?: string; error?: { message?: string } };
+    let ev: {
+      type?: string;
+      item_id?: string;
+      delta?: string;
+      transcript?: string;
+      error?: { message?: string };
+    };
     try {
       ev = JSON.parse(raw);
     } catch {

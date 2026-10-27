@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { setScenarioStatus } from './scenarios.js';
+import { setScenarioStatus, setScenarioVoice } from './scenarios.js';
 import type { Caller } from '../lib/callable.js';
 
 const PROJECT_ID = 'demo-plainspeak';
@@ -52,5 +52,23 @@ describe('setScenarioStatus', () => {
       setScenarioStatus(db, faculty, { scenarioId: '../x', status: 'active' }),
     ).rejects.toMatchObject({ code: 'invalid-argument' });
     expect((await db.doc('scenarios/htn').get()).get('status')).toBe('draft');
+  });
+});
+
+describe('setScenarioVoice', () => {
+  it('lets the program’s faculty pick (or clear) the patient’s GPT-Live voice', async () => {
+    await setScenarioVoice(db, faculty, { scenarioId: 'htn', voice: 'stone' });
+    expect((await db.doc('scenarios/htn').get()).get('liveVoice')).toBe('stone');
+    await setScenarioVoice(db, faculty, { scenarioId: 'htn', voice: null });
+    expect((await db.doc('scenarios/htn').get()).get('liveVoice')).toBeNull();
+    await expect(
+      setScenarioVoice(db, otherFaculty, { scenarioId: 'htn', voice: 'stone' }),
+    ).rejects.toMatchObject({ code: 'not-found' });
+    await expect(
+      setScenarioVoice(db, resident, { scenarioId: 'htn', voice: 'stone' }),
+    ).rejects.toBeTruthy();
+    await expect(
+      setScenarioVoice(db, faculty, { scenarioId: 'htn', voice: 'alloy' }),
+    ).rejects.toBeTruthy();
   });
 });
