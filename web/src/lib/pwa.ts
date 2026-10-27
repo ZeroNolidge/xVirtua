@@ -19,6 +19,13 @@ export function onUpdateWaiting(fn: () => void) {
  * comes back to the foreground (iPhone home-screen apps rarely check on their own).
  */
 export function setupPwa() {
+  // A new version was deployed and an old page asked for a file that's gone:
+  // load the new version (never mid-conversation).
+  window.addEventListener('vite:preloadError', (e) => {
+    if (inConversation()) return;
+    e.preventDefault();
+    window.location.reload();
+  });
   registerSW({
     immediate: true,
     onNeedReload() {

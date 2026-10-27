@@ -31,9 +31,12 @@ export function Privacy() {
         <h2>Services we use</h2>
         <ul className="tight">
           <li>Google Firebase stores the app’s data.</li>
-          <li>OpenAI turns your speech into text.</li>
+          <li>
+            OpenAI turns your speech into text. In the live voice mode, OpenAI also hears everything
+            your mic picks up and speaks as the patient.
+          </li>
           <li>Anthropic (Claude) plays the patient and writes your feedback.</li>
-          <li>Cartesia creates the patient’s voice.</li>
+          <li>Cartesia creates the patient’s voice in the standard mode.</li>
         </ul>
         <p className="small muted">These services don’t use our data to train their AI models.</p>
         <h2>How long we keep it</h2>

@@ -33,6 +33,8 @@ import { MicMeter } from '../lib/micMeter';
 import { useRecordingUpload } from '../lib/useRecordingUpload';
 import { UploadRetry } from '../components/UploadRetry';
 import { SavingCard } from '../components/SavingCard';
+import { Paused, StillThere } from '../components/PauseCards';
+import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
 export interface Bubble {
@@ -68,6 +70,7 @@ type Resume =
       bubbles: Bubble[];
       canContinue: boolean;
       voiceMode: VoiceMode;
+      startedAtMs: number | null;
     };
 
 /** Loads a saved conversation, for picking up after a crash or a closed app. */
@@ -109,6 +112,7 @@ function useSavedConversation(sessionId: string, enabled: boolean): Resume {
           bubbles,
           canContinue: canContinue(s),
           voiceMode: s.voiceMode === 'live' ? 'live' : 'standard',
+          startedAtMs: s.startedAt?.toMillis() ?? null,
         });
     })().catch(() => {
       if (!cancelled) setR({ state: 'missing' });
@@ -132,6 +136,9 @@ export function Session() {
     if (h?.usr) window.history.replaceState({ ...h, usr: null }, '');
   }, []);
   const saved = useSavedConversation(sessionId, !fresh);
+  // For the time limit: when the conversation started.
+  const [mountedAt] = useState(() => Date.now());
+  const startedAtMs = (saved.state === 'ok' && saved.startedAtMs) || mountedAt;
   const [resuming, setResuming] = useState(false);
   // GPT-Live test mode fell back (or was switched off): what to carry on with.
   const [standard, setStandard] = useState<{ notice: string; bubbles: Bubble[] | null } | null>(
@@ -146,6 +153,7 @@ export function Session() {
         <Conversation
           sessionId={sessionId}
           persona={persona}
+          startedAtMs={startedAtMs}
           initialNotice={standard.notice}
           {...(standard.bubbles
             ? { resumeFrom: standard.bubbles }
@@ -162,6 +170,7 @@ export function Session() {
         persona={fresh.persona}
         opening={fresh.opening}
         onFallback={fallBack}
+        startedAtMs={startedAtMs}
       />
     );
   if (fresh)
@@ -186,12 +195,18 @@ export function Session() {
         persona={saved.persona}
         resumeFrom={saved.bubbles}
         onFallback={fallBack}
+        startedAtMs={startedAtMs}
       />
     );
   }
   if (resuming) {
     return (
-      <Conversation sessionId={sessionId} persona={saved.persona} resumeFrom={saved.bubbles} />
+      <Conversation
+        sessionId={sessionId}
+        persona={saved.persona}
+        resumeFrom={saved.bubbles}
+        startedAtMs={startedAtMs}
+      />
     );
   }
   const first = saved.persona.name.split(' ')[0];
@@ -232,6 +247,8 @@ interface ConversationProps {
   resumeFrom?: Bubble[];
   /** Shown at the top from the start (e.g. why live voice was switched off). */
   initialNotice?: string;
+  /** Date.now() when the conversation started (for the time limit). */
+  startedAtMs?: number;
 }
 
 function Conversation({
@@ -240,6 +257,7 @@ function Conversation({
   opening,
   resumeFrom,
   initialNotice,
+  startedAtMs,
 }: ConversationProps) {
   const upload = useRecordingUpload(sessionId);
   const first = persona.name.split(' ')[0];
@@ -257,6 +275,12 @@ function Conversation({
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  /** The mic and speech service are off until "Continue". */
+  const [paused, setPaused] = useState<PauseReason | null>(null);
+  const [resumingVoice, setResumingVoice] = useState(false);
+  const [startMs] = useState(() => startedAtMs ?? Date.now());
+  /** The screen has closed: nothing may turn the mic on after this. */
+  const gone = useRef(false);
 
   const renderer = useRef<VoiceRenderer | null>(null);
   const player = useRef<ReplyPlayer | null>(null);
@@ -286,6 +310,23 @@ function Conversation({
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth' });
   }, [bubbles, partial, phase]);
+
+  const talking = phase === 'patient' || phase === 'listening' || phase === 'thinking';
+  const guard = useCallGuard({
+    active: talking && !paused,
+    startedAtMs: startMs,
+    onPause: (why) => pause(why),
+    onWarn: (n) => setNotice(`${n} minutes left in this conversation.`),
+    onTimeUp: () => {
+      setNotice('Time’s up for this conversation, so we ended it.');
+      void finish(true);
+    },
+  });
+  // Anything said or typed counts as someone being there.
+  useEffect(() => {
+    guard.activity();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, bubbles, partial, draft]);
 
   const addBubble = (b: Bubble) => setBubbles((xs) => [...xs, b]);
   const updateBubble = (key: string, patch: Partial<Bubble>) =>
@@ -353,7 +394,7 @@ function Conversation({
       queuedSourceRef.current = 'typed';
       window.setTimeout(() => void sendTurnRef.current?.(next, source), 0);
     }
-  }, [setPhase]);
+  }, [setPhase, setQueued]);
 
   /** Plays a stored patient line (the opening line). */
   const speakStored = useCallback(
@@ -611,6 +652,83 @@ function Conversation({
     [startListening],
   );
 
+  /** Streams the mic to the speech service (again after a pause). */
+  async function startVoice(stream: MediaStream) {
+    try {
+      const { data } = await sessionApi.sttToken({ sessionId });
+      stt.current = new OpenAIRealtimeStt({
+        onSpeechStart: () => {
+          // Still talking: never send in the middle of a thought.
+          cancelAutoSend();
+          const p = pending.current;
+          p.tStart ??= Math.round(performance.now() - t0.current);
+          // Only when the mic itself is loud: the speech service also "hears"
+          // the patient's own voice from the speaker, and turning him down for
+          // that made whole sentences near-silent.
+          const meter = micMeter.current;
+          const resident = !meter?.working || meter.loudWithin(300);
+          if (phaseRef.current === 'patient' && resident) {
+            // Maybe the resident is starting to talk: turn the patient almost
+            // silent at once (feels like stopping), back up if it was only echo.
+            renderer.current?.duck(true);
+            if (duckTimer.current) window.clearTimeout(duckTimer.current);
+            duckTimer.current = window.setTimeout(() => renderer.current?.duck(false), 1200);
+          } else if (phaseRef.current === 'thinking') {
+            // Talking again before the reply plays: hold it while we see if they're carrying on.
+            gate.current.holdUntil = performance.now() + 1200;
+          }
+        },
+        onPartial: (t, startedAt) => {
+          if (phaseRef.current === 'listening' && echoAfterPatient(t)) return;
+          if (phaseRef.current === 'patient') {
+            // The patient's own voice leaking into the mic isn't the resident.
+            if (!isCutIn(t, player.current?.spokenSoFar ?? '')) return;
+            bargeIn(startedAt);
+          } else if (
+            phaseRef.current === 'thinking' &&
+            turnRef.current &&
+            t.trim().split(/\s+/).length >= 2
+          ) {
+            turnRef.current.supersede = true;
+          }
+          setPartial([...pending.current.text, t].join(' '));
+        },
+        onFinal: (t, startedAt) => {
+          if (phaseRef.current === 'listening' && echoAfterPatient(t)) {
+            setPartial(pending.current.text.join(' '));
+            return;
+          }
+          if (phaseRef.current === 'patient') {
+            // His own echo, or "mm-hm" while he talks (listening, not a reply).
+            if (!isCutIn(t, player.current?.spokenSoFar ?? '')) {
+              renderer.current?.duck(false);
+              return;
+            }
+            bargeIn(startedAt);
+          } else if (phaseRef.current === 'thinking' && turnRef.current) {
+            turnRef.current.supersede = true;
+          }
+          pending.current.text.push(t);
+          setPartial(pending.current.text.join(' '));
+          scheduleFlush();
+        },
+        onError: (m) => {
+          setNotice(`${m} You can type instead.`);
+          setTyped(true);
+        },
+      });
+      semanticTurns.current = data.turnDetection === 'semantic';
+      if (gone.current) return;
+      await stt.current.start(stream, data.value);
+      if (gone.current) stt.current?.stop();
+    } catch (e) {
+      stt.current = null;
+      setTyped(true);
+      reportError('stt.start', e);
+      setNotice('Voice input isn’t available right now. You can type your side.');
+    }
+  }
+
   async function begin() {
     setPhase('connecting');
     setNotice(null);
@@ -619,96 +737,63 @@ function Conversation({
     t0.current = performance.now();
 
     try {
-      mic.current = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      recorder.current = new SessionRecorder(mic.current);
-      recorder.current.start();
-      micMeter.current = new MicMeter(mic.current);
+      // They left while we waited for the mic: never leave it on.
+      if (gone.current) return stream.getTracks().forEach((t) => t.stop());
+      mic.current = stream;
+      recorder.current = new SessionRecorder(stream);
+      void recorder.current.start();
+      micMeter.current = new MicMeter(stream);
     } catch {
       setTyped(true);
       setNotice('No microphone access, so you can type your side for now.');
     }
 
-    if (mic.current) {
-      try {
-        const { data } = await sessionApi.sttToken({ sessionId });
-        stt.current = new OpenAIRealtimeStt({
-          onSpeechStart: () => {
-            // Still talking: never send in the middle of a thought.
-            cancelAutoSend();
-            const p = pending.current;
-            p.tStart ??= Math.round(performance.now() - t0.current);
-            // Only when the mic itself is loud: the speech service also "hears"
-            // the patient's own voice from the speaker, and turning him down for
-            // that made whole sentences near-silent.
-            const meter = micMeter.current;
-            const resident = !meter?.working || meter.loudWithin(300);
-            if (phaseRef.current === 'patient' && resident) {
-              // Maybe the resident is starting to talk: turn the patient almost
-              // silent at once (feels like stopping), back up if it was only echo.
-              renderer.current?.duck(true);
-              if (duckTimer.current) window.clearTimeout(duckTimer.current);
-              duckTimer.current = window.setTimeout(() => renderer.current?.duck(false), 1200);
-            } else if (phaseRef.current === 'thinking') {
-              // Talking again before the reply plays: hold it while we see if they're carrying on.
-              gate.current.holdUntil = performance.now() + 1200;
-            }
-          },
-          onPartial: (t, startedAt) => {
-            if (phaseRef.current === 'listening' && echoAfterPatient(t)) return;
-            if (phaseRef.current === 'patient') {
-              // The patient's own voice leaking into the mic isn't the resident.
-              if (!isCutIn(t, player.current?.spokenSoFar ?? '')) return;
-              bargeIn(startedAt);
-            } else if (
-              phaseRef.current === 'thinking' &&
-              turnRef.current &&
-              t.trim().split(/\s+/).length >= 2
-            ) {
-              turnRef.current.supersede = true;
-            }
-            setPartial([...pending.current.text, t].join(' '));
-          },
-          onFinal: (t, startedAt) => {
-            if (phaseRef.current === 'listening' && echoAfterPatient(t)) {
-              setPartial(pending.current.text.join(' '));
-              return;
-            }
-            if (phaseRef.current === 'patient') {
-              // His own echo, or "mm-hm" while he talks (listening, not a reply).
-              if (!isCutIn(t, player.current?.spokenSoFar ?? '')) {
-                renderer.current?.duck(false);
-                return;
-              }
-              bargeIn(startedAt);
-            } else if (phaseRef.current === 'thinking' && turnRef.current) {
-              turnRef.current.supersede = true;
-            }
-            pending.current.text.push(t);
-            setPartial(pending.current.text.join(' '));
-            scheduleFlush();
-          },
-          onError: (m) => {
-            setNotice(`${m} You can type instead.`);
-            setTyped(true);
-          },
-        });
-        semanticTurns.current = data.turnDetection === 'semantic';
-        await stt.current.start(mic.current, data.value);
-      } catch (e) {
-        stt.current = null;
-        setTyped(true);
-        reportError('stt.start', e);
-        setNotice('Voice input isn’t available right now. You can type your side.');
-      }
-    }
+    if (mic.current) await startVoice(mic.current);
+    if (gone.current) return;
     if (opening) await speakStored(opening);
     else startListening();
   }
 
-  async function finish() {
-    if (!window.confirm('End the conversation and get feedback?')) return;
+  /** Nobody's using it (app hidden, or quiet): turn the mic and speech service off. */
+  function pause(why: PauseReason) {
+    if (!mic.current) return; // Typing only: nothing is listening.
+    setPaused(why);
+    recorder.current?.pause();
+    stt.current?.stop();
+    stt.current = null;
+    micMeter.current?.stop();
+    micMeter.current = null;
+    mic.current.getTracks().forEach((t) => t.stop());
+    mic.current = null;
+  }
+
+  async function carryOn() {
+    setResumingVoice(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      if (gone.current) return stream.getTracks().forEach((t) => t.stop());
+      mic.current = stream;
+      recorder.current?.resume(stream);
+      micMeter.current = new MicMeter(stream);
+      await startVoice(stream);
+    } catch {
+      setTyped(true);
+      setNotice('No microphone access, so you can type your side for now.');
+    } finally {
+      setResumingVoice(false);
+      setPaused(null);
+    }
+  }
+
+  async function finish(skipConfirm = false) {
+    if (!skipConfirm && !window.confirm('End the conversation and get feedback?')) return;
+    if (phaseRef.current === 'ending') return;
+    setPaused(null);
     setPhase('ending');
     const p = pending.current;
     if (p.timer) window.clearTimeout(p.timer);
@@ -740,6 +825,7 @@ function Conversation({
   useEffect(() => {
     const p = pending.current;
     return () => {
+      gone.current = true;
       if (p.timer) window.clearTimeout(p.timer);
       stt.current?.stop();
       player.current?.finish();
@@ -787,7 +873,7 @@ function Conversation({
         <div>
           <div className="patient-name">{persona.name}</div>
           <div className="muted small" role="status" aria-live="polite">
-            {status[phase]}
+            {paused && phase !== 'ending' ? 'Paused · mic off' : status[phase]}
           </div>
         </div>
       </header>
@@ -835,11 +921,23 @@ function Conversation({
 
       <div ref={bottom} />
 
+      {talking && !paused && guard.askingStillThere && (
+        <StillThere onHere={guard.stillHere} onEnd={() => void finish(true)} />
+      )}
+      {paused && phase !== 'ending' && (
+        <Paused
+          reason={paused}
+          busy={resumingVoice}
+          onContinue={() => void carryOn()}
+          onEnd={() => void finish(true)}
+        />
+      )}
+
       {upload.failed && (
         <UploadRetry busy={upload.busy} onRetry={upload.retry} onSkip={upload.skip} />
       )}
 
-      {phase !== 'ready' && phase !== 'ending' && (
+      {phase !== 'ready' && phase !== 'ending' && !paused && (
         <div className="session-controls">
           {typed && (
             <form className="typed" onSubmit={submitTyped}>

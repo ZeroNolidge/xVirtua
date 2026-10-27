@@ -15,6 +15,8 @@ export interface LiveCallbacks {
   /** Words GPT-Live actually said as the patient (pieces, in order), with their start time. */
   onSpoken(delta: string, startMs?: number): void;
   onError(message: string): void;
+  /** The connection dropped after it was working (the call is gone). */
+  onLost?(): void;
   onClosed(): void;
   /** Every event GPT-Live sends (for diagnostics). */
   onEvent?(type: string, ev: Record<string, unknown>): void;
@@ -69,6 +71,7 @@ export class LiveVoiceCall {
 
   /** `mic` null: listen only (e.g. a voice preview); the mic is never opened. */
   async start(mic: MediaStream | null, connect: Connect): Promise<void> {
+    if (this.stopped) return;
     const pc = new RTCPeerConnection();
     this.pc = pc;
     if (!mic) {
@@ -110,12 +113,24 @@ export class LiveVoiceCall {
     this.bindChannel(pc.createDataChannel('oai-events'));
     // In case OpenAI opens its own events channel instead.
     pc.ondatachannel = (e) => this.bindChannel(e.channel);
+    let connected = false;
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') this.cb.onError('Live voice connection lost.');
+      if (pc.connectionState === 'connected') connected = true;
+      if (pc.connectionState !== 'failed' || this.stopped) return;
+      // Hang up so nothing keeps running (or billing) on a dead line.
+      if (connected && this.cb.onLost) {
+        this.hangUp();
+        this.cb.onLost();
+      } else this.cb.onError('Live voice connection lost.');
     };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     const answer = await connect(offer.sdp ?? '');
+    // Hung up while we were connecting: don't open the line.
+    if (this.stopped) {
+      pc.close();
+      return;
+    }
     await pc.setRemoteDescription({ type: 'answer', sdp: answer });
   }
 

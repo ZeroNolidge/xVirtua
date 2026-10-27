@@ -50,9 +50,16 @@ export function Consent() {
             <strong>How long:</strong> {RETENTION_NOTICE}
           </li>
           <li>
+            <strong>The mic hears the whole room.</strong> While a conversation is running,
+            everything your mic picks up, including other people and sounds nearby, is sent to
+            OpenAI to understand what you said. The mic turns off when you pause, end, or leave the
+            app.
+          </li>
+          <li>
             <strong>AI services:</strong> to run the conversation and scoring, your audio or
-            transcript is sent to our AI providers (OpenAI for transcription, Anthropic for the
-            patient and feedback, Cartesia for the patient’s voice).
+            transcript is sent to our AI providers: OpenAI (turns your speech into text, and in the
+            live voice mode it also listens and speaks as the patient), Anthropic (plays the patient
+            and writes your feedback) and Cartesia (the patient’s voice in the standard mode).
           </li>
           {claims?.role === 'faculty' && (
             <li>

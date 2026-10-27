@@ -37,9 +37,20 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        navigateFallback: '/index.html',
-        // Never cache API or auth traffic.
-        navigateFallbackDenylist: [/^\/__/, /^\/api\//],
+        // The page itself is never served from the app's stored copy first,
+        // so a normal reload always gets the newest version. The stored copy
+        // is only for when there's no connection.
+        globPatterns: ['**/*.{js,css,png,svg,ico,webmanifest}'],
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            // Never API or auth traffic.
+            urlPattern: ({ request, url }) =>
+              request.mode === 'navigate' && !/^\/(__|api)\//.test(url.pathname),
+            handler: 'NetworkFirst',
+            options: { cacheName: 'pages', networkTimeoutSeconds: 5 },
+          },
+        ],
       },
     }),
   ],

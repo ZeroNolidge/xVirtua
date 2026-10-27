@@ -32,6 +32,8 @@ vi.mock('../lib/recorder', () => ({
   SessionRecorder: class {
     ext = 'webm';
     start() {}
+    pause() {}
+    resume() {}
     async stop() {
       return null;
     }

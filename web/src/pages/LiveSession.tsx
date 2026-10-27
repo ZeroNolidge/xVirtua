@@ -10,10 +10,12 @@ import { PlainWordSearch } from '../components/PlainWordSearch';
 import { UploadRetry } from '../components/UploadRetry';
 import { SavingCard } from '../components/SavingCard';
 import { useRecordingUpload } from '../lib/useRecordingUpload';
+import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
+import { Paused, StillThere } from '../components/PauseCards';
 import { Transcript, type Bubble } from './Session';
 
 type Persona = { name: string; age: number; pronouns: string };
-type Phase = 'ready' | 'connecting' | 'live' | 'ending';
+type Phase = 'ready' | 'connecting' | 'live' | 'paused' | 'ending';
 
 /** How long GPT-Live gets to answer the call before we fall back to the standard voice. */
 const START_TIMEOUT_MS = 12_000;
@@ -66,6 +68,8 @@ export interface LiveConversationProps {
   resumeFrom?: Bubble[];
   /** Live voice failed or was switched off: carry on with the standard voice. */
   onFallback(reason: string, bubbles: Bubble[] | null): void;
+  /** Date.now() when the conversation started (for the time limit). */
+  startedAtMs?: number;
 }
 
 /**
@@ -80,6 +84,7 @@ export function LiveConversation({
   opening,
   resumeFrom,
   onFallback,
+  startedAtMs,
 }: LiveConversationProps) {
   const first = persona.name.split(' ')[0];
   const upload = useRecordingUpload(sessionId);
@@ -95,6 +100,20 @@ export function LiveConversation({
   const [notice, setNotice] = useState<string | null>(null);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [pauseReason, setPauseReason] = useState<PauseReason>('hidden');
+  const [startMs] = useState(() => startedAtMs ?? Date.now());
+  /** The opening line has been handed to GPT-Live (not again after a pause). */
+  const openingSent = useRef(false);
+  const guard = useCallGuard({
+    active: phase === 'live',
+    startedAtMs: startMs,
+    onPause: (why) => void pause(why),
+    onWarn: (n) => setNotice(`${n} minutes left in this conversation.`),
+    onTimeUp: () => {
+      setNotice('Time’s up for this conversation, so we ended it.');
+      void finish(true);
+    },
+  });
 
   const call = useRef<LiveVoiceCall | null>(null);
   const mic = useRef<MediaStream | null>(null);
@@ -211,6 +230,7 @@ export function LiveConversation({
 
   /** Words GPT-Live is speaking while we didn't ask: it's answering on its own. */
   function onSpoken(delta: string, startMs?: number) {
+    guard.activity();
     const cur = reply.current;
     // Still the tail of a line the resident cut off (muted on our side): not a new reply.
     if (cur?.cut != null && muteTimer.current !== null) return void cur.add(delta, startMs);
@@ -391,6 +411,7 @@ export function LiveConversation({
   }
 
   function onHeard(delta: string) {
+    guard.activity();
     const c = call.current;
     if (!c) return;
     setOpeningWait(false);
@@ -535,13 +556,18 @@ export function LiveConversation({
   async function begin() {
     setPhase('connecting');
     setNotice(null);
-    const c = new LiveVoiceCall({
+    started.current = false;
+    // Events from an earlier call (before a pause) don't count.
+    const mine = (): boolean => call.current === c && !ended.current;
+    const c: LiveVoiceCall = new LiveVoiceCall({
       onStarted: () => {
-        if (started.current) return;
+        if (started.current || !mine()) return;
         started.current = true;
         setPhase('live');
-        window.setTimeout(() => !ended.current && reportCensus('first 30s'), 30_000);
-        if (opening) {
+        if (!openingSent.current)
+          window.setTimeout(() => !ended.current && reportCensus('first 30s'), 30_000);
+        if (opening && !openingSent.current) {
+          openingSent.current = true;
           const r = new LiveReply(0, null);
           r.planned = opening.text;
           r.nonverbal = opening.nonverbal;
@@ -567,10 +593,11 @@ export function LiveConversation({
         }
       },
       onDelegation: (id) => {
+        if (!mine()) return;
         inFlight.current = inFlight.current.then(() => answer(id)).catch(() => undefined);
       },
-      onHeard,
-      onSpoken,
+      onHeard: (d) => mine() && onHeard(d),
+      onSpoken: (d, ms) => mine() && onSpoken(d, ms),
       onEvent: (type, ev) => {
         const n = (census.current.counts[type] ?? 0) + 1;
         census.current.counts[type] = n;
@@ -578,38 +605,56 @@ export function LiveConversation({
           census.current.samples.push(JSON.stringify(ev).slice(0, 300));
       },
       onError: (m) => {
+        if (!mine()) return;
         reportError('live.call', new Error(m));
         if (!started.current)
           fallBack('GPT-Live couldn’t connect, so this uses the standard voice.');
         else setNotice(m);
       },
+      onLost: () => {
+        if (!mine()) return;
+        reportError('live.call', new Error('Live voice connection lost.'));
+        fallBack('The live voice connection dropped, so this continues with the standard voice.');
+      },
       onClosed: () => {
-        if (!ended.current)
+        if (mine())
           fallBack('The live voice call ended, so this continues with the standard voice.');
       },
     });
     call.current = c;
     c.unlockAudio(); // inside the tap (iOS)
 
+    let stream: MediaStream;
     try {
-      mic.current = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch {
       return fallBack('No microphone access, so you can type your side for now.');
     }
-    recorder.current = new SessionRecorder(mic.current);
-    recorder.current.start();
+    // They left (or ended) while we waited for the mic: never leave it on.
+    if (!mine()) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    mic.current = stream;
+    if (recorder.current) recorder.current.resume(stream);
+    else {
+      recorder.current = new SessionRecorder(stream);
+      void recorder.current.start();
+    }
     window.setTimeout(() => {
-      if (!started.current)
+      if (!started.current && mine())
         fallBack('GPT-Live didn’t answer in time, so this uses the standard voice.');
     }, START_TIMEOUT_MS);
     try {
-      await c.start(mic.current, async (sdp) => {
+      await c.start(stream, async (sdp) => {
         const { data } = await sessionApi.startLiveCall({ sessionId, sdp });
         return data.sdp;
       });
+      if (!mine()) c.hangUp();
     } catch (e) {
+      if (!mine()) return c.hangUp();
       // Include OpenAI's reason (status and message) so the cause shows up in diagnostics.
       const details = (e as { details?: unknown }).details;
       reportError(
@@ -641,8 +686,36 @@ export function LiveConversation({
     await Promise.race([Promise.allSettled(saves.current), wait(4000)]);
   }
 
-  async function finish() {
-    if (!window.confirm('End the conversation and get feedback?')) return;
+  /**
+   * Nobody's using the call (app hidden, or quiet): save, then turn the mic
+   * and the voice connection off. "Continue" starts a fresh call.
+   */
+  async function pause(why: PauseReason) {
+    if (ended.current || !call.current) return;
+    setPauseReason(why);
+    setPhase('paused');
+    setThinking(false);
+    setSpeaking(false);
+    setOpeningWait(false);
+    setSlowStart(false);
+    const c = call.current;
+    call.current = null;
+    recorder.current?.pause();
+    mic.current?.getTracks().forEach((t) => t.stop());
+    mic.current = null;
+    if (muteTimer.current) window.clearTimeout(muteTimer.current);
+    void c.close().catch(() => c.hangUp());
+    await flushSaves();
+    const r = reply.current;
+    if (r?.selfReply && r.committed && !r.cut) r.saved = true;
+    reply.current = null;
+    heardBuf.current = '';
+    setHeard('');
+  }
+
+  async function finish(skipConfirm = false) {
+    if (!skipConfirm && !window.confirm('End the conversation and get feedback?')) return;
+    if (ended.current) return;
     ended.current = true;
     setPhase('ending');
     setSaving('Saving the conversation…');
@@ -679,6 +752,7 @@ export function LiveConversation({
         : thinking
           ? `${first} is thinking…`
           : 'Listening… just talk',
+    paused: 'Paused · mic off',
     ending: saving ?? 'Wrapping up…',
   };
 
@@ -717,7 +791,10 @@ export function LiveConversation({
             Talk naturally, like you’re in the room. {first} listens while talking, so you can
             pause, carry on, or cut in. When you’re done, tap <strong>End</strong> to get feedback.
           </p>
-          <p className="muted small">GPT-Live voice (test).</p>
+          <p className="muted small">
+            GPT-Live voice (test). Everything your mic picks up, including the room around you, goes
+            to OpenAI, which also speaks as {first}.
+          </p>
           <p className="muted small">
             We’ll record this practice so you can review it and get feedback (kept up to 3 years).
           </p>
@@ -741,11 +818,22 @@ export function LiveConversation({
 
       <div ref={bottom} />
 
+      {phase === 'live' && guard.askingStillThere && (
+        <StillThere onHere={guard.stillHere} onEnd={() => void finish(true)} />
+      )}
+      {phase === 'paused' && (
+        <Paused
+          reason={pauseReason}
+          onContinue={() => void begin()}
+          onEnd={() => void finish(true)}
+        />
+      )}
+
       {upload.failed && (
         <UploadRetry busy={upload.busy} onRetry={upload.retry} onSkip={upload.skip} />
       )}
 
-      {phase !== 'ready' && phase !== 'ending' && (
+      {phase !== 'ready' && phase !== 'ending' && phase !== 'paused' && (
         <div className="session-controls">
           <div className="session-buttons">
             <button className="btn btn-secondary btn-inline" onClick={() => setLookupOpen(true)}>

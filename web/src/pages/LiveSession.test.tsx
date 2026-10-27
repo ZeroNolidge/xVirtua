@@ -26,6 +26,8 @@ vi.mock('../lib/recorder', () => ({
   SessionRecorder: class {
     ext = 'webm';
     start() {}
+    pause() {}
+    resume() {}
     async stop() {
       return null;
     }
@@ -39,6 +41,9 @@ let micLoudMs = 0;
 let micLoudAt = -1e9;
 let lastSound = -1e9;
 let nudges = 0;
+let micsOpened = 0;
+let micsStopped = 0;
+let closes = 0;
 const ducked: boolean[] = [];
 let failConnect = false;
 const said: [string | null, string][] = [];
@@ -89,7 +94,9 @@ vi.mock('../lib/liveVoice', async (orig) => {
         notes.push(text);
         return true;
       }
-      async close() {}
+      async close() {
+        closes++;
+      }
       hangUp() {}
     },
   };
@@ -147,7 +154,12 @@ const opening: Utterance = {
 async function start(onFallback = vi.fn()) {
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
-    value: { getUserMedia: async () => ({ getTracks: () => [] }) },
+    value: {
+      getUserMedia: async () => {
+        micsOpened++;
+        return { getTracks: () => [{ stop: () => micsStopped++ }] };
+      },
+    },
   });
   Element.prototype.scrollIntoView = () => {};
   render(
@@ -176,6 +188,7 @@ const sleep = (ms: number) => act(async () => new Promise((r) => setTimeout(r, m
 beforeEach(() => {
   calls.length = 0;
   said.length = 0;
+  notes.length = 0;
   muted.length = 0;
   ducked.length = 0;
   audible = false;
@@ -432,6 +445,35 @@ describe('GPT-Live conversation', () => {
       ).toBe(true),
     );
   }, 10_000);
+
+  it('turns the mic and the call off when the app is hidden, and picks up again on Continue', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(100);
+    patientStops();
+    const opened = micsOpened;
+    const stopped = micsStopped;
+    const closed = closes;
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    await act(async () => void document.dispatchEvent(new Event('visibilitychange')));
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    expect(micsStopped).toBe(stopped + 1);
+    expect(closes).toBe(closed + 1);
+    expect(screen.getByText(/Paused\. The mic is off\./)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'End' })).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /continue the conversation/i }));
+    });
+    expect(micsOpened).toBe(opened + 1);
+    await act(async () => cb.onStarted());
+    // Ray doesn't start over: no second opening line, just a private recap.
+    expect(said.filter(([, t]) => t.includes('my blood pressure is high'))).toHaveLength(1);
+    expect(notes.some((n) => n.includes('picking up after a break'))).toBe(true);
+    expect(screen.getByText('Listening… just talk')).toBeInTheDocument();
+  });
 
   it('when Ray pauses mid-answer and goes on, it stays one bubble and one saved turn', async () => {
     await start();

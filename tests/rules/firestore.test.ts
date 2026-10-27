@@ -138,6 +138,17 @@ describe('programs', () => {
     }
   });
 
+  it('residents and other programs can’t change any voice setting', async () => {
+    for (const who of [a.resA, a.resB, a.facultyOther, a.anon, a.noClaims]) {
+      const ref = doc(fs(who), 'programs/irmc');
+      await assertFails(updateDoc(ref, { voiceMode: 'live' }));
+      await assertFails(updateDoc(ref, { liveVoice: 'cinder' }));
+      await assertFails(updateDoc(ref, { liveVoices: { he: 'cinder' } }));
+      await assertFails(updateDoc(ref, { liveBrain: 'claude' }));
+      await assertFails(updateDoc(ref, { liveVoiceTags: { cinder: 'male' } }));
+    }
+  });
+
   it('faculty can switch the voice mode and live voice, to known values only', async () => {
     const ref = doc(fs(a.facultyIrmc), 'programs/irmc');
     await assertSucceeds(updateDoc(ref, { voiceMode: 'live', liveVoice: 'cinder' }));

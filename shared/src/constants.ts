@@ -1,7 +1,7 @@
 import type { ScoringWeights } from './model.js';
 
 /** Bump to re-prompt every user with the consent screen. */
-export const CONSENT_VERSION = 2;
+export const CONSENT_VERSION = 3;
 
 /** Stored with every score so trends stay comparable across rubric changes. */
 // v2: rewrites may only change how something is said, never add clinical,
