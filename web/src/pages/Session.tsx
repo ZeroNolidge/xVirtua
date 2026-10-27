@@ -823,7 +823,7 @@ function Conversation({
         <Transcript
           bubbles={bubbles}
           partial={partial}
-          thinking={phase === 'thinking' && showThinking}
+          thinking={(phase === 'thinking' && showThinking) || phase === 'connecting'}
           patientFirstName={first}
           queued={queued}
         />

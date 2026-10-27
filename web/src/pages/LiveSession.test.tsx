@@ -38,6 +38,7 @@ let audible = false;
 let micLoudMs = 0;
 let micLoudAt = -1e9;
 let lastSound = -1e9;
+let nudges = 0;
 const ducked: boolean[] = [];
 let failConnect = false;
 const said: [string | null, string][] = [];
@@ -66,6 +67,10 @@ vi.mock('../lib/liveVoice', async (orig) => {
       }
       truncate() {
         return false;
+      }
+      nudge() {
+        nudges++;
+        return true;
       }
       micLoudFor() {
         return micLoudMs;
@@ -206,6 +211,9 @@ describe('GPT-Live conversation', () => {
     await start();
     await act(async () => cb.onStarted());
     expect(said[0]).toEqual([null, 'So, my blood pressure is high?']);
+    // A moment of silence gets GPT-Live talking, and the screen says Ray is getting ready.
+    expect(nudges).toBeGreaterThan(0);
+    expect(screen.getByText('Ray is getting ready…')).toBeInTheDocument();
     // Nothing shows until he says it, then his words appear as he speaks.
     expect(screen.queryByText(opening.text)).toBeNull();
     audible = true;

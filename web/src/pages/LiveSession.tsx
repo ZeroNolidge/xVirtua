@@ -16,6 +16,9 @@ type Phase = 'ready' | 'connecting' | 'live' | 'ending';
 
 /** How long GPT-Live gets to answer the call before we fall back to the standard voice. */
 const START_TIMEOUT_MS = 12_000;
+/** If the patient hasn't started his opening line after this long, suggest saying hello. */
+const SLOW_START_MS = 10_000;
+
 /** Events we handle; samples of any others are sent with the diagnostics. */
 const KNOWN_EVENTS = new Set([
   'session.started',
@@ -80,6 +83,9 @@ export function LiveConversation({
   const bubblesRef = useRef<Bubble[]>(resumeFrom ?? []);
   const [heard, setHeard] = useState('');
   const [thinking, setThinking] = useState(false);
+  /** Waiting for the patient's opening line (the call is up, nothing said yet). */
+  const [openingWait, setOpeningWait] = useState(false);
+  const [slowStart, setSlowStart] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [lookupOpen, setLookupOpen] = useState(false);
@@ -243,6 +249,8 @@ export function LiveConversation({
       if (r && r.firstAudibleAt === null && audible && r.pieces.length) {
         r.firstAudibleAt = now;
         setThinking(false);
+        setOpeningWait(false);
+        setSlowStart(false);
       }
       // His words appear as he says them, not before.
       if (r && (r.idx !== null || r.key) && r.cut === null && !r.saved) {
@@ -347,6 +355,7 @@ export function LiveConversation({
   function onHeard(delta: string) {
     const c = call.current;
     if (!c) return;
+    setOpeningWait(false);
     const now = performance.now();
     const r = reply.current;
     // Late words: the reply was already asked for but the patient hasn't
@@ -501,7 +510,13 @@ export function LiveConversation({
           reply.current = r;
           delegationOf.current = null;
           c.say(null, toneNote(opening.delivery) + opening.text);
+          c.nudge();
           r.sentAt = performance.now();
+          setThinking(true);
+          setOpeningWait(true);
+          window.setTimeout(() => {
+            if (!r.firstAudibleAt) setSlowStart(true);
+          }, SLOW_START_MS);
         } else if (bubblesRef.current.length) {
           const recent = bubblesRef.current
             .slice(-8)
@@ -618,12 +633,14 @@ export function LiveConversation({
 
   const status: Record<Phase, string> = {
     ready: 'Ready when you are',
-    connecting: 'Connecting…',
+    connecting: `Connecting to ${first}…`,
     live: speaking
       ? `${first} is talking…`
-      : thinking
-        ? `${first} is thinking…`
-        : 'Listening… just talk',
+      : openingWait
+        ? `${first} is getting ready…`
+        : thinking
+          ? `${first} is thinking…`
+          : 'Listening… just talk',
     ending: saving ?? 'Wrapping up…',
   };
 
@@ -643,6 +660,12 @@ export function LiveConversation({
           </div>
         </div>
       </header>
+
+      {slowStart && openingWait && !notice && (
+        <p className="notice" role="status">
+          Taking a moment… you can say hello to start.
+        </p>
+      )}
 
       {notice && (
         <p className="notice" role="alert">
@@ -670,7 +693,7 @@ export function LiveConversation({
         <Transcript
           bubbles={bubbles}
           partial={heard}
-          thinking={thinking && !speaking}
+          thinking={(thinking && !speaking) || phase === 'connecting'}
           patientFirstName={first}
         />
       )}

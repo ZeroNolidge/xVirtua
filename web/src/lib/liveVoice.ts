@@ -188,6 +188,27 @@ export class LiveVoiceCall {
     return this.send({ type: 'session.commentary.append', delegation_id: delegationId, content });
   }
 
+  /** Event ids whose errors don't matter (best-effort nudges). */
+  private quiet = new Set<string>();
+
+  /**
+   * GPT-Live only starts talking once it has received some input audio, so
+   * after the opening line we send half a second of silence to get it going.
+   */
+  nudge() {
+    const id = `ps_nudge_${++this.seq}`;
+    this.quiet.add(id);
+    if (this.dc?.readyState !== 'open') return false;
+    this.dc.send(
+      JSON.stringify({
+        event_id: id,
+        type: 'session.input_audio.append',
+        audio: btoa(String.fromCharCode(...new Uint8Array(24_000))),
+      }),
+    );
+    return true;
+  }
+
   /**
    * Tells GPT-Live the patient was cut off after `audioEndMs` of the reply had
    * played, so it knows the rest wasn't heard. Off until we have GPT-Live's
@@ -235,8 +256,11 @@ export class LiveVoiceCall {
         done?.();
         return this.cb.onClosed();
       }
-      case 'error':
+      case 'error': {
+        const about = (ev as { error?: { client_event_id?: string } }).error?.client_event_id;
+        if (about && this.quiet.has(about)) return;
         return this.cb.onError(ev.error?.message ?? 'Live voice error');
+      }
     }
   }
 
