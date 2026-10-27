@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { isCutIn } from '@plainspeak/shared';
+import { isBackchannel, isCutIn } from '@plainspeak/shared';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
 import { sessionApi, streamTurn, type TurnInput, type Utterance } from '../lib/session';
@@ -165,24 +165,39 @@ export function LiveConversation({
     );
   }
 
+  /**
+   * A self-reply turned out to be a real answer: close the resident's turn
+   * (their bubble goes before the patient's) and count it.
+   */
+  function commitSelfReply(r: LiveReply) {
+    if (r.committed) return;
+    r.committed = true;
+    selfReplies.current++;
+    const text = heardBuf.current.trim();
+    heardBuf.current = '';
+    setHeard('');
+    r.residentText = text;
+    if (text) setBubbles((b) => [...b, { key: `r${Date.now()}`, who: 'resident', text }]);
+  }
+
   /** Words GPT-Live is speaking while we didn't ask: it's answering on its own. */
   function onSpoken(delta: string, startMs?: number) {
     const cur = reply.current;
     // Still the tail of a line the resident cut off (muted on our side): not a new reply.
     if (cur?.cut != null && muteTimer.current !== null) return void cur.add(delta, startMs);
-    if (!answering.current && (!cur || cur.finished)) {
-      selfReplies.current++;
-      const text = heardBuf.current.trim();
-      heardBuf.current = '';
-      setHeard('');
-      const residentKey = text ? `r${Date.now()}` : null;
-      if (text && residentKey)
-        setBubbles((b) => [...b, { key: residentKey, who: 'resident', text }]);
+    // A line that never got spoken (no words for a while) is over too.
+    const stale =
+      !!cur &&
+      !cur.pieces.length &&
+      cur.sentAt !== null &&
+      performance.now() - cur.sentAt > NO_TRANSCRIPT_MS;
+    if (!answering.current && (!cur || cur.finished || stale)) {
+      // GPT-Live is answering on its own. The resident's turn only closes once
+      // this is more than a listening sound ("mm-hm", "okay"); see commitSelfReply.
       if (cur) prevSpoken.current = cur.cut ?? cur.spoken;
       const r = new LiveReply(null, null);
       r.selfReply = true;
       r.key = `s${Date.now()}`;
-      r.residentText = text;
       reply.current = r;
     }
     reply.current!.add(delta, startMs);
@@ -236,7 +251,11 @@ export function LiveConversation({
           text = r.planned;
           setThinking(false);
         }
-        if (text && text !== r.shown) showPatient(r, text);
+        if (r.selfReply && !r.committed) {
+          // "Mm-hm" while the resident talks is listening, not a reply.
+          if (text && !isBackchannel(text)) commitSelfReply(r);
+        }
+        if (text && text !== r.shown && (!r.selfReply || r.committed)) showPatient(r, text);
       }
       // Done talking: what he said out loud becomes the saved line.
       if (
@@ -248,8 +267,14 @@ export function LiveConversation({
         now - r.lastPieceAt > 900 &&
         !c.patientAudible(800)
       ) {
-        save(r);
-        showPatient(r, r.spoken);
+        if (r.selfReply && !r.committed && isBackchannel(r.spoken)) {
+          // Only a listening sound: nothing to save, the resident's turn goes on.
+          r.saved = true;
+        } else {
+          if (r.selfReply) commitSelfReply(r);
+          save(r);
+          showPatient(r, r.spoken);
+        }
       }
       // Words held as possible echo that never turned out to be the resident.
       if (suspect.current.length && !audible && now - c.lastSoundAt > ECHO_WINDOW_MS)
@@ -342,6 +367,15 @@ export function LiveConversation({
     }
     // While the patient talks, and just after, mic input may be his own echo:
     // it only counts once it's clearly the resident (new words, and the mic was loud).
+    // Talking on through the patient's "mm-hm" is just the resident carrying on.
+    if (r?.selfReply && !r.committed && isBackchannel(r.spoken || 'mm')) {
+      if (!isEcho(delta, `${r.spoken} ${prevSpoken.current}`)) {
+        heardBuf.current += delta;
+        heardAt.current = now;
+        setHeard(heardBuf.current.trim());
+      }
+      return;
+    }
     const inEcho = c.patientAudible() || now - c.lastSoundAt < ECHO_WINDOW_MS;
     if (inEcho && r?.cut == null) {
       suspect.current.push(delta);

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import {
   LIVE_VOICES,
-  type LiveBrain,
   type LiveVoice,
   type PatientModel,
   type Program,
@@ -65,16 +64,6 @@ export function Settings() {
         >
           <option value="standard">Standard (turn by turn)</option>
           <option value="live">GPT-Live (test: talks and listens at once)</option>
-        </select>
-      </label>
-      <label className="field">
-        <span>GPT-Live: who writes the patient’s words</span>
-        <select
-          value={program.liveBrain ?? 'steer'}
-          onChange={(e) => void save({ liveBrain: e.target.value as LiveBrain })}
-        >
-          <option value="steer">GPT-Live answers at once; Claude steers it (natural, fast)</option>
-          <option value="claude">Claude writes every line (exact script, ~2 s slower)</option>
         </select>
       </label>
       <fieldset className="field">

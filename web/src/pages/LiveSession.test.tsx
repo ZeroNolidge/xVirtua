@@ -424,6 +424,40 @@ describe('GPT-Live conversation', () => {
     );
   });
 
+  it('a “mm-hm” from Ray while the resident talks stays listening: one resident turn, nothing saved', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    // Ray says his opening line first.
+    audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(100);
+    patientStops();
+    await sleep(1700);
+    micLoudAt = performance.now();
+    await act(async () => cb.onHeard('Well, not really. The numbers reflect'));
+    await sleep(100);
+    // Ray: "Mm-hm." while the resident carries on.
+    audible = true;
+    await act(async () => cb.onSpoken('Mm-hm.', 3000));
+    micLoudAt = performance.now();
+    await act(async () => cb.onHeard(' the pressure inside your arteries.'));
+    await sleep(100);
+    patientStops();
+    await sleep(1100);
+    expect(screen.queryByText('Mm-hm.')).toBeNull();
+    expect(muted).toEqual([]);
+    expect(sessionApi.saveLiveExchange).not.toHaveBeenCalled();
+    // Then a real answer closes the resident's (whole) turn.
+    await sleep(600);
+    audible = true;
+    await act(async () => cb.onSpoken('So that means my heart works harder?', 6000));
+    await sleep(120);
+    expect(
+      screen.getByText('Well, not really. The numbers reflect the pressure inside your arteries.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('So that means my heart works harder?')).toBeInTheDocument();
+  });
+
   it('falls back to the standard voice when GPT-Live can’t connect', async () => {
     failConnect = true;
     const onFallback = await start();

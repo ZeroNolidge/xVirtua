@@ -38,6 +38,8 @@ export class LiveReply {
   selfReply = false;
   /** For a self-reply: what the resident had said. */
   residentText = '';
+  /** For a self-reply: it's a real answer (not just "mm-hm"), so it counts as a turn. */
+  committed = false;
   /** Bubble key, for a reply not saved on the server yet. */
   key: string | null = null;
   /** GPT-Live has finished this reply (or it was cut off). */
