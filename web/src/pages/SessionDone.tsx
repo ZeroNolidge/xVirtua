@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
 import type { ResidentFeedback } from '@plainspeak/shared';
 import { db } from '../lib/firebase';
-import { friendlyError } from '../lib/api';
+import { friendlyError, isConnectionError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
 import { sessionApi } from '../lib/session';
 import { ScoreView } from '../components/ScoreView';
@@ -54,6 +54,10 @@ function useConversation(id: string) {
   return { bubbles, meta };
 }
 
+/** Quiet retries when the answer is lost to a dropped signal. */
+const RETRIES = 3;
+const RETRY_WAIT_MS = 3000;
+
 function useSavedFeedback(id: string): [FeedbackState, (s: FeedbackState) => void] {
   const [fb, setFb] = useState<FeedbackState>({ state: 'loading' });
   useEffect(() => {
@@ -84,10 +88,22 @@ export function SessionDone() {
   async function requestFeedback() {
     asked.current = true;
     setFb({ state: 'working' });
-    try {
-      const { data } = await sessionApi.score({ sessionId: id });
-      if (data.feedback) setFb({ state: 'ok', feedback: data.feedback });
-    } catch (e) {
+    // A dropped signal loses the answer, not the work: the server keeps the
+    // feedback, so asking again soon just fetches it.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const { data } = await sessionApi.score({ sessionId: id });
+        if (data.feedback) setFb({ state: 'ok', feedback: data.feedback });
+        return;
+      } catch (e) {
+        if (isConnectionError(e) && attempt < RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_WAIT_MS));
+          continue;
+        }
+        return failed(e);
+      }
+    }
+    function failed(e: unknown) {
       const code = typeof e === 'object' && e && 'code' in e ? String(e.code) : '';
       // Another tab or an earlier visit is already writing it: wait for it to arrive.
       if (code.endsWith('aborted')) return;
