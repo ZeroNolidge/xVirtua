@@ -39,8 +39,24 @@ function wav(pcm: Buffer): Buffer {
   return Buffer.concat([h, pcm]);
 }
 
-/** Tries ways of getting GPT-Live to speak first, in order, until one gives audio. */
-const KICKS = ['commentary', 'commentary+silence', 'instructions'] as const;
+/**
+ * Ways of getting GPT-Live to speak first, tried in order. It only starts
+ * talking once it has received some input audio, so a moment of silence goes
+ * with the line.
+ */
+const KICKS = ['commentary+silence', 'instructions+silence'] as const;
+
+/** Cuts leading/trailing silence (GPT-Live keeps streaming silence after it speaks). */
+function trim(pcm: Buffer, pad = Math.round(RATE * 0.25)): Buffer {
+  const n = Math.floor(pcm.length / 2);
+  const loud = (i: number) => Math.abs(pcm.readInt16LE(i * 2)) > 500;
+  let a = 0;
+  while (a < n && !loud(a)) a++;
+  let b = n - 1;
+  while (b > a && !loud(b)) b--;
+  if (a >= b) return Buffer.alloc(0);
+  return pcm.subarray(Math.max(0, a - pad) * 2, Math.min(n, b + pad) * 2);
+}
 
 function record(voice: string, kick: (typeof KICKS)[number]): Promise<Buffer> {
   return new Promise((resolve) => {
@@ -50,6 +66,7 @@ function record(voice: string, kick: (typeof KICKS)[number]): Promise<Buffer> {
     const chunks: Buffer[] = [];
     const seen: Record<string, number> = {};
     let quiet: NodeJS.Timeout | null = null;
+    let words = 0;
     let done = false;
     const finish = (why: string) => {
       if (done) return;
@@ -75,7 +92,7 @@ function record(voice: string, kick: (typeof KICKS)[number]): Promise<Buffer> {
     });
     ws.on('error', (e) => finish(`socket error ${e.message}`));
     ws.on('open', () => {
-      const say = kick === 'instructions';
+      const say = kick === 'instructions+silence';
       ws.send(
         JSON.stringify({
           type: 'session.start',
@@ -103,7 +120,7 @@ function record(voice: string, kick: (typeof KICKS)[number]): Promise<Buffer> {
       if (seen[type] === 1 && !type.endsWith('audio.delta'))
         console.log(`  [${voice}/${kick}] ${JSON.stringify(ev).slice(0, 300)}`);
       if (type === 'session.started') {
-        if (kick !== 'instructions')
+        if (kick !== 'instructions+silence')
           ws.send(
             JSON.stringify({
               type: 'session.commentary.append',
@@ -112,18 +129,20 @@ function record(voice: string, kick: (typeof KICKS)[number]): Promise<Buffer> {
               content: LINE,
             }),
           );
-        // Some voice models only speak once they hear something: send a moment of silence.
-        if (kick === 'commentary+silence')
-          ws.send(
-            JSON.stringify({
-              type: 'session.input_audio.append',
-              audio: Buffer.alloc(RATE).toString('base64'),
-            }),
-          );
+        // GPT-Live only speaks once it has heard something: send a moment of silence.
+        ws.send(
+          JSON.stringify({
+            type: 'session.input_audio.append',
+            audio: Buffer.alloc(RATE).toString('base64'),
+          }),
+        );
       } else if (type === 'session.output_audio.delta' && typeof ev.delta === 'string') {
         chunks.push(Buffer.from(ev.delta, 'base64'));
+      } else if (type === 'session.output_transcript.delta') {
+        // Done once its words stop (the audio carries on as silence).
+        words++;
         if (quiet) clearTimeout(quiet);
-        quiet = setTimeout(() => finish('done speaking'), 2000);
+        quiet = setTimeout(() => finish(`done speaking (${words} word pieces)`), 2500);
       } else if (type === 'error') {
         finish(`error ${JSON.stringify(ev.error ?? ev).slice(0, 300)}`);
       }
@@ -136,7 +155,7 @@ for (const voice of voices) {
   console.log(`== ${voice}`);
   let pcm: Buffer = Buffer.alloc(0);
   for (const kick of KICKS) {
-    pcm = await record(voice, kick);
+    pcm = trim(await record(voice, kick));
     if (pcm.length > RATE) break; // more than half a second of audio
   }
   if (pcm.length <= RATE) {
