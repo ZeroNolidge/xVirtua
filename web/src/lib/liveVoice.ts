@@ -67,18 +67,23 @@ export class LiveVoiceCall {
     }
   }
 
-  async start(mic: MediaStream, connect: Connect): Promise<void> {
-    // A clone, so the recording keeps its own track.
-    const track = mic.getAudioTracks()[0]?.clone();
-    if (!track) throw new Error('No microphone track');
-    this.track = track;
+  /** `mic` null: listen only (e.g. a voice preview); the mic is never opened. */
+  async start(mic: MediaStream | null, connect: Connect): Promise<void> {
     const pc = new RTCPeerConnection();
     this.pc = pc;
-    pc.addTrack(track, new MediaStream([track]));
+    if (!mic) {
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+    } else {
+      // A clone, so the recording keeps its own track.
+      const track = mic.getAudioTracks()[0]?.clone();
+      if (!track) throw new Error('No microphone track');
+      this.track = track;
+      pc.addTrack(track, new MediaStream([track]));
+    }
     // The mic's own level tells us the resident started talking right away,
     // well before GPT-Live's transcript of it arrives. Echo cancellation keeps
     // the patient's voice out of it.
-    this.watchLevel(new MediaStream([track]), 18, (loud) => {
+    if (this.track) this.watchLevel(new MediaStream([this.track]), 18, (loud) => {
       const now = performance.now();
       if (loud) {
         this.lastMicLoudAt = now;

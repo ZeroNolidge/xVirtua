@@ -141,14 +141,32 @@ export async function startLiveCall(
     byGroup[voiceGroupOf(sc.briefing.persona.pronouns)] ?? program.get('liveVoice'),
   );
 
-  const tries: { shape: string; status: number; detail: string }[] = [];
-  let res: Response | null = null;
-  let raw = '';
-  let shape = '';
   const instructions =
     s.liveBrain === 'claude'
       ? buildLiveInstructions(sc.briefing, sc.script)
       : buildLivePersona(sc.briefing, sc.script);
+  const { answer, liveId, shape } = await openLiveCall(apiKey, instructions, voice, sdp, doFetch);
+  await ref.update({
+    liveCalls: FieldValue.arrayUnion({ id: liveId, at: Date.now(), voice, shape }),
+  });
+  return { sdp: answer, voice };
+}
+
+/**
+ * Opens a GPT-Live call for the browser's WebRTC offer and returns OpenAI's
+ * answer. Tries the known request layouts in order (see liveRequests).
+ */
+export async function openLiveCall(
+  apiKey: string,
+  instructions: string,
+  voice: LiveVoice,
+  sdp: string,
+  doFetch: Fetch = fetch,
+): Promise<{ answer: string; liveId: string | null; shape: string }> {
+  const tries: { shape: string; status: number; detail: string }[] = [];
+  let res: Response | null = null;
+  let raw = '';
+  let shape = '';
   for (const r of liveRequests(instructions, voice, sdp)) {
     res = await doFetch(r.url, {
       method: 'POST',
@@ -183,8 +201,5 @@ export async function startLiveCall(
   const b = (body ?? {}) as { id?: unknown; session?: { id?: unknown } };
   const liveId =
     typeof b.id === 'string' ? b.id : typeof b.session?.id === 'string' ? b.session.id : null;
-  await ref.update({
-    liveCalls: FieldValue.arrayUnion({ id: liveId, at: Date.now(), voice, shape }),
-  });
-  return { sdp: answer, voice };
+  return { answer, liveId, shape };
 }
