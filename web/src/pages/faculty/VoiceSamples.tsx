@@ -12,7 +12,11 @@ const startPreview = httpsCallable<
 >(functions, 'voiceSample', { timeout: 30_000 });
 
 /** Longest a preview call stays open. */
-const MAX_PREVIEW_MS = 15_000;
+const MAX_PREVIEW_MS = 25_000;
+/** Never hang up sooner than this after sending the line (GPT-Live needs a moment to take it in). */
+const MIN_PREVIEW_MS = 6_000;
+/** Done once there's been no voice and no new words for this long. */
+const DONE_QUIET_MS = 1_800;
 
 /**
  * Faculty: hear each GPT-Live voice and tag how it sounds, so the right voice
@@ -37,8 +41,12 @@ export function VoiceSamples({
     current.current?.hangUp();
     setPlaying(voice);
     let line = '';
-    let heard = false;
+    let sentAt = 0;
+    let lastWordAt = 0;
+    let closing = false;
     const stop = () => {
+      if (closing) return;
+      closing = true;
       window.clearInterval(watch);
       window.clearTimeout(cap);
       void c.close().catch(() => undefined);
@@ -48,11 +56,18 @@ export function VoiceSamples({
       }
     };
     const c = new LiveVoiceCall({
-      onStarted: () => line && c.say(null, line),
+      onStarted: () => {
+        if (!line) return;
+        c.say(null, line);
+        sentAt = performance.now();
+      },
       onDelegation: (id) => c.note(id, 'Say only the sample line.'),
       onHeard: () => undefined,
-      onSpoken: () => undefined,
+      // Its transcript of what it's saying: the surest sign it's speaking.
+      onSpoken: () => (lastWordAt = performance.now()),
       onError: (m) => {
+        // Errors from our own hang-up don't matter.
+        if (closing) return;
         setError(m);
         stop();
       },
@@ -60,11 +75,14 @@ export function VoiceSamples({
     });
     current.current = c;
     c.unlockAudio(); // inside the tap (iOS)
-    // Hang up once it has finished speaking.
+    // Hang up once it has finished the line (never before it's had time to say it).
     const watch = window.setInterval(() => {
-      if (c.patientAudible(300)) heard = true;
-      else if (heard && !c.patientAudible(1200)) stop();
-    }, 200);
+      const now = performance.now();
+      if (!sentAt || now - sentAt < MIN_PREVIEW_MS) return;
+      const spoke = lastWordAt > 0 || c.lastSoundAt > sentAt;
+      const quiet = now - Math.max(lastWordAt, c.lastSoundAt) > DONE_QUIET_MS;
+      if (spoke && quiet) stop();
+    }, 250);
     const cap = window.setTimeout(stop, MAX_PREVIEW_MS);
     try {
       await c.start(null, async (sdp) => {
