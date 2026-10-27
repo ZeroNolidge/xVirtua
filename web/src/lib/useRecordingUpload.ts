@@ -15,13 +15,16 @@ export function useRecordingUpload(sessionId: string) {
   const job = useRef<RecordingJob | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** 0–1 while the recording uploads; null before it starts. */
+  const [progress, setProgress] = useState<number | null>(null);
   const done = () => nav(`/session/${sessionId}/done`, { replace: true });
 
   async function attempt() {
     if (!job.current) return done();
     setBusy(true);
     try {
-      await uploadRecording(job.current);
+      setProgress(0);
+      await uploadRecording(job.current, undefined, setProgress);
       job.current = null;
       done();
     } catch (e) {
@@ -35,6 +38,7 @@ export function useRecordingUpload(sessionId: string) {
   return {
     failed,
     busy,
+    progress,
     /** Upload this recording (or go straight to feedback if there is none). */
     async save(blob: Blob | null | undefined, ext: string) {
       if (blob && claims && user)

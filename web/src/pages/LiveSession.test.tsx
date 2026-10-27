@@ -184,6 +184,7 @@ beforeEach(() => {
   micLoudAt = -1e9;
   lastSound = -1e9;
   vi.mocked(sessionApi.saveHeard).mockClear();
+  vi.mocked(sessionApi.saveLiveExchange).mockClear();
 });
 
 /** The resident says something and GPT-Live asks for the reply. */
@@ -417,7 +418,7 @@ describe('GPT-Live conversation', () => {
     expect(screen.getByText('Yes, a little, but we can treat it.')).toBeInTheDocument();
     expect(screen.getByText('Okay. Is that bad?')).toBeInTheDocument();
     patientStops();
-    await sleep(1100);
+    await sleep(1800);
     expect(sessionApi.saveLiveExchange).toHaveBeenCalledWith({
       sessionId: 's1',
       resident: 'Yes, a little, but we can treat it.',
@@ -430,7 +431,42 @@ describe('GPT-Live conversation', () => {
         notes.some((n) => n.includes('bring up your license') && n.includes('never say it aloud')),
       ).toBe(true),
     );
-  });
+  }, 10_000);
+
+  it('when Ray pauses mid-answer and goes on, it stays one bubble and one saved turn', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(100);
+    patientStops();
+    await sleep(1000);
+    micLoudAt = performance.now();
+    await act(async () => cb.onHeard('You seem a little hesitant.'));
+    await sleep(1600);
+    audible = true;
+    await act(async () => cb.onSpoken('Yeah, a little. I just...', 5000));
+    await sleep(120);
+    patientStops();
+    // A long, thoughtful pause, then he goes on.
+    await sleep(2000);
+    audible = true;
+    await act(async () => cb.onSpoken('I don\u2019t wanna end up like my dad.', 9000));
+    await sleep(120);
+    patientStops();
+    await sleep(1800);
+    expect(sessionApi.saveLiveExchange).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText('Yeah, a little. I just... I don\u2019t wanna end up like my dad.'),
+    ).toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(saved()).toContainEqual({
+        sessionId: 's1',
+        idx: 2,
+        spoken: 'Yeah, a little. I just... I don\u2019t wanna end up like my dad.',
+      }),
+    );
+  }, 10_000);
 
   it('a “mm-hm” from Ray while the resident talks stays listening: one resident turn, nothing saved', async () => {
     await start();

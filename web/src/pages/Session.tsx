@@ -32,6 +32,7 @@ import { ECHO_WINDOW_MS } from '../lib/liveReply';
 import { MicMeter } from '../lib/micMeter';
 import { useRecordingUpload } from '../lib/useRecordingUpload';
 import { UploadRetry } from '../components/UploadRetry';
+import { SavingCard } from '../components/SavingCard';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
 export interface Bubble {
@@ -714,7 +715,7 @@ function Conversation({
     stt.current?.stop();
     player.current?.finish();
     renderer.current?.dispose();
-    setSaving('Saving…');
+    setSaving('Saving the conversation…');
     await Promise.race([
       Promise.allSettled(saves.current),
       new Promise((r) => setTimeout(r, 4000)),
@@ -828,6 +829,10 @@ function Conversation({
           queued={queued}
         />
       )}
+      {phase === 'ending' && !upload.failed && (
+        <SavingCard step={saving ?? 'Wrapping up…'} progress={upload.progress} />
+      )}
+
       <div ref={bottom} />
 
       {upload.failed && (

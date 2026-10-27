@@ -40,6 +40,8 @@ export class LiveReply {
   residentText = '';
   /** For a self-reply: it's a real answer (not just "mm-hm"), so it counts as a turn. */
   committed = false;
+  /** For a self-reply: the first save (it gives us `idx`; later parts update that turn). */
+  exchange: Promise<void> | null = null;
   /** Bubble key, for a reply not saved on the server yet. */
   key: string | null = null;
   /** GPT-Live has finished this reply (or it was cut off). */

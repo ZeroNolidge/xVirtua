@@ -18,7 +18,12 @@ export interface RecordingJob {
  * when the connection drops (instead of the storage library's own retries,
  * which can run for 10 minutes), so the app can offer "Try again".
  */
-export async function uploadRecording(job: RecordingJob, stallMs = UPLOAD_STALL_MS): Promise<void> {
+export async function uploadRecording(
+  job: RecordingJob,
+  stallMs = UPLOAD_STALL_MS,
+  /** 0–1, as the upload goes. */
+  onProgress?: (fraction: number) => void,
+): Promise<void> {
   const path = `audio/${job.programId}/${job.uid}/${job.sessionId}/recording.${job.ext}`;
   const task = uploadBytesResumable(ref(storage, path), job.blob, {
     contentType: job.blob.type || 'audio/webm',
@@ -35,7 +40,10 @@ export async function uploadRecording(job: RecordingJob, stallMs = UPLOAD_STALL_
     arm();
     task.on(
       'state_changed',
-      () => arm(),
+      (snap) => {
+        arm();
+        if (snap?.totalBytes) onProgress?.(snap.bytesTransferred / snap.totalBytes);
+      },
       (e) => {
         window.clearTimeout(timer);
         reject(e);

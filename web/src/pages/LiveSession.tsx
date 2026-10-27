@@ -8,6 +8,7 @@ import { ECHO_WINDOW_MS, isEcho, LiveReply, MIC_EVIDENCE_MS } from '../lib/liveR
 import { SessionRecorder } from '../lib/recorder';
 import { PlainWordSearch } from '../components/PlainWordSearch';
 import { UploadRetry } from '../components/UploadRetry';
+import { SavingCard } from '../components/SavingCard';
 import { useRecordingUpload } from '../lib/useRecordingUpload';
 import { Transcript, type Bubble } from './Session';
 
@@ -33,6 +34,10 @@ const KNOWN_EVENTS = new Set([
 /** Resident words this soon after a reply was asked for (before the patient speaks) finish that turn. */
 const LATE_WORDS_MS = 2500;
 /** The resident is done once no new words (and no mic sound) for this long... */
+/** A self-reply is done after this much quiet (he often pauses mid-thought). */
+const SELF_DONE_MS = 1600;
+/** He went on within this long, with nothing from the resident: same answer. */
+const CONTINUE_MS = 8000;
 const SETTLE_QUIET_MS = 700;
 /** ...or after this long at most. */
 const SETTLE_MAX_MS = 2500;
@@ -132,7 +137,7 @@ export function LiveConversation({
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [bubbles, heard, thinking]);
+  }, [bubbles, heard, thinking, phase]);
 
   /** Shows (or updates) the patient's bubble for this reply. */
   function showPatient(r: LiveReply, text: string) {
@@ -155,20 +160,32 @@ export function LiveConversation({
     r.saved = true;
     const resident = r.residentText.trim();
     const patient = (r.cut !== null ? (r.cut ? `${r.cut} —` : '') : r.spoken).trim();
+    // A later part of the same answer (he paused, then went on): update his turn.
+    if (r.exchange) {
+      const spoken = r.spoken;
+      saves.current.push(
+        r.exchange
+          .then(() =>
+            r.idx === null ? undefined : sessionApi.saveHeard({ sessionId, idx: r.idx, spoken }),
+          )
+          .catch((e: unknown) => reportError('live.selfReply', e)),
+      );
+      return;
+    }
     if (!resident) return;
-    saves.current.push(
-      sessionApi
-        .saveLiveExchange({ sessionId, resident, patient })
-        .then(({ data }) => {
-          // Claude's private note steers the patient's next reply (never spoken).
-          if (data.note)
-            call.current?.note(
-              null,
-              `Director note for your next reply (private; never say it aloud): ${data.note}`,
-            );
-        })
-        .catch((e: unknown) => reportError('live.selfReply', e)),
-    );
+    r.exchange = sessionApi
+      .saveLiveExchange({ sessionId, resident, patient })
+      .then(({ data }) => {
+        r.idx = data.patientIdx;
+        // Claude's private note steers the patient's next reply (never spoken).
+        if (data.note)
+          call.current?.note(
+            null,
+            `Director note for your next reply (private; never say it aloud): ${data.note}`,
+          );
+      })
+      .catch((e: unknown) => reportError('live.selfReply', e));
+    saves.current.push(r.exchange);
   }
 
   /**
@@ -186,6 +203,12 @@ export function LiveConversation({
     if (text) setBubbles((b) => [...b, { key: `r${Date.now()}`, who: 'resident', text }]);
   }
 
+  /** The resident has said something real since the patient's last words. */
+  function residentSpokeSince() {
+    const t = heardBuf.current.trim();
+    return !!t && !isBackchannel(t);
+  }
+
   /** Words GPT-Live is speaking while we didn't ask: it's answering on its own. */
   function onSpoken(delta: string, startMs?: number) {
     const cur = reply.current;
@@ -197,6 +220,21 @@ export function LiveConversation({
       !cur.pieces.length &&
       cur.sentAt !== null &&
       performance.now() - cur.sentAt > NO_TRANSCRIPT_MS;
+    // He paused mid-answer and went on, and the resident said nothing in
+    // between: it's the same answer (one bubble, one turn), not a new one.
+    if (
+      !answering.current &&
+      cur?.selfReply &&
+      cur.committed &&
+      cur.cut === null &&
+      cur.saved &&
+      !residentSpokeSince() &&
+      performance.now() - cur.lastPieceAt < CONTINUE_MS
+    ) {
+      cur.saved = false;
+      cur.add(/^\s/.test(delta) ? delta : ` ${delta}`, startMs);
+      return;
+    }
     if (!answering.current && (!cur || cur.finished || stale)) {
       // GPT-Live is answering on its own. The resident's turn only closes once
       // this is more than a listening sound ("mm-hm", "okay"); see commitSelfReply.
@@ -272,7 +310,7 @@ export function LiveConversation({
         !r.saved &&
         r.cut === null &&
         r.pieces.length &&
-        now - r.lastPieceAt > 900 &&
+        now - r.lastPieceAt > (r.selfReply ? SELF_DONE_MS : 900) &&
         !c.patientAudible(800)
       ) {
         if (r.selfReply && !r.committed && isBackchannel(r.spoken)) {
@@ -607,7 +645,7 @@ export function LiveConversation({
     if (!window.confirm('End the conversation and get feedback?')) return;
     ended.current = true;
     setPhase('ending');
-    setSaving('Saving…');
+    setSaving('Saving the conversation…');
     await flushSaves();
     reportCensus('end');
     await call.current?.close().catch(() => undefined);
@@ -697,6 +735,10 @@ export function LiveConversation({
           patientFirstName={first}
         />
       )}
+      {phase === 'ending' && !upload.failed && (
+        <SavingCard step={saving ?? 'Wrapping up…'} progress={upload.progress} />
+      )}
+
       <div ref={bottom} />
 
       {upload.failed && (
