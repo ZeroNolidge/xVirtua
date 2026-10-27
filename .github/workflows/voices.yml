@@ -1,0 +1,48 @@
+name: Record voices
+
+# Records a short sample of each GPT-Live voice into Cloud Storage, for the
+# faculty voice picker. Run once (or again to refresh). Uses the OpenAI key.
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'Firebase project ID (must match the key)'
+        required: true
+      voices:
+        description: 'Optional: comma-separated voices (default: all)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w shared >/dev/null
+      - name: Google credentials
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EXPECTED: ${{ inputs.project_id }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          PID=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).project_id)" "$RUNNER_TEMP/sa.json")
+          [ "$PID" = "$EXPECTED" ] || { echo "::error::key is for $PID"; exit 1; }
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+      - name: Record
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
+          STORAGE_BUCKET: ${{ inputs.project_id }}.firebasestorage.app
+          VOICES: ${{ inputs.voices }}
+        run: npx tsx scripts/record-voices.ts
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

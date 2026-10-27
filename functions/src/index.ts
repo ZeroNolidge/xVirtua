@@ -30,7 +30,7 @@ import { pickVoice, synthesize } from './voice/cartesia.js';
 import type { VoiceService } from './voice/streamVoice.js';
 import { getSttToken as mintSttToken } from './voice/stt.js';
 import { startLiveCall as connectLive } from './voice/live.js';
-import { voicePreview as makeVoicePreview } from './voice/voiceSample.js';
+import { voiceSample as makeVoiceSample } from './voice/voiceSample.js';
 import type { Caller } from './lib/callable.js';
 import { APP_CHECK_ENFORCE } from './lib/appCheck.js';
 import { reportClientError as storeClientError } from './lib/clientErrors.js';
@@ -178,9 +178,13 @@ export const startLiveCall = callable(
   (req) => warmup(req) ?? connectLive(db(), callerOf(req), req.data, keyOf(OPENAI_API_KEY)),
 );
 
-/** Faculty tool: hear a GPT-Live voice (a short listen-only call from the browser). */
-export const voiceSample = callable({ secrets: [OPENAI_API_KEY], timeoutSeconds: 30 }, (req) =>
-  makeVoicePreview(db(), callerOf(req), req.data, keyOf(OPENAI_API_KEY)),
+/** Faculty tool: a recorded sample of a GPT-Live voice (see the Record voices workflow). */
+export const voiceSample = callable({}, (req) =>
+  makeVoiceSample(callerOf(req), req.data, async (voice) => {
+    const f = getStorage().bucket().file(`voiceSamples/${voice}.wav`);
+    const [exists] = await f.exists();
+    return exists ? (await f.download())[0] : null;
+  }),
 );
 
 const CORS = [

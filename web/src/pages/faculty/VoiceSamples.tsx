@@ -2,26 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { LIVE_VOICES, type LiveVoice } from '@plainspeak/shared';
 import { functions } from '../../lib/firebase';
-import { LiveVoiceCall } from '../../lib/liveVoice';
 import { friendlyError } from '../../lib/api';
 import { TAG_LABEL, type VoiceTag } from './voiceTags';
 
-const startPreview = httpsCallable<
-  { voice: LiveVoice; sdp: string },
-  { sdp: string; line: string }
->(functions, 'voiceSample', { timeout: 30_000 });
-
-/** Longest a preview call stays open. */
-const MAX_PREVIEW_MS = 25_000;
-/** Never hang up sooner than this after sending the line (GPT-Live needs a moment to take it in). */
-const MIN_PREVIEW_MS = 6_000;
-/** Done once there's been no voice and no new words for this long. */
-const DONE_QUIET_MS = 1_800;
+const getSample = httpsCallable<{ voice: LiveVoice }, { voice: string; wav: string }>(
+  functions,
+  'voiceSample',
+);
 
 /**
- * Faculty: hear each GPT-Live voice and tag how it sounds, so the right voice
- * can be picked for each patient. Each play is a short listen-only GPT-Live
- * call (the mic is never opened) that says one line.
+ * Faculty: hear each GPT-Live voice (a short recording, made once) and tag how
+ * it sounds, so the right voice can be picked for each patient.
  */
 export function VoiceSamples({
   tags,
@@ -32,67 +23,32 @@ export function VoiceSamples({
 }) {
   const [playing, setPlaying] = useState<LiveVoice | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const current = useRef<LiveVoiceCall | null>(null);
+  const urls = useRef(new Map<LiveVoice, string>());
+  const audio = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => () => current.current?.hangUp(), []);
+  useEffect(() => () => audio.current?.pause(), []);
 
   async function play(voice: LiveVoice) {
     setError(null);
-    current.current?.hangUp();
+    audio.current?.pause();
+    // Created inside the tap so phones allow it to play.
+    const a = new Audio();
+    audio.current = a;
     setPlaying(voice);
-    let line = '';
-    let sentAt = 0;
-    let lastWordAt = 0;
-    let closing = false;
-    const stop = () => {
-      if (closing) return;
-      closing = true;
-      window.clearInterval(watch);
-      window.clearTimeout(cap);
-      void c.close().catch(() => undefined);
-      if (current.current === c) {
-        current.current = null;
-        setPlaying(null);
-      }
-    };
-    const c = new LiveVoiceCall({
-      onStarted: () => {
-        if (!line) return;
-        c.say(null, line);
-        sentAt = performance.now();
-      },
-      onDelegation: (id) => c.note(id, 'Say only the sample line.'),
-      onHeard: () => undefined,
-      // Its transcript of what it's saying: the surest sign it's speaking.
-      onSpoken: () => (lastWordAt = performance.now()),
-      onError: (m) => {
-        // Errors from our own hang-up don't matter.
-        if (closing) return;
-        setError(m);
-        stop();
-      },
-      onClosed: () => stop(),
-    });
-    current.current = c;
-    c.unlockAudio(); // inside the tap (iOS)
-    // Hang up once it has finished the line (never before it's had time to say it).
-    const watch = window.setInterval(() => {
-      const now = performance.now();
-      if (!sentAt || now - sentAt < MIN_PREVIEW_MS) return;
-      const spoke = lastWordAt > 0 || c.lastSoundAt > sentAt;
-      const quiet = now - Math.max(lastWordAt, c.lastSoundAt) > DONE_QUIET_MS;
-      if (spoke && quiet) stop();
-    }, 250);
-    const cap = window.setTimeout(stop, MAX_PREVIEW_MS);
     try {
-      await c.start(null, async (sdp) => {
-        const { data } = await startPreview({ voice, sdp });
-        line = data.line;
-        return data.sdp;
-      });
+      let url = urls.current.get(voice);
+      if (!url) {
+        const { data } = await getSample({ voice });
+        const bytes = Uint8Array.from(atob(data.wav), (ch) => ch.charCodeAt(0));
+        url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+        urls.current.set(voice, url);
+      }
+      a.src = url;
+      a.onended = () => setPlaying((p) => (p === voice ? null : p));
+      await a.play();
     } catch (e) {
       setError(friendlyError(e));
-      stop();
+      setPlaying(null);
     }
   }
 
@@ -100,7 +56,7 @@ export function VoiceSamples({
     <div className="voice-samples">
       <p className="muted small">
         Tap play to hear each voice say a line, then tag how it sounds. Your tags show in the voice
-        lists above. Each play takes a few seconds to connect.
+        lists above.
       </p>
       {error && (
         <p className="error" role="alert">
