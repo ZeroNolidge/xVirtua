@@ -99,16 +99,16 @@ export function Settings() {
             </select>
           </label>
         ))}
-        <details>
-          <summary>Hear the voices</summary>
-          <VoiceSamples
-            tags={program.liveVoiceTags ?? {}}
-            onTag={(voice, tag) =>
-              void save({ liveVoiceTags: { ...program.liveVoiceTags, [voice]: tag } })
-            }
-          />
-        </details>
       </fieldset>
+      <section aria-labelledby="voice-samples-h">
+        <h3 id="voice-samples-h">Hear the GPT-Live voices</h3>
+        <VoiceSamples
+          tags={program.liveVoiceTags ?? {}}
+          onTag={(voice, tag) =>
+            void save({ liveVoiceTags: { ...program.liveVoiceTags, [voice]: tag } })
+          }
+        />
+      </section>
       {saved && <p className="ok small">Saved. New conversations use these settings.</p>}
       <p className="muted small">
         Audio kept {program.audioRetentionMonths} months · transcripts kept{' '}
