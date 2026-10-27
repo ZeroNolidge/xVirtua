@@ -17,6 +17,8 @@ export class LiveReply {
   /** performance.now() when the patient became audible for this reply. */
   firstAudibleAt: number | null = null;
   lastPieceAt = 0;
+  /** performance.now() when GPT-Live's first words for this reply arrived. */
+  firstPieceAt: number | null = null;
   /** What the patient got out before the resident cut in. */
   cut: string | null = null;
   /** How much audio had played when cut off (ms). */
@@ -62,6 +64,7 @@ export class LiveReply {
   add(text: string, startMs?: number, now = performance.now()) {
     this.pieces.push({ text, ...(startMs !== undefined ? { startMs } : {}) });
     this.lastPieceAt = now;
+    this.firstPieceAt ??= now;
   }
 
   /** Everything GPT-Live has said for this reply so far. */

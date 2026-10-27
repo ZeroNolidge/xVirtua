@@ -475,6 +475,17 @@ describe('GPT-Live conversation', () => {
     expect(screen.getByText('Listening… just talk')).toBeInTheDocument();
   });
 
+  it('says so when Ray’s words arrive but no sound plays (e.g. Bluetooth took it)', async () => {
+    await start();
+    await act(async () => cb.onStarted());
+    audible = false;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(3800);
+    expect(screen.getByText(/Can’t hear Ray\?/)).toBeInTheDocument();
+    expect(screen.getByText('So, my blood pressure is high?')).toBeInTheDocument();
+    expect(screen.queryByText('Ray is thinking…')).toBeNull();
+  }, 10_000);
+
   it('when Ray pauses mid-answer and goes on, it stays one bubble and one saved turn', async () => {
     await start();
     await act(async () => cb.onStarted());

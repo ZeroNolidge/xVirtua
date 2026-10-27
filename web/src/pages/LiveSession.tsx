@@ -60,6 +60,8 @@ const RESUME_QUIET_MS = 1200;
 const MAX_MUTE_MS = 15_000;
 /** No transcript of the patient's speech this long after his line went out: show the line itself. */
 const NO_TRANSCRIPT_MS = 4000;
+/** His words are arriving but no sound has played for this long: warn. */
+const NO_SOUND_MS = 3500;
 
 export interface LiveConversationProps {
   sessionId: string;
@@ -104,6 +106,8 @@ export function LiveConversation({
   const [startMs] = useState(() => startedAtMs ?? Date.now());
   /** The opening line has been handed to GPT-Live (not again after a pause). */
   const openingSent = useRef(false);
+  /** We've told them we can't play his voice. */
+  const soundWarned = useRef(false);
   const guard = useCallGuard({
     active: phase === 'live',
     startedAtMs: startMs,
@@ -309,6 +313,7 @@ export function LiveConversation({
         setThinking(false);
         setOpeningWait(false);
         setSlowStart(false);
+        if (soundWarned.current) setNotice((n) => (n?.startsWith('Can’t hear') ? null : n));
       }
       // His words appear as he says them, not before.
       if (r && (r.idx !== null || r.key) && r.cut === null && !r.saved) {
@@ -322,6 +327,24 @@ export function LiveConversation({
           if (text && !isBackchannel(text)) commitSelfReply(r);
         }
         if (text && text !== r.shown && (!r.selfReply || r.committed)) showPatient(r, text);
+      }
+      // He's talking (his words are arriving) but no sound reaches this phone:
+      // usually the sound went to a Bluetooth device, or the volume is off.
+      if (
+        r &&
+        r.firstAudibleAt === null &&
+        r.firstPieceAt !== null &&
+        now - r.firstPieceAt > NO_SOUND_MS
+      ) {
+        setThinking(false);
+        setOpeningWait(false);
+        if (!soundWarned.current) {
+          soundWarned.current = true;
+          setNotice(
+            `Can’t hear ${first}? ${first}’s voice isn’t playing on this phone. Check the volume, and turn off Bluetooth (a car or headset may be taking the sound).`,
+          );
+          reportError('live.noSound', new Error('Patient words arrived but no sound played'));
+        }
       }
       // Done talking: what he said out loud becomes the saved line.
       if (
