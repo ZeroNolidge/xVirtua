@@ -12,7 +12,8 @@ from it, so get it right first.
 - **Model:** GPT Image 2, text-to-image, 1:1, 2K, medium quality (about 35 credits each). Make 3 at once and pick one.
 - **Must have:**
   - Faces the camera, looking straight into the lens at eye level.
-  - Neutral expression, **mouth gently closed**.
+  - **A truly neutral face: no smile at all.** Lips relaxed and closed, mouth corners level, cheeks not lifted, no smile lines at the eyes. For a worried patient, add only a faint hint of concern (eyebrows very slightly lifted in the middle). Every clip ends on this face, so even a slight smile makes every cue end in a smile. With Ray, a frown that relaxed into his slightly smiling portrait read as if he were laughing to himself.
+  - If a portrait you like has a slight smile, don't start over: edit it with Nano Banana Pro (image-to-image, 2K, about 40 credits), asking it to change only the expression and keep everything else the same.
   - Head and upper chest centred, a little space above the head, hands just visible (resting on knees) so fidgeting can show.
   - Soft, even light on the face, no harsh shadows; softly blurred clinic background.
   - "Realistic and unretouched, documentary style. No text, no logos."
