@@ -42,6 +42,8 @@ import {
   type TurnState,
 } from '../components/ConversationBits';
 import { useCaptions } from '../lib/useCaptions';
+import { useAvatar } from '../lib/useAvatar';
+import { AvatarStage } from '../components/AvatarStage';
 import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
@@ -321,6 +323,12 @@ function Conversation({
 
   const talking = phase === 'patient' || phase === 'listening' || phase === 'thinking';
   const [captions, toggleCaptions] = useCaptions();
+  const {
+    stage: faceStage,
+    ready: faceReady,
+    start: startFace,
+    stop: stopFace,
+  } = useAvatar(sessionId);
   // Typing needs the words on screen.
   const showWords = captions || typed;
   const lastPatient = [...bubbles].reverse().find((b) => b.who === 'patient');
@@ -789,6 +797,8 @@ function Conversation({
   }
 
   async function begin() {
+    // The video face (if on) starts inside this tap, alongside everything else.
+    const facing = startFace();
     setPhase('connecting');
     setNotice(null);
     renderer.current = new VoiceRenderer();
@@ -811,13 +821,20 @@ function Conversation({
     }
 
     if (mic.current) await startVoice(mic.current);
+    // Wait for the face (it times out by itself) so the opening line has it.
+    const a = await facing;
     if (gone.current) return;
+    if (a && renderer.current) {
+      a.feedElement(renderer.current.element);
+      renderer.current.follower = a;
+    }
     if (opening) await speakStored(opening);
     else startListening();
   }
 
   /** Nobody's using it (app hidden, or quiet): turn the mic and speech service off. */
   function pause(why: PauseReason) {
+    stopFace(); // The video face is billed by the minute.
     if (!mic.current) return; // Typing only: nothing is listening.
     setPaused(why);
     recorder.current?.pause();
@@ -830,6 +847,7 @@ function Conversation({
   }
 
   async function carryOn() {
+    void startFace();
     setResumingVoice(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -853,6 +871,7 @@ function Conversation({
     if (!skipConfirm && !window.confirm('End and get feedback?')) return;
     if (phaseRef.current === 'ending') return;
     setPaused(null);
+    stopFace();
     setPhase('ending');
     const p = pending.current;
     if (p.timer) window.clearTimeout(p.timer);
@@ -941,6 +960,8 @@ function Conversation({
           )}
         </div>
       </header>
+
+      <AvatarStage ref={faceStage} show={faceReady && talking} name={persona.name} />
 
       {notice && (
         <p className="notice" role="alert">

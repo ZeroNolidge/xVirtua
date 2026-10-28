@@ -7,6 +7,8 @@ export const REGION = 'us-east1';
 export const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 export const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY');
 export const CARTESIA_API_KEY = defineSecret('CARTESIA_API_KEY');
+/** Optional: "unset" until the program tries the video avatar. */
+export const SIMLI_API_KEY = defineSecret('SIMLI_API_KEY');
 
 /** Guard rails per session. */
 export const LIMITS = {

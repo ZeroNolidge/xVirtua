@@ -41,6 +41,8 @@ export default defineConfig({
         // so a normal reload always gets the newest version. The stored copy
         // is only for when there's no connection.
         globPatterns: ['**/*.{js,css,png,svg,ico,webmanifest}'],
+        // The video avatar (large) downloads only for programs that use it.
+        globIgnores: ['**/avatar-*.js'],
         navigateFallback: null,
         runtimeCaching: [
           {
@@ -60,6 +62,8 @@ export default defineConfig({
         // Separate long-lived vendor chunks: they change rarely, so phones keep them cached.
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return undefined;
+          // The video avatar loads only when a program turns it on.
+          if (id.includes('simli-client') || id.includes('livekit')) return 'avatar';
           if (id.includes('@firebase/firestore') || id.includes('firebase/firestore'))
             return 'firebase-firestore';
           if (id.includes('@firebase/auth') || id.includes('firebase/auth')) return 'firebase-auth';

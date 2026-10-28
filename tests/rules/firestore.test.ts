@@ -146,6 +146,16 @@ describe('programs', () => {
     await assertFails(updateDoc(doc(fs(a.resA), 'programs/irmc'), { captionsDefault: true }));
   });
 
+  it('faculty can turn the video avatar on and pick faces (Simli ids only); residents can’t', async () => {
+    const ref = doc(fs(a.facultyIrmc), 'programs/irmc');
+    const face = 'bf13113a-355a-4d97-8b90-4edccd1da7b2';
+    await assertSucceeds(updateDoc(ref, { avatarOn: true, avatarFaces: { he: face } }));
+    await assertFails(updateDoc(ref, { avatarOn: 'yes' }));
+    await assertFails(updateDoc(ref, { avatarFaces: { he: 'not-a-face' } }));
+    await assertFails(updateDoc(ref, { avatarFaces: { robot: face } }));
+    await assertFails(updateDoc(doc(fs(a.resA), 'programs/irmc'), { avatarOn: true }));
+  });
+
   it('residents and other programs can’t change any voice setting', async () => {
     for (const who of [a.resA, a.resB, a.facultyOther, a.anon, a.noClaims]) {
       const ref = doc(fs(who), 'programs/irmc');

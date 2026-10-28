@@ -8,6 +8,7 @@ import { endSession, patientTurn, saveHeard, saveLiveExchange, startSession } fr
 import { FakeBrain } from '../patient/fakeBrain.js';
 import type { Caller } from '../lib/callable.js';
 import { startLiveCall } from '../voice/live.js';
+import { avatarSession } from '../voice/avatar.js';
 import { FakeDirector } from '../patient/director.js';
 
 const PROJECT_ID = 'demo-plainspeak';
@@ -435,6 +436,40 @@ describe('GPT-Live test mode', () => {
     await expect(
       startLiveCall(db, otherResident, { sessionId, sdp: 'v=0 offer....' }, 'sk-x', okFetch([])),
     ).rejects.toMatchObject({ code: 'not-found' });
+  });
+
+  it('mints a video avatar session only when faculty turned it on, with the face for the patient', async () => {
+    const face = 'bf13113a-355a-4d97-8b90-4edccd1da7b2';
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const calls: { url: string; init: { headers: Record<string, string>; body: string } }[] = [];
+    const simli = (async (url: string, init: { headers: Record<string, string>; body: string }) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ session_token: 'tok_1', warnings: [] }), {
+        status: 200,
+      });
+    }) as unknown as typeof fetch;
+    await expect(
+      avatarSession(db, resident, { sessionId }, 'sk-simli', simli),
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
+    await db.doc('programs/irmc').set({ avatarOn: true }, { merge: true });
+    // On, but no face chosen yet.
+    await expect(
+      avatarSession(db, resident, { sessionId }, 'sk-simli', simli),
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
+    await db.doc('programs/irmc').set({ avatarFaces: { he: face } }, { merge: true });
+    // Key not added yet.
+    await expect(avatarSession(db, resident, { sessionId }, 'unset', simli)).rejects.toMatchObject({
+      code: 'unavailable',
+    });
+    const r = await avatarSession(db, resident, { sessionId }, 'sk-simli', simli);
+    expect(r.token).toBe('tok_1');
+    expect(calls[0]!.url).toBe('https://api.simli.ai/compose/token');
+    expect(calls[0]!.init.headers['x-simli-api-key']).toBe('sk-simli');
+    expect(JSON.parse(calls[0]!.init.body)).toMatchObject({ faceId: face, handleSilence: false });
+    await expect(
+      avatarSession(db, otherResident, { sessionId }, 'sk-simli', simli),
+    ).rejects.toMatchObject({ code: 'not-found' });
+    await db.doc('programs/irmc').set({ avatarOn: false }, { merge: true });
   });
 
   it('skips the Cartesia voice for live turns and keeps what GPT-Live actually said', async () => {

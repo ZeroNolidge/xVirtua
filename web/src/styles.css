@@ -946,3 +946,24 @@ p {
   gap: 8px;
   margin-bottom: 8px;
 }
+
+/* ---------- video avatar (test) ---------- */
+.avatar-stage {
+  display: none;
+}
+.avatar-stage.on {
+  display: block;
+  margin: 0 auto 12px;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.avatar-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

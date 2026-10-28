@@ -146,6 +146,11 @@ export class VoiceRenderer {
     });
   }
 
+  /** The player itself (the video avatar listens to it). */
+  get element(): HTMLAudioElement {
+    return this.audio;
+  }
+
   /** How far through the current clip we are, 0–1 (1 when there's no clip). */
   get progress(): number {
     if (!this.clipPlaying) return 1;
@@ -177,14 +182,19 @@ export class VoiceRenderer {
     this.clipPlaying = false;
   }
 
+  /** The video avatar, when it plays the voice instead (it follows duck and stop). */
+  follower: { duck(on: boolean): void; clear(): void } | null = null;
+
   /** Turn the patient down while we check whether the resident is starting to talk. */
   duck(on: boolean) {
     this.audio.volume = on ? 0.05 : 1;
+    this.follower?.duck(on);
   }
 
   /** Stops the clip that's playing (play() then returns). */
   stopClip() {
     this.audio.pause();
+    this.follower?.clear();
     const w = this.textWait;
     this.textWait = null;
     w?.();

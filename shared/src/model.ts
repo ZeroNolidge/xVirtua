@@ -67,6 +67,10 @@ export interface Program {
   liveVoiceTags?: Partial<Record<LiveVoice, 'male' | 'female' | 'neutral'>>;
   /** Captions (the live transcript) on by default during conversations. Unset: off. */
   captionsDefault?: boolean;
+  /** Test: show the patient as a lip-synced video avatar (Simli). Unset: off. */
+  avatarOn?: boolean;
+  /** Simli face ids by the patient's pronouns. */
+  avatarFaces?: Partial<Record<VoiceGroup, string>>;
 }
 
 /** Custom claims set on the Firebase Auth token by the server. */

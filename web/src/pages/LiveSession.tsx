@@ -20,6 +20,8 @@ import {
   type TurnState,
 } from '../components/ConversationBits';
 import { useCaptions } from '../lib/useCaptions';
+import { useAvatar } from '../lib/useAvatar';
+import { AvatarStage } from '../components/AvatarStage';
 import { Transcript, type Bubble } from './Session';
 import { nonverbalLine } from '../lib/voiceRenderer';
 
@@ -131,6 +133,16 @@ export function LiveConversation({
   const call = useRef<LiveVoiceCall | null>(null);
   const readMic = useCallback(() => call.current?.micLevel ?? 0, []);
   const [captions, toggleCaptions] = useCaptions();
+  const {
+    stage: faceStage,
+    ready: faceReady,
+    start: startFace,
+    stop: stopFace,
+  } = useAvatar(sessionId);
+  // The face went away: the patient's voice plays from our own player again.
+  useEffect(() => {
+    if (!faceReady) call.current?.setOutput(null);
+  }, [faceReady]);
   const mic = useRef<MediaStream | null>(null);
   const recorder = useRef<SessionRecorder | null>(null);
   const started = useRef(false);
@@ -588,6 +600,8 @@ export function LiveConversation({
   }
 
   async function begin() {
+    // The video face (if on) starts inside this tap, alongside the call.
+    const facing = startFace();
     setPhase('connecting');
     setNotice(null);
     started.current = false;
@@ -657,6 +671,14 @@ export function LiveConversation({
     });
     call.current = c;
     c.unlockAudio(); // inside the tap (iOS)
+    void facing.then((a) => {
+      if (!a || !mine()) return;
+      // Simli gets the patient's voice and plays it in step with the face.
+      const feed = (t: MediaStreamTrack) => a.feedTrack(t);
+      if (c.remoteTrack) feed(c.remoteTrack);
+      c.onRemoteTrack = feed;
+      c.setOutput(a);
+    });
 
     let stream: MediaStream;
     try {
@@ -734,6 +756,7 @@ export function LiveConversation({
     setSlowStart(false);
     const c = call.current;
     call.current = null;
+    stopFace();
     recorder.current?.pause();
     mic.current?.getTracks().forEach((t) => t.stop());
     mic.current = null;
@@ -751,6 +774,7 @@ export function LiveConversation({
     if (!skipConfirm && !window.confirm('End and get feedback?')) return;
     if (ended.current) return;
     ended.current = true;
+    stopFace();
     setPhase('ending');
     setSaving('Saving the conversation…');
     await flushSaves();
@@ -818,6 +842,12 @@ export function LiveConversation({
           )}
         </div>
       </header>
+
+      <AvatarStage
+        ref={faceStage}
+        show={faceReady && (phase === 'live' || phase === 'connecting')}
+        name={persona.name}
+      />
 
       {slowStart && openingWait && !notice && (
         <p className="notice" role="status">

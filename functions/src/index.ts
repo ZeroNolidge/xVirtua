@@ -18,7 +18,13 @@ import {
   DEFAULT_TIMEZONE,
   type PatientChunk,
 } from '@plainspeak/shared';
-import { ANTHROPIC_API_KEY, CARTESIA_API_KEY, OPENAI_API_KEY, REGION } from './config.js';
+import {
+  ANTHROPIC_API_KEY,
+  CARTESIA_API_KEY,
+  OPENAI_API_KEY,
+  REGION,
+  SIMLI_API_KEY,
+} from './config.js';
 import * as invites from './auth/invites.js';
 import * as scenarios from './content/scenarios.js';
 import * as session from './session/session.js';
@@ -31,6 +37,7 @@ import type { VoiceService } from './voice/streamVoice.js';
 import { getSttToken as mintSttToken } from './voice/stt.js';
 import { startLiveCall as connectLive } from './voice/live.js';
 import { voiceSample as makeVoiceSample } from './voice/voiceSample.js';
+import { avatarSession as mintAvatar } from './voice/avatar.js';
 import type { Caller } from './lib/callable.js';
 import { APP_CHECK_ENFORCE } from './lib/appCheck.js';
 import { reportClientError as storeClientError } from './lib/clientErrors.js';
@@ -179,6 +186,12 @@ export const getSttToken = callable(
 export const startLiveCall = callable(
   { secrets: [OPENAI_API_KEY], timeoutSeconds: 30 },
   (req) => warmup(req) ?? connectLive(db(), callerOf(req), req.data, keyOf(OPENAI_API_KEY)),
+);
+
+/** Test: a video avatar session for the patient (see voice/avatar.ts). */
+export const avatarSession = callable(
+  { secrets: [SIMLI_API_KEY], timeoutSeconds: 20 },
+  (req) => warmup(req) ?? mintAvatar(db(), callerOf(req), req.data, keyOf(SIMLI_API_KEY)),
 );
 
 /** Faculty tool: a recorded sample of a GPT-Live voice (see the Record voices workflow). */

@@ -78,6 +78,38 @@ export function Settings() {
         </span>
       </label>
       <fieldset className="field">
+        <legend>Video avatar (test)</legend>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={program.avatarOn ?? false}
+            onChange={(e) => void save({ avatarOn: e.target.checked })}
+          />
+          <span>
+            Show the patient as a lip-synced video face (Simli). Only the patient’s voice is sent to
+            Simli, never the resident’s.
+          </span>
+        </label>
+        {VOICE_GROUPS.map(([group, label]) => (
+          <FaceField
+            key={group}
+            label={label}
+            value={program.avatarFaces?.[group] ?? ''}
+            onSave={(id) =>
+              void save({
+                avatarFaces: Object.fromEntries(
+                  Object.entries({ ...program.avatarFaces, [group]: id }).filter(([, v]) => v),
+                ),
+              })
+            }
+          />
+        ))}
+        <p className="small muted">
+          Copy a face ID from your Simli dashboard (Faces). The Simli key is added by the developer
+          as a GitHub secret, never here.
+        </p>
+      </fieldset>
+      <fieldset className="field">
         <legend>GPT-Live voices (each patient gets the one for their pronouns)</legend>
         {VOICE_GROUPS.map(([group, label]) => (
           <label key={group} className="field">
@@ -115,5 +147,37 @@ export function Settings() {
         {program.transcriptRetentionMonths} months
       </p>
     </div>
+  );
+}
+
+const FACE_ID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/** A Simli face id, saved once it looks right (or cleared). */
+function FaceField({
+  label,
+  value,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  onSave(id: string): void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const ok = !draft.trim() || FACE_ID.test(draft.trim());
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        value={draft}
+        placeholder="Simli face ID"
+        spellCheck={false}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const id = draft.trim();
+          if (ok && id !== value) onSave(id);
+        }}
+      />
+      {!ok && <span className="small error">That doesn’t look like a Simli face ID.</span>}
+    </label>
   );
 }

@@ -48,5 +48,6 @@ export const DAILY_LIMITS = {
   lookups: 100,
   scoring: 30,
   liveCalls: 30,
+  avatarSessions: 40,
 } as const;
 export type DailyLimitKind = keyof typeof DAILY_LIMITS;

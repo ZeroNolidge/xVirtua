@@ -129,10 +129,20 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CARTESIA_API_KEY: ${{ secrets.CARTESIA_API_KEY }}
+          SIMLI_API_KEY: ${{ secrets.SIMLI_API_KEY }}
         run: |
           for NAME in ANTHROPIC_API_KEY OPENAI_API_KEY CARTESIA_API_KEY; do
             VALUE="${!NAME}"
             if [ -z "$VALUE" ]; then echo "::error::GitHub secret $NAME is missing"; exit 1; fi
+            CURRENT=$(npx firebase functions:secrets:access "$NAME" --project "$PROJECT_ID" 2>/dev/null || true)
+            if [ "$CURRENT" = "$VALUE" ]; then echo "$NAME unchanged"; continue; fi
+            printf '%s' "$VALUE" | npx firebase functions:secrets:set "$NAME" --data-file=- --project "$PROJECT_ID" --non-interactive --force >/dev/null
+            echo "$NAME updated"
+          done
+          # Optional keys: a placeholder until the GitHub secret is added, so the
+          # functions that use them still deploy (they report "not set up").
+          for NAME in SIMLI_API_KEY; do
+            VALUE="${!NAME:-unset}"
             CURRENT=$(npx firebase functions:secrets:access "$NAME" --project "$PROJECT_ID" 2>/dev/null || true)
             if [ "$CURRENT" = "$VALUE" ]; then echo "$NAME unchanged"; continue; fi
             printf '%s' "$VALUE" | npx firebase functions:secrets:set "$NAME" --data-file=- --project "$PROJECT_ID" --non-interactive --force >/dev/null

@@ -46,7 +46,7 @@ service cloud.firestore {
         && onlyChanges(['name', 'timezone', 'audioRetentionMonths',
                         'transcriptRetentionMonths', 'scoringWeights', 'patientModel',
                         'voiceMode', 'liveVoice', 'liveVoices', 'liveBrain',
-                        'liveVoiceTags', 'captionsDefault'])
+                        'liveVoiceTags', 'captionsDefault', 'avatarOn', 'avatarFaces'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
@@ -72,11 +72,25 @@ service cloud.firestore {
                 && request.resource.data.liveVoiceTags.keys().hasOnly(['marin', 'cinder', 'stone', 'beacon', 'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper', 'willow', 'gleam'])))
         && (!('liveBrain' in request.resource.data)
             || request.resource.data.liveBrain in ['steer', 'claude'])
+        && (!('avatarOn' in request.resource.data)
+            || request.resource.data.avatarOn is bool)
+        && (!('avatarFaces' in request.resource.data)
+            || validAvatarFaces(request.resource.data.avatarFaces))
         && (!('captionsDefault' in request.resource.data)
             || request.resource.data.captionsDefault is bool)
         && (!('liveVoices' in request.resource.data)
             || validLiveVoices(request.resource.data.liveVoices));
       allow create, delete: if false;
+    }
+
+    function isFaceId(x) {
+      return x is string && x.matches('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    }
+    function validAvatarFaces(v) {
+      return v is map && v.keys().hasOnly(['he', 'she', 'they'])
+        && (!('he' in v) || isFaceId(v.he))
+        && (!('she' in v) || isFaceId(v.she))
+        && (!('they' in v) || isFaceId(v.they));
     }
 
     function validLiveVoices(v) {

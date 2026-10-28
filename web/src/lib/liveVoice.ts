@@ -54,6 +54,20 @@ export class LiveVoiceCall {
   lastMicLoudAt = 0;
   /** How loud the resident's mic is right now, 0–1 (for the level bar). */
   micLevel = 0;
+  /** The patient's voice as it arrives (for the video avatar). */
+  remoteTrack: MediaStreamTrack | null = null;
+  onRemoteTrack: ((t: MediaStreamTrack) => void) | null = null;
+  /**
+   * While the video avatar plays the patient's voice (in step with the face),
+   * our own player stays silent and mute/duck go to the avatar.
+   */
+  private output: { mute(on: boolean): void; duck(on: boolean): void } | null = null;
+  private mutedNow = false;
+  setOutput(o: { mute(on: boolean): void; duck(on: boolean): void } | null) {
+    this.output = o;
+    this.audioEl.muted = !!o || this.mutedNow;
+    o?.mute(this.mutedNow);
+  }
 
   constructor(private readonly cb: LiveCallbacks) {
     this.audioEl = new Audio();
@@ -104,6 +118,8 @@ export class LiveVoiceCall {
       });
     let remoteWatched = false;
     pc.ontrack = (e) => {
+      this.remoteTrack = e.track;
+      this.onRemoteTrack?.(e.track);
       const stream = e.streams[0] ?? new MediaStream([e.track]);
       this.audioEl.srcObject = stream;
       void this.audioEl.play().catch(() => undefined);
@@ -181,6 +197,8 @@ export class LiveVoiceCall {
 
   /** Silences the patient on our side (GPT-Live may keep talking after an interruption). */
   mutePatient(muted: boolean) {
+    this.mutedNow = muted;
+    if (this.output) return this.output.mute(muted);
     this.audioEl.muted = muted;
     if (!muted) this.audioEl.volume = 1;
   }
@@ -190,6 +208,7 @@ export class LiveVoiceCall {
    * talking. iPhones ignore volume changes, so there it mutes instead.
    */
   duckPatient(on: boolean) {
+    if (this.output) return this.output.duck(on);
     if (!on) {
       this.audioEl.volume = 1;
       this.audioEl.muted = false;

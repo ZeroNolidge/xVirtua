@@ -67,6 +67,11 @@ export const sessionApi = {
     { sessionId: string; resident: string; patient: string },
     { residentIdx: number; patientIdx: number; note: string | null }
   >(functions, 'saveLiveExchange'),
+  /** Test: a video avatar session for the patient (Simli). */
+  avatarSession: httpsCallable<{ sessionId: string }, { token: string }>(
+    functions,
+    'avatarSession',
+  ),
   /** GPT-Live test mode: trades the browser's WebRTC offer for OpenAI's answer. */
   startLiveCall: httpsCallable<{ sessionId: string; sdp: string }, { sdp: string; voice: string }>(
     functions,
