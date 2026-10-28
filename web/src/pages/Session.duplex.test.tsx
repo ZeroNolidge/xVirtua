@@ -177,6 +177,7 @@ describe('two-way voice', () => {
     expect(
       await screen.findByText('Will I lose my license? —', undefined, { timeout: 4000 }),
     ).toBeInTheDocument();
+    expect(screen.getByText('You came in here')).toBeInTheDocument();
     await vi.waitFor(() => expect(calls).toHaveLength(2), { timeout: 5000 });
     expect(calls[1]!.prevInterrupted).toEqual({ heard: 'Will I lose my license?' });
     expect(calls[1]!.text).toBe('Wait, before you go on, can I ask about your job?');

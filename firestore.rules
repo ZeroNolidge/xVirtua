@@ -46,7 +46,7 @@ service cloud.firestore {
         && onlyChanges(['name', 'timezone', 'audioRetentionMonths',
                         'transcriptRetentionMonths', 'scoringWeights', 'patientModel',
                         'voiceMode', 'liveVoice', 'liveVoices', 'liveBrain',
-                        'liveVoiceTags'])
+                        'liveVoiceTags', 'captionsDefault'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
@@ -72,6 +72,8 @@ service cloud.firestore {
                 && request.resource.data.liveVoiceTags.keys().hasOnly(['marin', 'cinder', 'stone', 'beacon', 'delta', 'meridian', 'tempo', 'bossa', 'quartz', 'ripple', 'vesper', 'willow', 'gleam'])))
         && (!('liveBrain' in request.resource.data)
             || request.resource.data.liveBrain in ['steer', 'claude'])
+        && (!('captionsDefault' in request.resource.data)
+            || request.resource.data.captionsDefault is bool)
         && (!('liveVoices' in request.resource.data)
             || validLiveVoices(request.resource.data.liveVoices));
       allow create, delete: if false;

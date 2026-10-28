@@ -774,7 +774,7 @@ p {
   box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
 }
 .overall-word {
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: var(--primary);
   margin: 0 0 12px;
@@ -852,4 +852,97 @@ p {
   height: 100%;
   background: var(--primary);
   transition: width 0.2s linear;
+}
+
+.said-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.you-said .quote {
+  margin-top: 0;
+}
+.before {
+  margin: 4px 0 0;
+}
+
+/* ---------- conversation controls ---------- */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: var(--border);
+  color: var(--text-muted);
+}
+.status-pill.you {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+  color: var(--primary);
+}
+.mic-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: mic-pulse 1.4s ease-out infinite;
+}
+@keyframes mic-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 60%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mic-pulse {
+    animation: none;
+  }
+}
+.mic-level {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+.mic-level-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.1s linear;
+}
+.btn.btn-outline {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1.5px solid var(--border);
+  box-shadow: none;
+}
+.btn.btn-send-big {
+  width: 100%;
+  font-size: 1.15rem;
+  padding: 14px;
+}
+.cut-tag {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 2px 0 0 6px;
+}
+.captions-off {
+  text-align: center;
+  margin: 24px 12px;
+}
+.patient-cue {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+.session-controls .status-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
 }

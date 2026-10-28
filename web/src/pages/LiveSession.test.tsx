@@ -446,6 +446,25 @@ describe('GPT-Live conversation', () => {
     );
   }, 10_000);
 
+  it('hides the words by default (captions off), and the Captions button brings them back and is remembered', async () => {
+    window.localStorage.removeItem('plainspeak.captions');
+    await start();
+    await act(async () => cb.onStarted());
+    audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(300);
+    expect(screen.queryByText(opening.text)).toBeNull();
+    expect(screen.getByText(/Captions are off/)).toBeInTheDocument();
+    expect(screen.getByText('Ray is talking…')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Captions: off' }));
+    });
+    expect(screen.getByText(opening.text)).toBeInTheDocument();
+    expect(window.localStorage.getItem('plainspeak.captions')).toBe('on');
+    // End is a quiet button that asks first.
+    expect(screen.getByRole('button', { name: 'End' })).toHaveClass('btn-outline');
+  });
+
   it('turns the mic and the call off when the app is hidden, and picks up again on Continue', async () => {
     await start();
     await act(async () => cb.onStarted());
@@ -472,7 +491,7 @@ describe('GPT-Live conversation', () => {
     // Ray doesn't start over: no second opening line, just a private recap.
     expect(said.filter(([, t]) => t.includes('my blood pressure is high'))).toHaveLength(1);
     expect(notes.some((n) => n.includes('picking up after a break'))).toBe(true);
-    expect(screen.getByText('Listening… just talk')).toBeInTheDocument();
+    expect(screen.getByText('Your turn — just talk')).toBeInTheDocument();
   });
 
   it('says so when Ray’s words arrive but no sound plays (e.g. Bluetooth took it)', async () => {

@@ -52,20 +52,40 @@ const feedback: ResidentFeedback = {
 };
 
 describe('score screen', () => {
-  it('shows a word and trend (no numbers), one strength, two fixes, the rest behind a tap', () => {
-    const { container } = render(<ScoreView feedback={feedback} patientFirstName="Ray" />);
-    expect(screen.getByText('Getting there, up from last time')).toBeInTheDocument();
+  it('shows the trend (no numbers), one strength, two fixes each with a rewrite, the rest behind a tap', () => {
+    const fb = {
+      ...feedback,
+      fixes: [{ ...feedback.fixes[0]!, before: 'I drive a truck, you know.' }, feedback.fixes[1]!],
+    };
+    const { container } = render(<ScoreView feedback={fb} patientFirstName="Ray" />);
+    expect(screen.getByText('Up from last time')).toBeInTheDocument();
     const headings = screen.getAllByRole('heading').map((h) => h.textContent);
     expect(headings).toEqual(['What went well', 'Two things to try next time']);
-    expect(screen.getAllByText('Try saying this instead')).toHaveLength(1);
-    // Per-area rewrites are folded away until asked for.
+    expect(screen.getAllByText('Try saying this instead')).toHaveLength(2);
+    expect(screen.getAllByText('You said:')).toHaveLength(3);
+    expect(
+      screen.getByText('Before this, Ray said: “I drive a truck, you know.”'),
+    ).toBeInTheDocument();
+    // Full scores are folded away until asked for.
     expect(screen.queryByText(/per-area clarity rewrite/)).toBeNull();
     expect(container.textContent).not.toMatch(/\b\d{1,3}\b/);
 
-    fireEvent.click(screen.getByRole('button', { name: 'See all suggestions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See full scores' }));
     expect(screen.getByText('“per-area clarity rewrite”')).toBeInTheDocument();
     for (const w of ['Solid', 'Strong', 'Just starting'])
-      expect(screen.getAllByText(w).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(new RegExp(w)).length).toBeGreaterThan(0);
+    // The flagged-word list isn't repeated here.
+    expect(screen.queryByText(/hypertension →/)).toBeNull();
     expect(container.textContent).not.toMatch(/\b\d{2,3}\b/);
+  });
+
+  it('says nothing about a trend for a first conversation', () => {
+    render(
+      <ScoreView
+        feedback={{ ...feedback, overall: { band: 'Solid', trend: 'first' } }}
+        patientFirstName="Ray"
+      />,
+    );
+    expect(screen.queryByLabelText('Compared with last time')).toBeNull();
   });
 });

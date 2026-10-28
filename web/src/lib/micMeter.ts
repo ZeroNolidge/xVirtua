@@ -8,6 +8,8 @@ export class MicMeter {
   private stopped = false;
   /** performance.now() when the mic was last loud. */
   lastLoudAt = 0;
+  /** How loud the mic is right now, 0–1 (for the level bar). */
+  level = 0;
 
   constructor(stream: MediaStream, threshold = 18) {
     try {
@@ -24,6 +26,7 @@ export class MicMeter {
         let peak = 0;
         for (const v of levels) peak = Math.max(peak, Math.abs(v - 128));
         if (peak > threshold) this.lastLoudAt = performance.now();
+        this.level = Math.min(1, peak / 64);
         window.setTimeout(tick, 50);
       };
       tick();

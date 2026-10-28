@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { isBackchannel, isCutIn } from '@plainspeak/shared';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
@@ -12,7 +12,16 @@ import { SavingCard } from '../components/SavingCard';
 import { useRecordingUpload } from '../lib/useRecordingUpload';
 import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
 import { Paused, StillThere } from '../components/PauseCards';
+import {
+  CaptionsOff,
+  CaptionsToggle,
+  MicLevel,
+  StatusPill,
+  type TurnState,
+} from '../components/ConversationBits';
+import { useCaptions } from '../lib/useCaptions';
 import { Transcript, type Bubble } from './Session';
+import { nonverbalLine } from '../lib/voiceRenderer';
 
 type Persona = { name: string; age: number; pronouns: string };
 type Phase = 'ready' | 'connecting' | 'live' | 'paused' | 'ending';
@@ -120,6 +129,8 @@ export function LiveConversation({
   });
 
   const call = useRef<LiveVoiceCall | null>(null);
+  const readMic = useCallback(() => call.current?.micLevel ?? 0, []);
+  const [captions, toggleCaptions] = useCaptions();
   const mic = useRef<MediaStream | null>(null);
   const recorder = useRef<SessionRecorder | null>(null);
   const started = useRef(false);
@@ -737,7 +748,7 @@ export function LiveConversation({
   }
 
   async function finish(skipConfirm = false) {
-    if (!skipConfirm && !window.confirm('End the conversation and get feedback?')) return;
+    if (!skipConfirm && !window.confirm('End and get feedback?')) return;
     if (ended.current) return;
     ended.current = true;
     setPhase('ending');
@@ -774,10 +785,17 @@ export function LiveConversation({
         ? `${first} is getting ready…`
         : thinking
           ? `${first} is thinking…`
-          : 'Listening… just talk',
+          : 'Your turn — just talk',
     paused: 'Paused · mic off',
     ending: saving ?? 'Wrapping up…',
   };
+  const turnState: TurnState = speaking
+    ? 'patient'
+    : openingWait || thinking || phase === 'connecting'
+      ? 'thinking'
+      : 'you';
+  const lastPatient = [...bubbles].reverse().find((b) => b.who === 'patient');
+  const cue = nonverbalLine(lastPatient?.nonverbal);
 
   return (
     <section className="session">
@@ -790,9 +808,14 @@ export function LiveConversation({
         </div>
         <div>
           <div className="patient-name">{persona.name}</div>
-          <div className="muted small" role="status" aria-live="polite">
-            {status[phase]}
-          </div>
+          {phase === 'live' ? (
+            // With captions off, body language goes here instead of above the words.
+            !captions && cue && <div className="patient-cue">{cue}</div>
+          ) : (
+            <div className="muted small" role="status" aria-live="polite">
+              {status[phase]}
+            </div>
+          )}
         </div>
       </header>
 
@@ -827,14 +850,17 @@ export function LiveConversation({
         </div>
       )}
 
-      {(phase !== 'ready' || resumeFrom) && (
-        <Transcript
-          bubbles={bubbles}
-          partial={heard}
-          thinking={(thinking && !speaking) || phase === 'connecting'}
-          patientFirstName={first}
-        />
-      )}
+      {(phase !== 'ready' || resumeFrom) &&
+        (captions || phase === 'ready' || phase === 'ending' ? (
+          <Transcript
+            bubbles={bubbles}
+            partial={heard}
+            thinking={(thinking && !speaking) || phase === 'connecting'}
+            patientFirstName={first}
+          />
+        ) : (
+          <CaptionsOff first={first} />
+        ))}
       {phase === 'ending' && !upload.failed && (
         <SavingCard step={saving ?? 'Wrapping up…'} progress={upload.progress} />
       )}
@@ -858,20 +884,25 @@ export function LiveConversation({
 
       {phase !== 'ready' && phase !== 'ending' && phase !== 'paused' && (
         <div className="session-controls">
+          <div className="status-row">
+            <StatusPill
+              state={turnState}
+              text={phase === 'connecting' ? `Connecting to ${first}…` : status.live}
+            />
+            {phase === 'live' && <MicLevel read={readMic} />}
+          </div>
           <div className="session-buttons">
             <button className="btn btn-secondary btn-inline" onClick={() => setLookupOpen(true)}>
               Plain words
             </button>
-            <span className={`mic-state ${phase === 'live' ? 'on' : ''}`} aria-hidden="true">
-              {phase === 'live' ? '● Mic on' : '○ Mic ready'}
-            </span>
+            <CaptionsToggle on={captions} onToggle={toggleCaptions} />
             <button
               className="btn btn-text btn-inline"
               onClick={() => fallBack('Switched to the standard voice.')}
             >
               Standard voice
             </button>
-            <button className="btn btn-inline end" onClick={() => void finish()}>
+            <button className="btn btn-outline btn-inline end" onClick={() => void finish()}>
               End
             </button>
           </div>

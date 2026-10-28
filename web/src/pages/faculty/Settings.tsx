@@ -66,6 +66,17 @@ export function Settings() {
           <option value="live">GPT-Live (test: talks and listens at once)</option>
         </select>
       </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={program.captionsDefault ?? false}
+          onChange={(e) => void save({ captionsDefault: e.target.checked })}
+        />
+        <span>
+          Captions on by default during conversations (residents can still switch them on or off on
+          their own phone)
+        </span>
+      </label>
       <fieldset className="field">
         <legend>GPT-Live voices (each patient gets the one for their pronouns)</legend>
         {VOICE_GROUPS.map(([group, label]) => (

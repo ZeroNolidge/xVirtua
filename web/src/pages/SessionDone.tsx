@@ -152,7 +152,11 @@ export function SessionDone() {
   return (
     <section>
       <h1>
-        {fb.state === 'ok' ? 'Nice work 👏' : resumable ? 'What you said so far' : 'Your feedback'}
+        {fb.state === 'ok'
+          ? (fb.feedback.overall?.band ?? 'Your feedback')
+          : resumable
+            ? 'What you said so far'
+            : 'Your feedback'}
       </h1>
       <p className="muted">
         {meta.scenarioTitle ? `${meta.scenarioTitle} · ` : ''}

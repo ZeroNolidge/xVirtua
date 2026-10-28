@@ -52,6 +52,8 @@ export class LiveVoiceCall {
   private micQuietAt = 0;
   /** performance.now() when the resident's mic was last loud. */
   lastMicLoudAt = 0;
+  /** How loud the resident's mic is right now, 0–1 (for the level bar). */
+  micLevel = 0;
 
   constructor(private readonly cb: LiveCallbacks) {
     this.audioEl = new Audio();
@@ -87,7 +89,8 @@ export class LiveVoiceCall {
     // well before GPT-Live's transcript of it arrives. Echo cancellation keeps
     // the patient's voice out of it.
     if (this.track)
-      this.watchLevel(new MediaStream([this.track]), 18, (loud) => {
+      this.watchLevel(new MediaStream([this.track]), 18, (loud, peak) => {
+        this.micLevel = Math.min(1, peak / 64);
         const now = performance.now();
         if (loud) {
           this.lastMicLoudAt = now;
@@ -140,7 +143,11 @@ export class LiveVoiceCall {
   }
 
   /** Measures a stream's loudness every 50 ms. */
-  private watchLevel(stream: MediaStream, threshold: number, onLevel: (loud: boolean) => void) {
+  private watchLevel(
+    stream: MediaStream,
+    threshold: number,
+    onLevel: (loud: boolean, peak: number) => void,
+  ) {
     if (!this.ctx) return;
     try {
       const src = this.ctx.createMediaStreamSource(stream);
@@ -153,7 +160,7 @@ export class LiveVoiceCall {
         a.getByteTimeDomainData(levels);
         let peak = 0;
         for (const v of levels) peak = Math.max(peak, Math.abs(v - 128));
-        onLevel(peak > threshold);
+        onLevel(peak > threshold, peak);
         window.setTimeout(tick, 50);
       };
       tick();

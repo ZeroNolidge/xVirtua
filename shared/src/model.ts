@@ -65,6 +65,8 @@ export interface Program {
   liveBrain?: LiveBrain;
   /** Faculty's own notes on how each GPT-Live voice sounds. */
   liveVoiceTags?: Partial<Record<LiveVoice, 'male' | 'female' | 'neutral'>>;
+  /** Captions (the live transcript) on by default during conversations. Unset: off. */
+  captionsDefault?: boolean;
 }
 
 /** Custom claims set on the Firebase Auth token by the server. */
@@ -173,6 +175,8 @@ export interface Moment {
   note: string;
   /** "Try saying this instead" line (fixes only). */
   rewrite?: string;
+  /** What the patient said just before (so the resident remembers the moment). */
+  before?: string;
 }
 
 export interface MetricScore {
@@ -213,7 +217,7 @@ export interface ScoreDoc {
   };
   /** The one moment that went well, shown first. */
   highlight: Moment | null;
-  /** At most two things to work on. The first carries the rewrite. */
+  /** At most two things to work on, from two different areas, each with a rewrite. */
   fixes: Moment[];
   understandingCheck: 'teachback' | 'weak' | null;
   needsReview: boolean;

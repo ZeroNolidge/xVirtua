@@ -34,6 +34,14 @@ import { useRecordingUpload } from '../lib/useRecordingUpload';
 import { UploadRetry } from '../components/UploadRetry';
 import { SavingCard } from '../components/SavingCard';
 import { Paused, StillThere } from '../components/PauseCards';
+import {
+  CaptionsOff,
+  CaptionsToggle,
+  MicLevel,
+  StatusPill,
+  type TurnState,
+} from '../components/ConversationBits';
+import { useCaptions } from '../lib/useCaptions';
 import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
@@ -312,6 +320,23 @@ function Conversation({
   }, [bubbles, partial, phase]);
 
   const talking = phase === 'patient' || phase === 'listening' || phase === 'thinking';
+  const [captions, toggleCaptions] = useCaptions();
+  // Typing needs the words on screen.
+  const showWords = captions || typed;
+  const lastPatient = [...bubbles].reverse().find((b) => b.who === 'patient');
+  const cue = nonverbalLine(lastPatient?.nonverbal);
+  const turnState: TurnState =
+    phase === 'listening' ? 'you' : phase === 'patient' ? 'patient' : 'thinking';
+  const turnText =
+    phase === 'listening'
+      ? typed
+        ? 'Your turn — type your reply'
+        : 'Your turn — just talk'
+      : phase === 'patient'
+        ? `${first} is talking`
+        : phase === 'connecting'
+          ? 'Connecting…'
+          : `${first} is thinking…`;
   const guard = useCallGuard({
     active: talking && !paused,
     startedAtMs: startMs,
@@ -331,6 +356,39 @@ function Conversation({
   const addBubble = (b: Bubble) => setBubbles((xs) => [...xs, b]);
   const updateBubble = (key: string, patch: Partial<Bubble>) =>
     setBubbles((xs) => xs.map((b) => (b.key === key ? { ...b, ...patch } : b)));
+
+  // The patient's words appear as they're said, a few at a time.
+  const reveal = useRef({ timer: 0, token: 0 });
+  const stopReveal = useCallback(() => {
+    window.clearInterval(reveal.current.timer);
+    reveal.current.token++;
+  }, []);
+  /** Shows `sentence` word by word as it plays, after the sentences already said. */
+  const revealSentence = useCallback(
+    (key: string, base: string, sentence: string, nonverbal?: string[]) => {
+      stopReveal();
+      const token = reveal.current.token;
+      const words = sentence.split(/\s+/).filter(Boolean);
+      let shownWords = 0;
+      const put = (n: number) => {
+        if (token !== reveal.current.token || n === shownWords) return;
+        shownWords = n;
+        const text = [base, words.slice(0, n).join(' ')].filter(Boolean).join(' ');
+        setBubbles((xs) =>
+          xs.some((b) => b.key === key)
+            ? xs.map((b) => (b.key === key ? { ...b, text } : b))
+            : [...xs, { key, who: 'patient', text, nonverbal }],
+        );
+      };
+      put(1);
+      reveal.current.timer = window.setInterval(() => {
+        const n = Math.max(1, Math.ceil(words.length * (renderer.current?.progress ?? 1)));
+        put(n);
+        if (n >= words.length) window.clearInterval(reveal.current.timer);
+      }, 120);
+    },
+    [stopReveal],
+  );
 
   // A typed reply sent while the patient is still answering waits here.
   const [queued, setQueued] = useState<string | null>(null);
@@ -366,6 +424,7 @@ function Conversation({
   const quickNext = useRef(false);
   const [showThinking, setShowThinking] = useState(false);
   const micMeter = useRef<MicMeter | null>(null);
+  const readMic = useCallback(() => micMeter.current?.level ?? 0, []);
   /** Cut-off saves still on their way; End waits for them. */
   const saves = useRef<Promise<unknown>[]>([]);
   /** What the patient said last, to tell his echo from the resident just after he stops. */
@@ -404,18 +463,20 @@ function Conversation({
       setPhase('patient');
       const audio = await fetchPatientAudio(sessionId, u.idx);
       const key = `p${u.idx}`;
-      const p = new ReplyPlayer(r, () =>
-        addBubble({ key, who: 'patient', text: u.text, nonverbal: u.nonverbal }),
+      const p = new ReplyPlayer(r, (sentence) =>
+        revealSentence(key, p.played.slice(0, -1).join(' '), sentence, u.nonverbal),
       );
       player.current = p;
       p.say(0, u.text);
       if (audio) p.audio(0, audio);
       p.finish();
       await p.run(u.delivery.pauseBeforeMs);
+      stopReveal();
+      updateBubble(key, { text: u.text });
       lastPatientSaid.current = p.played.join(' ');
       startListening();
     },
-    [sessionId, setPhase, startListening],
+    [sessionId, setPhase, startListening, revealSentence, stopReveal],
   );
 
   const sendTurn = useCallback(
@@ -469,12 +530,8 @@ function Conversation({
         if (!shown) {
           shown = true;
           setPhase('patient');
-          addBubble({ key, who: 'patient', text: sentence, nonverbal: meta?.nonverbal });
-        } else {
-          setBubbles((xs) =>
-            xs.map((b) => (b.key === key ? { ...b, text: `${b.text} ${sentence}` } : b)),
-          );
         }
+        revealSentence(key, p.played.slice(0, -1).join(' '), sentence, meta?.nonverbal);
       });
       player.current = p;
       let running: Promise<void> | null = null;
@@ -520,6 +577,7 @@ function Conversation({
         // Drop this reply; the next send answers the resident's whole thought.
         const replace = () => {
           p.interrupt();
+          stopReveal();
           setBubbles((xs) => xs.filter((b) => b.key !== key));
           supersedeRef.current = { idx: u.idx - 1, text, residentKey };
         };
@@ -528,6 +586,7 @@ function Conversation({
         } else {
           p.finish();
           await run();
+          stopReveal();
           if (turnRef.current?.supersede) {
             // The resident went on with their thought just as the patient started.
             replace();
@@ -567,7 +626,7 @@ function Conversation({
         settle();
       }
     },
-    [sessionId, setPhase, startListening],
+    [sessionId, setPhase, startListening, revealSentence, stopReveal],
   );
 
   // Voice turns: collect transcript pieces and send after a pause. The pause
@@ -791,7 +850,7 @@ function Conversation({
   }
 
   async function finish(skipConfirm = false) {
-    if (!skipConfirm && !window.confirm('End the conversation and get feedback?')) return;
+    if (!skipConfirm && !window.confirm('End and get feedback?')) return;
     if (phaseRef.current === 'ending') return;
     setPaused(null);
     setPhase('ending');
@@ -872,9 +931,14 @@ function Conversation({
         </div>
         <div>
           <div className="patient-name">{persona.name}</div>
-          <div className="muted small" role="status" aria-live="polite">
-            {paused && phase !== 'ending' ? 'Paused · mic off' : status[phase]}
-          </div>
+          {talking && !paused ? (
+            // With captions off, his body language goes here instead of above his words.
+            !showWords && cue && <div className="patient-cue">{cue}</div>
+          ) : (
+            <div className="muted small" role="status" aria-live="polite">
+              {paused && phase !== 'ending' ? 'Paused · mic off' : status[phase]}
+            </div>
+          )}
         </div>
       </header>
 
@@ -906,15 +970,18 @@ function Conversation({
         </div>
       ) : null}
 
-      {(phase !== 'ready' || resumeFrom) && (
-        <Transcript
-          bubbles={bubbles}
-          partial={partial}
-          thinking={(phase === 'thinking' && showThinking) || phase === 'connecting'}
-          patientFirstName={first}
-          queued={queued}
-        />
-      )}
+      {(phase !== 'ready' || resumeFrom) &&
+        (showWords || phase === 'ready' || phase === 'ending' ? (
+          <Transcript
+            bubbles={bubbles}
+            partial={partial}
+            thinking={(phase === 'thinking' && showThinking) || phase === 'connecting'}
+            patientFirstName={first}
+            queued={queued}
+          />
+        ) : (
+          <CaptionsOff first={first} />
+        ))}
       {phase === 'ending' && !upload.failed && (
         <SavingCard step={saving ?? 'Wrapping up…'} progress={upload.progress} />
       )}
@@ -939,15 +1006,15 @@ function Conversation({
 
       {phase !== 'ready' && phase !== 'ending' && !paused && (
         <div className="session-controls">
+          <div className="status-row">
+            <StatusPill state={turnState} text={turnText} />
+            {!typed && <MicLevel read={readMic} />}
+          </div>
           {typed && (
             <form className="typed" onSubmit={submitTyped}>
               <input
                 aria-label="Your reply"
-                placeholder={
-                  phase === 'listening'
-                    ? 'Type what you’d say…'
-                    : `You can start typing while ${first} answers…`
-                }
+                placeholder="Type instead…"
                 value={draft}
                 onChange={(e) => {
                   if (timing.current.typingStartAt === null && phaseRef.current === 'listening')
@@ -960,13 +1027,10 @@ function Conversation({
               </button>
             </form>
           )}
-          {!typed && sendMode === 'tap' && phase === 'listening' && partial && (
-            <div className="send-row">
-              <span className="muted small">Tap send when you’re done.</span>
-              <button className="btn btn-inline" onClick={() => flushVoice()}>
-                Send
-              </button>
-            </div>
+          {!typed && sendMode === 'tap' && phase === 'listening' && (
+            <button className="btn btn-send-big" disabled={!partial} onClick={() => flushVoice()}>
+              {partial ? 'Send' : 'Talk, then tap Send'}
+            </button>
           )}
           <div className="session-buttons">
             <button className="btn btn-secondary btn-inline" onClick={() => setLookupOpen(true)}>
@@ -982,6 +1046,7 @@ function Conversation({
                 Type instead
               </button>
             )}
+            {!typed && <CaptionsToggle on={captions} onToggle={toggleCaptions} />}
             {!typed && (
               <button
                 className="btn btn-text btn-inline"
@@ -991,7 +1056,7 @@ function Conversation({
                 {sendMode === 'tap' ? 'Send: when I tap' : 'Send: when I pause'}
               </button>
             )}
-            <button className="btn btn-inline end" onClick={() => void finish()}>
+            <button className="btn btn-outline btn-inline end" onClick={() => void finish()}>
               End
             </button>
           </div>
@@ -1047,6 +1112,9 @@ export function Transcript({
             <div className={`bubble ${b.who} ${highlightTurns?.has(b.key) ? 'marked' : ''}`}>
               {b.text}
             </div>
+            {b.who === 'patient' && /—\s*$/.test(b.text) && (
+              <div className="cut-tag">You came in here</div>
+            )}
           </div>
         );
       })}

@@ -138,6 +138,14 @@ describe('programs', () => {
     }
   });
 
+  it('faculty can set the captions default (true or false only); residents can’t', async () => {
+    const ref = doc(fs(a.facultyIrmc), 'programs/irmc');
+    await assertSucceeds(updateDoc(ref, { captionsDefault: true }));
+    await assertSucceeds(updateDoc(ref, { captionsDefault: false }));
+    await assertFails(updateDoc(ref, { captionsDefault: 'yes' }));
+    await assertFails(updateDoc(doc(fs(a.resA), 'programs/irmc'), { captionsDefault: true }));
+  });
+
   it('residents and other programs can’t change any voice setting', async () => {
     for (const who of [a.resA, a.resB, a.facultyOther, a.anon, a.noClaims]) {
       const ref = doc(fs(who), 'programs/irmc');

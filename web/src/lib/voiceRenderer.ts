@@ -146,14 +146,24 @@ export class VoiceRenderer {
     });
   }
 
+  /** How far through the current clip we are, 0–1 (1 when there's no clip). */
+  get progress(): number {
+    if (!this.clipPlaying) return 1;
+    const d = this.audio.duration;
+    return Number.isFinite(d) && d > 0 ? Math.min(1, this.audio.currentTime / d) : 0;
+  }
+  private clipPlaying = false;
+
   async play(blob: Blob | null, text: string): Promise<void> {
     if (this.stopped) return;
     this.audio.volume = 1;
+    this.clipPlaying = false;
     if (!blob || !blob.size) return this.readingPause(text);
     if (this.currentUrl) URL.revokeObjectURL(this.currentUrl);
     this.currentUrl = URL.createObjectURL(blob);
     this.audio.src = this.currentUrl;
     try {
+      this.clipPlaying = true;
       await this.audio.play();
       await new Promise<void>((resolve) => {
         this.audio.onended = () => resolve();
@@ -161,8 +171,10 @@ export class VoiceRenderer {
         this.audio.onpause = () => resolve();
       });
     } catch {
+      this.clipPlaying = false;
       await this.readingPause(text);
     }
+    this.clipPlaying = false;
   }
 
   /** Turn the patient down while we check whether the resident is starting to talk. */

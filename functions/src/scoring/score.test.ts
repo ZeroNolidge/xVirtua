@@ -10,7 +10,7 @@ import {
   type ClaudeScore,
   type Turn,
 } from './score.js';
-import { distinctFixes } from './feedback.js';
+import { distinctFixes, withContext } from './feedback.js';
 import { rewriteProblems } from './rewriteCheck.js';
 
 const turns: Turn[] = [
@@ -269,6 +269,24 @@ describe('fixes from two different areas', () => {
     expect(
       distinctFixes({ fixes: [fix('clarity', 'a'), fix('cue', 'b')], metrics }).map((f) => f.quote),
     ).toEqual(['a', 'b']);
+  });
+
+  it('never shows a fix without something to say instead', () => {
+    const { rewrite: _r, ...bare } = { ...fix('clarity', 'a'), turnIdx: 9 };
+    const out = distinctFixes({ fixes: [bare, fix('cue', 'b')], metrics });
+    expect(out.map((f) => f.quote)).toEqual(['b', 'orig']);
+    expect(out.every((f) => f.rewrite)).toBe(true);
+    // Same line as the area's own suggestion: it borrows that rewrite.
+    const { rewrite: _r2, ...sameLine } = fix('clarity', 'a');
+    expect(distinctFixes({ fixes: [sameLine], metrics })[0]).toMatchObject({
+      quote: 'a',
+      rewrite: 'clear rewrite',
+    });
+  });
+
+  it('adds what the patient said just before each quoted line', () => {
+    const out = withContext({ highlight: null, fixes: [fix('clarity', 'a')] }, turns);
+    expect(out.fixes[0]!.before).toBe('So my blood pressure is high?');
   });
 });
 

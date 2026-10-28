@@ -7,7 +7,8 @@ export const METRIC_LABEL: Record<Metric, string> = {
   cue: 'Picking up on cues',
 };
 
-/** "Getting there, up from last time" (just the word for a first conversation). */
-export function overallText(o: NonNullable<ResidentFeedback['overall']>) {
-  return o.trend === 'first' ? o.band : `${o.band}, ${TREND_TEXT[o.trend]}`;
+/** "Up from last time" (nothing for a first conversation). */
+export function trendLine(t: NonNullable<ResidentFeedback['overall']>['trend']) {
+  const text = TREND_TEXT[t];
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

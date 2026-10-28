@@ -26,7 +26,7 @@ import { parse, type Caller } from '../lib/callable.js';
 import { consumeQuota } from '../lib/quota.js';
 import { loadScenario } from '../session/scenario.js';
 import { RUBRIC, SCORE_JSON_SCHEMA } from './rubric.js';
-import { checkRewrites, distinctFixes, toResidentFeedback } from './feedback.js';
+import { checkRewrites, distinctFixes, toResidentFeedback, withContext } from './feedback.js';
 import { badInlineQuotes, findQuote } from './quotes.js';
 import { classifyCutoffs, limitInterruptionNotes } from './interruptions.js';
 
@@ -652,7 +652,7 @@ export async function scoreSession(
     });
     // Rewrites must not add facts; then make sure the two fixes cover two areas.
     const checked = checkRewrites(assembled, residentTurns.map((t) => t.text).join(' \n '));
-    const limited = limitInterruptions(checked, turns);
+    const limited = withContext(limitInterruptions(checked, turns), turns);
     const prev = await previousOverall(db, s.uid, sessionId, s.startedAt);
     const full: ScoreDoc = {
       ...limited,
