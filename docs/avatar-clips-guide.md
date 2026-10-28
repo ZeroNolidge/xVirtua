@@ -41,13 +41,14 @@ face ID into Faculty → Settings → Video avatar.
 
 1. **Start with the camera:** "Static locked-off camera, single continuous shot." Otherwise it zooms or pans.
 2. **Say it's silent and the mouth stays closed, three ways:** "A silent, wordless moment… His mouth stays closed with his lips together the whole time; his jaw and lips do not move." Emotions like worry or doubt make models think the person is talking.
-3. **One action per clip.** Say which part of the face or body moves ("Only his eyebrows and forehead move…").
-4. **Give the timing:** how long it builds, how long it's held ("holds the frown for about two seconds"), then the return.
-5. **Describe the ending expression exactly**, not just "back to neutral": "settles back into the same calm, neutral, slightly tired face as at the start, still a little uneasy." A vague ending came out as a smirk, like he was laughing to himself.
-6. **Rule out the wrong emotion by name:** "He never smiles, never smirks, and shows no amusement: his cheeks do not lift and the corners of his mouth do not rise."
-7. **Give the reason for the feeling** in one phrase ("he has just heard something about his health that worries him"). It makes the expression read right.
-8. **Keep the rest still:** "Head and body still, hands resting on his knees. Same framing, lighting and background throughout."
-9. **Subtle beats big:** "Subtle, realistic, natural motion." Big movements look fake and don't match the live face.
+3. **Never describe him as about to speak.** Phrases like "searching for words", "unsure how to answer" or "thinks of something to say" made Kling open his mouth. Use "quietly thinks to himself, not speaking and not about to speak", and end with "He does not talk, mouth words or take a breath to speak." Even a nod opened his mouth until that line was added.
+4. **One action per clip.** Say which part of the face or body moves ("Only his eyebrows and forehead move…").
+5. **Give the timing:** how long it builds, how long it's held ("holds the frown for about two seconds"), then the return.
+6. **Describe the ending expression exactly**, not just "back to neutral": "settles back into the same calm, neutral, slightly tired face as at the start, still a little uneasy." A vague ending came out as a smirk, like he was laughing to himself.
+7. **Rule out the wrong emotion by name:** "He never smiles, never smirks, and shows no amusement: his cheeks do not lift and the corners of his mouth do not rise."
+8. **Give the reason for the feeling** in one phrase ("he has just heard something about his health that worries him"). It makes the expression read right.
+9. **Keep the rest still:** "Head and body still, hands resting on his knees. Same framing, lighting and background throughout."
+10. **Subtle beats big:** "Subtle, realistic, natural motion." Big movements look fake and don't match the live face.
 
 ### Template
 
@@ -55,19 +56,19 @@ face ID into Faculty → Settings → Video avatar.
 
 ### The cue set (matches the app's body-language cues)
 
-| Cue                 | The one action to describe                                                              | Watch out for                                                    |
-| ------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `look_away`         | Eyes and head turn slightly to one side and down, as if unsure; then back to the camera | A small mouth opening is OK here (a hesitation), but not talking |
-| `frown`             | Brow furrows, eyebrows draw together and lift slightly in the middle; eyes narrow       | Smirking on the way back (rule 6)                                |
-| `avoid_eye_contact` | Eyes drop to his hands or the floor and stay there longer; then slowly come back        | Head drooping too far, which makes it hard to cut back           |
-| `fidget`            | Hands rub together or pick at the jacket zipper; the face stays uneasy                  | Hands looking odd: always check them                             |
-| `nod`               | One or two small, slow nods of agreement, eyes on the camera                            | Talking while nodding                                            |
-| `smile`             | A small, polite, closed-mouth smile that fades                                          | A big grin, or teeth showing                                     |
+| Cue                 | The one action to describe                                                            | Watch out for                                           |
+| ------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `look_away`         | Eyes drift to one side and down, "lost in an uneasy thought"; then back to the camera | Mouth opening: never say "searching for words" (rule 3) |
+| `frown`             | Brow furrows, eyebrows draw together and lift slightly in the middle; eyes narrow     | Smirking on the way back (rule 6)                       |
+| `avoid_eye_contact` | Eyes drop to his hands or the floor and stay there longer; then slowly come back      | Head drooping too far, which makes it hard to cut back  |
+| `fidget`            | Hands rub together or pick at the jacket zipper; the face stays uneasy                | Hands looking odd: always check them                    |
+| `nod`               | One or two small, slow nods of agreement, eyes on the camera                          | Talking while nodding                                   |
+| `smile`             | A small, polite, closed-mouth smile that fades                                        | A big grin, or teeth showing                            |
 
 ### Checking a clip
 
 - Same person all the way through (face, hair, clothes)?
-- Mouth closed (or only a brief hesitation for `look_away`)?
+- Mouth closed the whole time?
 - Reads as the intended emotion, including the last second?
 - Ends back on the starting pose, with no jump at the end?
 - Hands and eyes look normal?
