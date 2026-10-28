@@ -71,6 +71,8 @@ export interface Program {
   avatarOn?: boolean;
   /** Simli face ids by the patient's pronouns. */
   avatarFaces?: Partial<Record<VoiceGroup, string>>;
+  /** Simli face ids for the patient's moods (guarded at first, at ease once he relaxes). */
+  avatarMoodFaces?: Partial<Record<'guarded' | 'at_ease', string>>;
 }
 
 /** Custom claims set on the Firebase Auth token by the server. */

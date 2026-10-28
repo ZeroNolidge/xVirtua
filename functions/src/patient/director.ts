@@ -7,7 +7,14 @@ import type { CueScriptEntry, ScenarioBriefing, ScenarioScript } from '@plainspe
  * keeps answering at once; the note steers it toward the script.
  */
 export interface Director {
-  note(input: DirectorInput): Promise<string | null>;
+  direct(input: DirectorInput): Promise<DirectorOutput>;
+}
+
+export interface DirectorOutput {
+  /** A private note for the patient's next reply, or null. */
+  note: string | null;
+  /** The doctor has earned the patient's trust: he relaxes (the video avatar shows it). */
+  atEase: boolean;
 }
 
 export interface DirectorInput {
@@ -17,6 +24,8 @@ export interface DirectorInput {
   transcript: { speaker: 'resident' | 'patient'; text: string }[];
   /** A scripted cue the patient should perform next, if one fired. */
   cue: CueScriptEntry | null;
+  /** The patient already relaxed earlier in the visit. */
+  alreadyAtEase?: boolean;
 }
 
 export const DIRECTOR_MODEL = 'claude-haiku-5-5';
@@ -31,7 +40,9 @@ The script:
 - What ${first} knows: ${i.script.patientKnows.join('; ')}
 - How ${first} feels: ${i.script.emotionalState}
 
-Write a note when: the doctor just gave an opening for the hidden concern that ${first} didn't take; a scripted cue (given below) should happen next; ${first} is repeating an earlier story or drifting out of character; or ${first} seemed to understand jargon the patient wouldn't know. Never script medical facts, never tell the actor to explain medicine, and don't repeat a note that's already been followed.`;
+Write a note when: the doctor just gave an opening for the hidden concern that ${first} didn't take; a scripted cue (given below) should happen next; ${first} is repeating an earlier story or drifting out of character; or ${first} seemed to understand jargon the patient wouldn't know. Never script medical facts, never tell the actor to explain medicine, and don't repeat a note that's already been followed.
+
+Also set atEase: true only once ${first} would genuinely feel reassured, because the doctor noticed his main worry (the hidden concern above) and responded to it kindly and clearly. Otherwise false. ${i.alreadyAtEase ? `${first} is already at ease; keep atEase true unless the doctor has since been dismissive or harsh.` : ''}`;
   const lines = i.transcript
     .slice(-16)
     .map((t) => `${t.speaker === 'resident' ? 'DOCTOR' : first.toUpperCase()}: ${t.text}`)
@@ -39,14 +50,17 @@ Write a note when: the doctor just gave an opening for the hidden concern that $
   const cue = i.cue
     ? `\n\nScripted cue to perform in the next reply: ${i.cue.cue}. Line to convey (in ${first}'s own words): "${i.cue.performance.say}". If ${first} already said this earlier, don't ask for it again.`
     : '';
-  return { system, user: `Conversation so far:\n${lines}${cue}\n\nYour note (or null):` };
+  return {
+    system,
+    user: `Conversation so far:\n${lines}${cue}\n\nYour note (or null), and atEase:`,
+  };
 }
 
 const NOTE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['note'],
-  properties: { note: { type: ['string', 'null'] } },
+  required: ['note', 'atEase'],
+  properties: { note: { type: ['string', 'null'] }, atEase: { type: 'boolean' } },
 } as const;
 
 export class ClaudeDirector implements Director {
@@ -55,7 +69,7 @@ export class ClaudeDirector implements Director {
     this.client = new Anthropic({ apiKey, maxRetries: 1, timeout: 15_000 });
   }
 
-  async note(i: DirectorInput): Promise<string | null> {
+  async direct(i: DirectorInput): Promise<DirectorOutput> {
     const p = directorPrompt(i);
     const res = await this.client.beta.messages.create({
       model: DIRECTOR_MODEL,
@@ -73,16 +87,21 @@ export class ClaudeDirector implements Director {
       .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
       .map((b) => b.text)
       .join('');
-    const note = (JSON.parse(raw) as { note: string | null }).note?.trim();
-    return note ? note.slice(0, 400) : null;
+    const out = JSON.parse(raw) as { note: string | null; atEase?: boolean };
+    const note = out.note?.trim();
+    return { note: note ? note.slice(0, 400) : null, atEase: out.atEase === true };
   }
 }
 
 /** Offline stand-in: passes a fired cue straight through. */
 export class FakeDirector implements Director {
   readonly calls: DirectorInput[] = [];
-  async note(i: DirectorInput) {
+  async direct(i: DirectorInput): Promise<DirectorOutput> {
     this.calls.push(i);
-    return i.cue ? `Next, in your own words: ${i.cue.performance.say}` : null;
+    const said = i.transcript.at(-1)?.text ?? '';
+    return {
+      note: i.cue ? `Next, in your own words: ${i.cue.performance.say}` : null,
+      atEase: !!i.alreadyAtEase || /that helps|thank/i.test(said),
+    };
   }
 }

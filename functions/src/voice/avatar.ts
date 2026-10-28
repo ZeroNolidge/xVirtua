@@ -15,7 +15,11 @@ export const SIMLI_TOKEN_URL = 'https://api.simli.ai/compose/token';
 export const FACE_ID =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-const input = z.object({ sessionId: z.string().min(1).max(64) });
+const input = z.object({
+  sessionId: z.string().min(1).max(64),
+  /** Which of the patient's faces (guarded at first, at ease once he relaxes). */
+  mood: z.enum(['guarded', 'at_ease']).nullish(),
+});
 
 type Fetch = typeof fetch;
 
@@ -27,7 +31,7 @@ export async function avatarSession(
   doFetch: Fetch = fetch,
 ) {
   if (!caller) throw new HttpsError('unauthenticated', 'Please sign in.');
-  const { sessionId } = parse(input, data);
+  const { sessionId, mood } = parse(input, data);
   const ref = db.doc(`sessions/${sessionId}`);
   const s = (await ref.get()).data();
   if (!s || s.uid !== caller.uid) throw new HttpsError('not-found', 'Session not found.');
@@ -41,7 +45,12 @@ export async function avatarSession(
   const sc = await loadScenario(db, s.scenarioId, s.scenarioVersion);
   if (!sc) throw new HttpsError('not-found', 'Scenario not found.');
   const faces = (program.avatarFaces ?? {}) as Record<string, unknown>;
-  const faceId = String(faces[voiceGroupOf(sc.briefing.persona.pronouns)] ?? '');
+  const moodFaces = (program.avatarMoodFaces ?? {}) as Record<string, unknown>;
+  const moodFace = mood ? String(moodFaces[mood] ?? '') : '';
+  // A face for this mood if faculty chose one, else the face for the patient's pronouns.
+  const faceId = FACE_ID.test(moodFace)
+    ? moodFace
+    : String(faces[voiceGroupOf(sc.briefing.persona.pronouns)] ?? '');
   if (!FACE_ID.test(faceId))
     throw new HttpsError('failed-precondition', 'No avatar face is chosen for this patient.');
 

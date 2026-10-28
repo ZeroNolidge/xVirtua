@@ -46,7 +46,8 @@ service cloud.firestore {
         && onlyChanges(['name', 'timezone', 'audioRetentionMonths',
                         'transcriptRetentionMonths', 'scoringWeights', 'patientModel',
                         'voiceMode', 'liveVoice', 'liveVoices', 'liveBrain',
-                        'liveVoiceTags', 'captionsDefault', 'avatarOn', 'avatarFaces'])
+                        'liveVoiceTags', 'captionsDefault', 'avatarOn', 'avatarFaces',
+                        'avatarMoodFaces'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
@@ -76,6 +77,8 @@ service cloud.firestore {
             || request.resource.data.avatarOn is bool)
         && (!('avatarFaces' in request.resource.data)
             || validAvatarFaces(request.resource.data.avatarFaces))
+        && (!('avatarMoodFaces' in request.resource.data)
+            || validMoodFaces(request.resource.data.avatarMoodFaces))
         && (!('captionsDefault' in request.resource.data)
             || request.resource.data.captionsDefault is bool)
         && (!('liveVoices' in request.resource.data)
@@ -91,6 +94,12 @@ service cloud.firestore {
         && (!('he' in v) || isFaceId(v.he))
         && (!('she' in v) || isFaceId(v.she))
         && (!('they' in v) || isFaceId(v.they));
+    }
+
+    function validMoodFaces(v) {
+      return v is map && v.keys().hasOnly(['guarded', 'at_ease'])
+        && (!('guarded' in v) || isFaceId(v.guarded))
+        && (!('at_ease' in v) || isFaceId(v.at_ease));
     }
 
     function validLiveVoices(v) {

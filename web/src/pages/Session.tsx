@@ -43,6 +43,7 @@ import {
 } from '../components/ConversationBits';
 import { useCaptions } from '../lib/useCaptions';
 import { useAvatar } from '../lib/useAvatar';
+import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
 import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
 
@@ -328,7 +329,24 @@ function Conversation({
     ready: faceReady,
     start: startFace,
     stop: stopFace,
+    enabled: faceEnabled,
+    everReady: faceEverReady,
+    restart: restartFace,
   } = useAvatar(sessionId);
+  // His body language: clips over the live face while he isn't talking.
+  const body = useBodyLanguage(persona.name, faceStage, {
+    enabled: faceEnabled,
+    ready: faceReady,
+    restart: (m) => void restartFace(m),
+  });
+  const bodyRef = useRef(body);
+  useEffect(() => {
+    bodyRef.current = body;
+  });
+  /** Resident turns so far (he only relaxes once the visit is under way). */
+  const residentTurns = useRef(0);
+  /** He sounded relieved: relax once this reply is over. */
+  const relaxAfter = useRef(false);
   // Typing needs the words on screen.
   const showWords = captions || typed;
   const lastPatient = [...bubbles].reverse().find((b) => b.who === 'patient');
@@ -471,14 +489,17 @@ function Conversation({
       setPhase('patient');
       const audio = await fetchPatientAudio(sessionId, u.idx);
       const key = `p${u.idx}`;
-      const p = new ReplyPlayer(r, (sentence) =>
-        revealSentence(key, p.played.slice(0, -1).join(' '), sentence, u.nonverbal),
-      );
+      const p = new ReplyPlayer(r, (sentence) => {
+        bodyRef.current.setSpeaking(true);
+        revealSentence(key, p.played.slice(0, -1).join(' '), sentence, u.nonverbal);
+      });
       player.current = p;
       p.say(0, u.text);
       if (audio) p.audio(0, audio);
       p.finish();
-      await p.run(u.delivery.pauseBeforeMs);
+      const shown = await bodyRef.current.cue(u.nonverbal, 2500);
+      await p.run(shown ? 0 : u.delivery.pauseBeforeMs);
+      bodyRef.current.setSpeaking(false);
       stopReveal();
       updateBubble(key, { text: u.text });
       lastPatientSaid.current = p.played.join(' ');
@@ -503,7 +524,10 @@ function Conversation({
       const text = sup ? `${sup.text} ${said}` : said;
       const residentKey = sup?.residentKey ?? `r${Date.now()}`;
       if (sup) updateBubble(residentKey, { text });
-      else addBubble({ key: residentKey, who: 'resident', text });
+      else {
+        addBubble({ key: residentKey, who: 'resident', text });
+        residentTurns.current++;
+      }
       const cutOff = interruptedRef.current;
       interruptedRef.current = null;
       turnRef.current = { residentKey, text, supersede: false };
@@ -539,6 +563,7 @@ function Conversation({
           shown = true;
           setPhase('patient');
         }
+        bodyRef.current.setSpeaking(true);
         revealSentence(key, p.played.slice(0, -1).join(' '), sentence, meta?.nonverbal);
       });
       player.current = p;
@@ -552,15 +577,24 @@ function Conversation({
         setShowThinking(true);
       };
       const run = () =>
-        (running ??= waitForGate().then(() =>
-          turnRef.current?.supersede ? undefined : p.run(pauseMs),
-        ));
+        (running ??= waitForGate().then(async () => {
+          if (turnRef.current?.supersede) return;
+          // His body language comes first (a clip over his face), then he speaks.
+          const shown = meta ? await bodyRef.current.cue(meta.nonverbal, 2500) : false;
+          if (turnRef.current?.supersede) return;
+          return p.run(shown ? 0 : pauseMs);
+        }));
       const onChunk = (c: PatientChunk) => {
         // The resident kept talking: this reply will be replaced, so don't play it.
         if (turnRef.current?.supersede) return;
         if (c.t === 'meta') {
           meta = { nonverbal: c.nonverbal };
           pauseMs = c.delivery.pauseBeforeMs;
+          if (
+            residentTurns.current >= 3 &&
+            (c.delivery.emotion === 'relieved' || c.nonverbal.includes('smile'))
+          )
+            relaxAfter.current = true;
           run();
         } else if (c.t === 'say') {
           p.say(c.seq, c.text);
@@ -624,6 +658,11 @@ function Conversation({
         // So a silent sentence can be traced (missing voice vs. something else).
         if (p.noVoice.length)
           reportError('voice.missing', new Error(`${p.noVoice.length} sentence(s) had no voice`));
+        bodyRef.current.setSpeaking(false);
+        if (relaxAfter.current) {
+          relaxAfter.current = false;
+          bodyRef.current.relax();
+        }
         if (phaseRef.current !== 'listening') startListening();
       } catch (e) {
         p.finish();
@@ -798,7 +837,7 @@ function Conversation({
 
   async function begin() {
     // The video face (if on) starts inside this tap, alongside everything else.
-    const facing = startFace();
+    const facing = startFace(body.startMood ?? undefined);
     setPhase('connecting');
     setNotice(null);
     renderer.current = new VoiceRenderer();
@@ -847,7 +886,7 @@ function Conversation({
   }
 
   async function carryOn() {
-    void startFace();
+    void startFace(body.mood() ?? undefined);
     setResumingVoice(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -961,7 +1000,12 @@ function Conversation({
         </div>
       </header>
 
-      <AvatarStage ref={faceStage} show={faceReady && talking} name={persona.name} />
+      <AvatarStage
+        ref={faceStage}
+        show={faceEverReady && talking}
+        name={persona.name}
+        poster={body.poster}
+      />
 
       {notice && (
         <p className="notice" role="alert">

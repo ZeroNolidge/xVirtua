@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isBackchannel, isCutIn } from '@plainspeak/shared';
+import { isBackchannel, isCutIn, type NonverbalCue } from '@plainspeak/shared';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
 import { sessionApi, streamTurn, type TurnInput, type Utterance } from '../lib/session';
@@ -21,6 +21,8 @@ import {
 } from '../components/ConversationBits';
 import { useCaptions } from '../lib/useCaptions';
 import { useAvatar } from '../lib/useAvatar';
+import { useBodyLanguage } from '../lib/useBodyLanguage';
+import { cueForWords } from '../lib/cueWords';
 import { AvatarStage } from '../components/AvatarStage';
 import { Transcript, type Bubble } from './Session';
 import { nonverbalLine } from '../lib/voiceRenderer';
@@ -138,10 +140,36 @@ export function LiveConversation({
     ready: faceReady,
     start: startFace,
     stop: stopFace,
+    enabled: faceEnabled,
+    everReady: faceEverReady,
+    restart: restartFace,
+    instance: faceInstance,
   } = useAvatar(sessionId);
-  // The face went away: the patient's voice plays from our own player again.
+  // His body language: clips over the live face while he isn't talking.
+  const body = useBodyLanguage(persona.name, faceStage, {
+    enabled: faceEnabled,
+    ready: faceReady,
+    restart: (m) => void restartFace(m),
+  });
+  const bodyRef = useRef(body);
   useEffect(() => {
-    if (!faceReady) call.current?.setOutput(null);
+    bodyRef.current = body;
+  });
+  // A clip gives way to his live face as soon as he talks.
+  useEffect(() => {
+    bodyRef.current.setSpeaking(speaking);
+  }, [speaking]);
+  // The face is up (again, after switching to his relaxed face): it gets the
+  // patient's voice and plays it in step. Gone: our own player plays it.
+  useEffect(() => {
+    const c = call.current;
+    const a = faceInstance();
+    if (!faceReady || !a || !c) return void c?.setOutput(null);
+    const feed = (t: MediaStreamTrack) => a.feedTrack(t);
+    if (c.remoteTrack) feed(c.remoteTrack);
+    c.onRemoteTrack = feed;
+    c.setOutput(a);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [faceReady]);
   const mic = useRef<MediaStream | null>(null);
   const recorder = useRef<SessionRecorder | null>(null);
@@ -223,6 +251,8 @@ export function LiveConversation({
       .saveLiveExchange({ sessionId, resident, patient })
       .then(({ data }) => {
         r.idx = data.patientIdx;
+        // The resident earned his trust: he relaxes once he's quiet.
+        if (data.atEase) bodyRef.current.relax();
         // Claude's private note steers the patient's next reply (never spoken).
         if (data.note)
           call.current?.note(
@@ -386,6 +416,13 @@ export function LiveConversation({
           if (r.selfReply) commitSelfReply(r);
           save(r);
           showPatient(r, r.spoken);
+          // He's done talking: his body language follows what he just said.
+          const mood = bodyRef.current.mood();
+          const fromWords = mood ? cueForWords(r.spoken, mood) : null;
+          void bodyRef.current.cue([
+            ...(r.nonverbal as NonverbalCue[]),
+            ...(fromWords ? [fromWords] : []),
+          ]);
         }
       }
       // Words held as possible echo that never turned out to be the resident.
@@ -601,7 +638,7 @@ export function LiveConversation({
 
   async function begin() {
     // The video face (if on) starts inside this tap, alongside the call.
-    const facing = startFace();
+    const facing = startFace(body.mood() ?? body.startMood ?? undefined);
     setPhase('connecting');
     setNotice(null);
     started.current = false;
@@ -845,8 +882,9 @@ export function LiveConversation({
 
       <AvatarStage
         ref={faceStage}
-        show={faceReady && (phase === 'live' || phase === 'connecting')}
+        show={faceEverReady && (phase === 'live' || phase === 'connecting')}
         name={persona.name}
+        poster={body.poster}
       />
 
       {slowStart && openingWait && !notice && (

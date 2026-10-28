@@ -105,6 +105,32 @@ export function Settings() {
           />
         ))}
         <p className="small muted">
+          Patients with body-language clips (Ray) have two faces: guarded at the start, and at ease
+          once the resident earns his trust. These replace the face above.
+        </p>
+        <FaceField
+          label="Guarded face (start of the visit)"
+          value={program.avatarMoodFaces?.guarded ?? ''}
+          onSave={(id) =>
+            void save({
+              avatarMoodFaces: Object.fromEntries(
+                Object.entries({ ...program.avatarMoodFaces, guarded: id }).filter(([, v]) => v),
+              ),
+            })
+          }
+        />
+        <FaceField
+          label="At-ease face (once he relaxes)"
+          value={program.avatarMoodFaces?.at_ease ?? ''}
+          onSave={(id) =>
+            void save({
+              avatarMoodFaces: Object.fromEntries(
+                Object.entries({ ...program.avatarMoodFaces, at_ease: id }).filter(([, v]) => v),
+              ),
+            })
+          }
+        />
+        <p className="small muted">
           Copy a face ID from your Simli dashboard (Faces). The Simli key is added by the developer
           as a GitHub secret, never here.
         </p>

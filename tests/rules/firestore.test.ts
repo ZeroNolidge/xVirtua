@@ -153,6 +153,8 @@ describe('programs', () => {
     await assertFails(updateDoc(ref, { avatarOn: 'yes' }));
     await assertFails(updateDoc(ref, { avatarFaces: { he: 'not-a-face' } }));
     await assertFails(updateDoc(ref, { avatarFaces: { robot: face } }));
+    await assertSucceeds(updateDoc(ref, { avatarMoodFaces: { guarded: face, at_ease: face } }));
+    await assertFails(updateDoc(ref, { avatarMoodFaces: { angry: face } }));
     await assertFails(updateDoc(doc(fs(a.resA), 'programs/irmc'), { avatarOn: true }));
   });
 

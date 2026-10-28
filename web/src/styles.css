@@ -961,9 +961,24 @@ p {
   overflow: hidden;
   background: var(--surface);
 }
-.avatar-stage video {
+.avatar-stage.on {
+  position: relative;
+}
+.avatar-stage video,
+.avatar-stage .stage-poster {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+/* Body-language clips fade in over the live face, and back out. */
+.avatar-stage .stage-clip {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.avatar-stage .stage-clip.on {
+  opacity: 1;
 }

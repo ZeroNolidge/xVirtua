@@ -65,13 +65,13 @@ export const sessionApi = {
   /** Saves an exchange GPT-Live answered on its own. */
   saveLiveExchange: httpsCallable<
     { sessionId: string; resident: string; patient: string },
-    { residentIdx: number; patientIdx: number; note: string | null }
+    { residentIdx: number; patientIdx: number; note: string | null; atEase?: boolean }
   >(functions, 'saveLiveExchange'),
   /** Test: a video avatar session for the patient (Simli). */
-  avatarSession: httpsCallable<{ sessionId: string }, { token: string }>(
-    functions,
-    'avatarSession',
-  ),
+  avatarSession: httpsCallable<
+    { sessionId: string; mood?: 'guarded' | 'at_ease' },
+    { token: string }
+  >(functions, 'avatarSession'),
   /** GPT-Live test mode: trades the browser's WebRTC offer for OpenAI's answer. */
   startLiveCall: httpsCallable<{ sessionId: string; sdp: string }, { sdp: string; voice: string }>(
     functions,

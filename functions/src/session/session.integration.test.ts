@@ -463,6 +463,11 @@ describe('GPT-Live test mode', () => {
     });
     const r = await avatarSession(db, resident, { sessionId }, 'sk-simli', simli);
     expect(r.token).toBe('tok_1');
+    // A face for the patient's mood, once faculty chose one.
+    const eased = 'aaaaaaaa-355a-4d97-8b90-4edccd1da7b2';
+    await db.doc('programs/irmc').set({ avatarMoodFaces: { at_ease: eased } }, { merge: true });
+    await avatarSession(db, resident, { sessionId, mood: 'at_ease' }, 'sk-simli', simli);
+    expect(JSON.parse(calls.at(-1)!.init.body)).toMatchObject({ faceId: eased });
     expect(calls[0]!.url).toBe('https://api.simli.ai/compose/token');
     expect(calls[0]!.init.headers['x-simli-api-key']).toBe('sk-simli');
     expect(JSON.parse(calls[0]!.init.body)).toMatchObject({ faceId: face, handleSilence: false });
@@ -650,7 +655,7 @@ describe('GPT-Live voice and self-replies', () => {
       resident: 'Your blood pressure is a little high.',
       patient: 'Oh, okay. Is that bad?',
     });
-    expect(r).toEqual({ residentIdx: 1, patientIdx: 2, note: null });
+    expect(r).toEqual({ residentIdx: 1, patientIdx: 2, note: null, atEase: false });
     const [t1, t2, s] = await Promise.all([
       db.doc(`sessions/${sessionId}/turns/1`).get(),
       db.doc(`sessions/${sessionId}/turns/2`).get(),
@@ -718,5 +723,26 @@ describe('GPT-Live steer mode', () => {
       speaker: 'patient',
       text: cue.performance.say,
     });
+    // He relaxes once the director says so, and stays relaxed.
+    expect(r.atEase).toBe(false);
+    const eased = await saveLiveExchange(
+      db,
+      resident,
+      {
+        sessionId,
+        resident: 'We’ll work through the license together.',
+        patient: 'That helps, doc.',
+      },
+      director,
+    );
+    expect(eased.atEase).toBe(true);
+    expect((await db.doc(`sessions/${sessionId}`).get()).get('mood')).toBe('at_ease');
+    const later = await saveLiveExchange(
+      db,
+      resident,
+      { sessionId, resident: 'Any questions?', patient: 'No.' },
+      director,
+    );
+    expect(later.atEase).toBe(true);
   });
 });

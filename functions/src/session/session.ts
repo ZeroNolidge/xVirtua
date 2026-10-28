@@ -59,6 +59,8 @@ export interface SessionDoc {
   inputMode?: 'voice' | 'typed' | 'mixed';
   voiceMode?: VoiceMode;
   liveBrain?: LiveBrain;
+  /** Video avatar: the patient relaxed (set once by the director in GPT-Live mode). */
+  mood?: 'at_ease';
   /** Steer mode: the cue the last director note asked for. */
   directedCueId?: string | null;
 }
@@ -663,8 +665,10 @@ export async function saveLiveExchange(
     });
     return { residentIdx: rIdx, patientIdx: pIdx, cue: decision.cue };
   });
-  // Steer mode: a private note for the patient's next reply (never blocks the call).
+  // Steer mode: a private note for the patient's next reply (never blocks the call),
+  // and whether the patient has relaxed (for the video avatar).
   let note: string | null = null;
+  let atEase = first?.mood === 'at_ease';
   if (director && sc && first?.liveBrain !== 'claude') {
     const transcript = [
       ...prior.docs
@@ -674,14 +678,26 @@ export async function saveLiveExchange(
       { speaker: 'resident' as const, text: input.resident },
       { speaker: 'patient' as const, text: input.patient },
     ];
-    note = await director
-      .note({ briefing: sc.briefing, script: sc.script, transcript, cue: saved.cue })
+    const out = await director
+      .direct({
+        briefing: sc.briefing,
+        script: sc.script,
+        transcript,
+        cue: saved.cue,
+        alreadyAtEase: atEase,
+      })
       .catch((e: unknown) => {
         console.warn('director note failed', e instanceof Error ? e.message : e);
         return null;
       });
+    note = out?.note ?? null;
+    // One way for now: once he relaxes, he stays relaxed.
+    if (out?.atEase && !atEase) {
+      atEase = true;
+      await ref.update({ mood: 'at_ease' }).catch(() => undefined);
+    }
   }
-  return { residentIdx: saved.residentIdx, patientIdx: saved.patientIdx, note };
+  return { residentIdx: saved.residentIdx, patientIdx: saved.patientIdx, note, atEase };
 }
 
 // ---------- what was actually said ----------
