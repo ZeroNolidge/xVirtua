@@ -1,0 +1,24 @@
+{
+  "start": "guarded",
+  "moods": {
+    "guarded": {
+      "poster": "guarded.jpg",
+      "clips": {
+        "look_away": "guarded-look-away.mp4",
+        "frown": "guarded-frown.mp4",
+        "avoid_eye_contact": "guarded-avoid-eye-contact.mp4",
+        "fidget": "guarded-fidget.mp4"
+      }
+    },
+    "at_ease": {
+      "poster": "at-ease.jpg",
+      "clips": {
+        "nod": "at-ease-nod.mp4",
+        "smile": "at-ease-smile.mp4"
+      }
+    }
+  },
+  "transitions": {
+    "guarded>at_ease": "guarded-to-at-ease.mp4"
+  }
+}
