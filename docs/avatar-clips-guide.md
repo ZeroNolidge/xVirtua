@@ -36,11 +36,19 @@ Once Simli has built the face:
 Simli crops closer than the portrait, so the hands are usually out of frame:
 don't describe hand movements (fidget becomes a shift in the seat).
 
-**Mood change clip** (e.g. guarded → at ease): it starts on one Simli face and
-ends on the other, and the two are zoomed differently. Kling fills the gap with
-motion and tends to open the mouth. Say "the camera very slowly and smoothly
-drifts a little closer" (so the zoom reads as camera motion), and "his lips stay
-pressed gently together, sealed shut… he breathes calmly through his nose".
+**Mood change clip** (e.g. guarded → at ease): the two Simli faces are zoomed
+and shifted slightly differently (Ray: about 4% and 21 px). If Kling has to cover
+that, it moves the face and opens the mouth (4 of 4 tries failed). Instead:
+
+1. `python3 -I scripts/avatar-tools/align.py guarded.png at-ease.png out/` lines
+   the at-ease image up with the guarded framing.
+2. Make the clip in Kling from the guarded image to `out/at-ease-on-guarded-framing.png`,
+   with "Static locked-off camera" and "his lips stay pressed gently together,
+   sealed shut… he breathes calmly through his nose". Now it only changes the
+   expression, and the mouth stays closed (2 of 2).
+3. `python3 -I scripts/avatar-tools/warp.py clip.mp4 out/Mface.npy guarded-to-at-ease.mp4`
+   adds the zoom smoothly, so the clip ends exactly on the at-ease Simli face.
+   Copy it into the patient folder by hand (the asset workflow doesn't do this step).
 
 ## 2. The clips
 
