@@ -23,32 +23,32 @@ from it, so get it right first.
 Then upload the same image to Simli (create a face from a photo) and paste the
 face ID into Faculty → Settings → Video avatar.
 
-### Make the clips from Simli's preview image, not your portrait
+### Make the clips from the face Simli actually shows
 
-Simli crops and zooms each face its own way and shifts the lighting a little,
-so clips made from your original portrait won't line up with the live face.
-Once Simli has built the face:
+Simli crops and zooms each face its own way, so clips made from your original
+portrait won't line up with the live face. Use an image of the live face:
 
-1. Save Simli's preview image of the face (a screenshot cropped to the square is fine).
-2. Upload that to OpenArt and use it as the start and end frame of every clip.
-3. Use the same image as the poster (`guarded.jpg` / `at-ease.jpg`).
+1. **Best:** the face's picture on the Simli dashboard (app.simli.com → Avatars),
+   or a screenshot of the face in a live session. Both match the live stream.
+   Don't use the images Simli shows while it's still building the face: for Ray
+   those had a different background, and a whole set of clips had to be redone.
+2. Crop to the video square. If the screenshot has rounded corners, fill them in
+   (`scripts/avatar-tools` has examples) so they don't show in the clips.
+3. Upload that to OpenArt and use it as the start and end frame of every clip.
+4. Use the same image as the poster (`guarded.jpg` / `at-ease.jpg`).
 
 Simli crops closer than the portrait, so the hands are usually out of frame:
 don't describe hand movements (fidget becomes a shift in the seat).
 
-**Mood change clip** (e.g. guarded → at ease): the two Simli faces are zoomed
-and shifted slightly differently (Ray: about 4% and 21 px). If Kling has to cover
-that, it moves the face and opens the mouth (4 of 4 tries failed). Instead:
+**Mood change clip** (e.g. guarded → at ease): don't use AI. The two Simli faces
+differ slightly in zoom, head and body position, and every time Kling had to cover
+that it opened the mouth (8 of 8 tries, even with an edited end frame). Instead:
 
-1. `python3 -I scripts/avatar-tools/align.py guarded.png at-ease.png out/` lines
-   the at-ease image up with the guarded framing.
-2. Make the clip in Kling from the guarded image to `out/at-ease-on-guarded-framing.png`,
-   with "Static locked-off camera" and "his lips stay pressed gently together,
-   sealed shut… he breathes calmly through his nose". Now it only changes the
-   expression, and the mouth stays closed (2 of 2).
-3. `python3 -I scripts/avatar-tools/warp.py clip.mp4 out/Mface.npy guarded-to-at-ease.mp4`
-   adds the zoom smoothly, so the clip ends exactly on the at-ease Simli face.
-   Copy it into the patient folder by hand (the asset workflow doesn't do this step).
+1. `python3 -I scripts/avatar-tools/align.py guarded.png at-ease.png out/`
+2. `python3 -I scripts/avatar-tools/morph.py guarded.png at-ease.png out/Mface.npy guarded-to-at-ease.mp4 2`
+   makes a 2-second blend from one face to the other with the faces kept lined
+   up, so the expression eases over and the mouth stays shut. It starts and ends
+   exactly on the two faces. Copy it into the patient folder by hand.
 
 ## 2. The clips
 
