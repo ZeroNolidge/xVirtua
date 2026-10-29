@@ -5,7 +5,14 @@ import type { Request, Response } from 'express';
 import { dayKey } from '../lib/quota.js';
 
 /** The conversation servers the app needs awake before a conversation. */
-export const WARM_TARGETS = ['startSession', 'getSttToken', 'patientTurn', 'tts'] as const;
+export const WARM_TARGETS = [
+  'startSession',
+  'getSttToken',
+  'patientTurn',
+  'tts',
+  'startLiveCall',
+  'avatarSession',
+] as const;
 
 export type AppCheckResult = 'valid' | 'invalid' | 'missing';
 

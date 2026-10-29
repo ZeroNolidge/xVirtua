@@ -32,6 +32,8 @@ type Phase = 'ready' | 'connecting' | 'live' | 'paused' | 'ending';
 
 /** How long GPT-Live gets to answer the call before we fall back to the standard voice. */
 const START_TIMEOUT_MS = 12_000;
+/** How long our server gets to set up the call (it may be waking up). */
+const SERVER_TIMEOUT_MS = 30_000;
 /** If the patient hasn't started his opening line after this long, suggest saying hello. */
 const SLOW_START_MS = 10_000;
 
@@ -743,16 +745,20 @@ export function LiveConversation({
       recorder.current = new SessionRecorder(stream);
       void recorder.current.start();
     }
-    window.setTimeout(() => {
+    const tooSlow = () => {
       if (!started.current && mine())
         fallBack('GPT-Live didn’t answer in time, so this uses the standard voice.');
-    }, START_TIMEOUT_MS);
+    };
+    // Our server can take a while to wake up, so it gets its own, longer limit.
+    window.setTimeout(tooSlow, SERVER_TIMEOUT_MS);
     try {
       await c.start(stream, async (sdp) => {
         const { data } = await sessionApi.startLiveCall({ sessionId, sdp });
         return data.sdp;
       });
-      if (!mine()) c.hangUp();
+      if (!mine()) return c.hangUp();
+      // Then GPT-Live itself has START_TIMEOUT_MS to start talking.
+      window.setTimeout(tooSlow, START_TIMEOUT_MS);
     } catch (e) {
       if (!mine()) return c.hangUp();
       // Include OpenAI's reason (status and message) so the cause shows up in diagnostics.
