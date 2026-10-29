@@ -23,6 +23,25 @@ from it, so get it right first.
 Then upload the same image to Simli (create a face from a photo) and paste the
 face ID into Faculty → Settings → Video avatar.
 
+### Make the clips from Simli's preview image, not your portrait
+
+Simli crops and zooms each face its own way and shifts the lighting a little,
+so clips made from your original portrait won't line up with the live face.
+Once Simli has built the face:
+
+1. Save Simli's preview image of the face (a screenshot cropped to the square is fine).
+2. Upload that to OpenArt and use it as the start and end frame of every clip.
+3. Use the same image as the poster (`guarded.jpg` / `at-ease.jpg`).
+
+Simli crops closer than the portrait, so the hands are usually out of frame:
+don't describe hand movements (fidget becomes a shift in the seat).
+
+**Mood change clip** (e.g. guarded → at ease): it starts on one Simli face and
+ends on the other, and the two are zoomed differently. Kling fills the gap with
+motion and tends to open the mouth. Say "the camera very slowly and smoothly
+drifts a little closer" (so the zoom reads as camera motion), and "his lips stay
+pressed gently together, sealed shut… he breathes calmly through his nose".
+
 ## 2. The clips
 
 ### Settings that worked
@@ -47,23 +66,23 @@ face ID into Faculty → Settings → Video avatar.
 6. **Describe the ending expression exactly**, not just "back to neutral": "settles back into the same calm, neutral, slightly tired face as at the start, still a little uneasy." A vague ending came out as a smirk, like he was laughing to himself.
 7. **Rule out the wrong emotion by name:** "He never smiles, never smirks, and shows no amusement: his cheeks do not lift and the corners of his mouth do not rise."
 8. **Give the reason for the feeling** in one phrase ("he has just heard something about his health that worries him"). It makes the expression read right.
-9. **Keep the rest still:** "Head and body still, hands resting on his knees. Same framing, lighting and background throughout."
+9. **Keep the rest still:** "Head and body still. Same framing, lighting and background throughout." (Mention the hands only if they're in Simli's frame.)
 10. **Subtle beats big:** "Subtle, realistic, natural motion." Big movements look fake and don't match the live face.
 
 ### Template
 
-> Static locked-off camera, single continuous shot. A silent, [serious/uneasy] moment: [the reason for the feeling]. His mouth stays closed with his lips together the whole time; his jaw and lips do not move. [The one action: which part moves, how, and in what direction.] He holds it for about [1–2] seconds. Then [how it eases] and he settles back into the same calm, neutral[, slightly tired/uneasy] face as at the start. He never [the wrong emotion: smiles / smirks / laughs / talks]. Head and body still, hands resting on his knees. Subtle, realistic, natural motion. Same framing, lighting and background throughout.
+> Static locked-off camera, single continuous shot. A silent, [serious/uneasy] moment: [the reason for the feeling]. His mouth stays closed with his lips together the whole time; his jaw and lips do not move. [The one action: which part moves, how, and in what direction.] He holds it for about [1–2] seconds. Then [how it eases] and he settles back into the same calm, neutral[, slightly tired/uneasy] face as at the start. He never [the wrong emotion: smiles / smirks / laughs / talks]. Head and body still. Subtle, realistic, natural motion. Same framing, lighting and background throughout.
 
 ### The cue set (matches the app's body-language cues)
 
-| Cue                 | The one action to describe                                                            | Watch out for                                           |
-| ------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `look_away`         | Eyes drift to one side and down, "lost in an uneasy thought"; then back to the camera | Mouth opening: never say "searching for words" (rule 3) |
-| `frown`             | Brow furrows, eyebrows draw together and lift slightly in the middle; eyes narrow     | Smirking on the way back (rule 6)                       |
-| `avoid_eye_contact` | Eyes drop to his hands or the floor and stay there longer; then slowly come back      | Head drooping too far, which makes it hard to cut back  |
-| `fidget`            | Hands rub together or pick at the jacket zipper; the face stays uneasy                | Hands looking odd: always check them                    |
-| `nod`               | One or two small, slow nods of agreement, eyes on the camera                          | Talking while nodding                                   |
-| `smile`             | A small, polite, closed-mouth smile that fades                                        | A big grin, or teeth showing                            |
+| Cue                 | The one action to describe                                                            | Watch out for                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `look_away`         | Eyes drift to one side and down, "lost in an uneasy thought"; then back to the camera | Mouth opening: never say "searching for words" (rule 3)                               |
+| `frown`             | Brow furrows, eyebrows draw together and lift slightly in the middle; eyes narrow     | Smirking on the way back (rule 6)                                                     |
+| `avoid_eye_contact` | Eyes drop to his hands or the floor and stay there longer; then slowly come back      | Head drooping too far, which makes it hard to cut back                                |
+| `fidget`            | Hands rub together, or (hands out of frame) shifts uneasily in the seat               | Hands looking odd; if hands are out of Simli's frame, use a shift in the seat instead |
+| `nod`               | One or two small, slow nods of agreement, eyes on the camera                          | Talking while nodding                                                                 |
+| `smile`             | A small, polite, closed-mouth smile that fades                                        | A big grin, or teeth showing                                                          |
 
 ### Checking a clip
 
