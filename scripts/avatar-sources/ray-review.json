@@ -1,18 +1,4 @@
 {
-  "guarded.jpg": "https://cdn.openart.ai/openart-uploads/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/ray-guarded-simli_1793274473448_cbdb7a7d.png",
-  "at-ease.jpg": "https://cdn.openart.ai/openart-uploads/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/ray-at-ease-simli_1793274474054_b72be8d7.png",
-  "look-away-a.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/15c75288dbfc21a24bac3ee660b7733a-44d603be-79a0-4d7a-9728-ad91a12557c1_1793274570952_bddd7d59.mp4",
-  "look-away-b.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/d7421d649b4b061410289082acbe5512-16674ca7-d9a2-44f8-8767-eee6c1561cb2_1793274575613_ed00b90f.mp4",
-  "frown-a.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/59994839f415c3cfa99881ebd86a7869-6265fe9b-746c-40cc-9e74-9dfb154e5691_1793274570351_0f1a2628.mp4",
-  "frown-b.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/86f0cf45aab1f552192835d3714ad443-8e950a1f-6542-49e1-a166-d2e95edf58ba_1793274573920_716b942a.mp4",
-  "avoid-a.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/a8b04dc67108f642d7974205637a1554-5ce6b657-af0d-4570-b5ad-844e6a0d7978_1793274865014_77e73574.mp4",
-  "avoid-b.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/62810fd1671d3cbd54384d92c7b30705-0fd4d61b-186c-46f1-ad56-b4ba3ef44f56_1793274914056_c7c13eab.mp4",
-  "fidget-a.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/d8fab6f6044606cb181b3dff6aa04ccb-c38dbe53-7bd1-4f79-8020-47812685efcc_1793274874231_8c5cb41c.mp4",
-  "fidget-b.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/b1bb03e0602f79e031d069bcc4c73257-ca0078fc-ecff-4ab6-bd29-42551a0e63b9_1793274882971_f5bae39b.mp4",
-  "relax-a.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/89c1d634bb1674076ac16e3d461c7e87-398bacf0-262c-4780-b917-cfa8a335a6c0_1793275269331_c351bc65.mp4",
-  "relax-b.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/2b9c89f9e992a624b83619fc65cad6c8-03954ec7-8e61-411c-a12c-f3ff5d7bb3c3_1793275280937_e987b490.mp4",
-  "nod-a.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/deb7e3622f5936033e1ea6d69d3adf87-b79486fe-b4a6-46ea-af08-773f205a9bcd_1793275268191_4d41a75f.mp4",
-  "nod-b.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/d0dde0f4166dbd00cfe3193c6243eaf9-f83ceb0a-cf4c-48c0-a99b-3d1dc5576f0d_1793275280962_2efc369a.mp4",
-  "smile-a.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/c06a39d2bc851d7005e05280946e6d9e-e4285970-cfb1-4848-a5cf-a3896622e83e_1793275525959_1bdc27c8.mp4",
-  "smile-b.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/fd986ab855c78c16176b8b4538215961-9b0a78e6-3c9b-4670-b4aa-640cb286f561_1793275547927_fcf0978b.mp4"
+  "relax-c.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/49d08c4ab26995d0b6fefd773bab735b-2d4288d0-7d5c-4d9b-b89a-fd8e0e57987c_1793276043954_86d9a1b6.mp4",
+  "relax-d.mp4": "https://cdn.openart.ai/openart-ai/production/2026-10/create-video/Xb0lbXnAAjDaxw9b85vK/052746a715eda3d34c81d5a75f8caa3b-dfef99e0-da47-4fb9-b0ea-5d6bd287ae5a_1793276057990_72a0c450.mp4"
 }
