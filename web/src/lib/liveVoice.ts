@@ -190,6 +190,15 @@ export class LiveVoiceCall {
     return this.micLoudSince === null ? 0 : performance.now() - this.micLoudSince;
   }
 
+  /** For diagnostics: what state the patient's audio is in. */
+  describe(): string {
+    return `call ${this.pc?.connectionState ?? 'none'}, meter ${this.ctx?.state ?? 'none'}, track ${
+      this.remoteTrack ? this.remoteTrack.readyState : 'none'
+    }, player ${this.audioEl.muted ? 'muted' : 'on'}${this.audioEl.paused ? ' (paused)' : ''}${
+      this.output ? ', via avatar' : ''
+    }`;
+  }
+
   /** True while the patient's voice is coming through (or was, very recently). */
   patientAudible(windowMs = 300): boolean {
     return performance.now() - this.lastSoundAt < windowMs;

@@ -396,7 +396,14 @@ export function LiveConversation({
           setNotice(
             `Can’t hear ${first}? ${first}’s voice isn’t playing on this phone. Check the volume, and turn off Bluetooth (a car or headset may be taking the sound).`,
           );
-          reportError('live.noSound', new Error('Patient words arrived but no sound played'));
+          reportError(
+            'live.noSound',
+            new Error(
+              `Patient words arrived but no sound played: ${c.describe?.() ?? ''}; ${
+                faceInstance()?.describe() ?? 'no avatar'
+              }`,
+            ),
+          );
         }
       }
       // Done talking: what he said out loud becomes the saved line.

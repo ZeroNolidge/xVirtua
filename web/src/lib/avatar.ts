@@ -92,7 +92,10 @@ export class PatientAvatar {
         new Promise((_, no) => setTimeout(() => no(new Error('Simli start timed out')), timeoutMs)),
       ]);
       if (this.disposed || this.client !== client) {
-        void client.stop().catch(() => undefined);
+        void client.stop().then(
+          () => closeInternalAudio(client),
+          () => undefined,
+        );
         return false;
       }
       this.audio.muted = false;
@@ -100,7 +103,11 @@ export class PatientAvatar {
       return true;
     } catch (e) {
       this.onFail?.(e);
-      void this.client?.stop().catch(() => undefined);
+      const c = this.client;
+      void c?.stop().then(
+        () => closeInternalAudio(c),
+        () => undefined,
+      );
       this.client = null;
       this.setReady(false);
       return false;
@@ -156,6 +163,14 @@ export class PatientAvatar {
     this.client = null;
     this.setReady(false);
     await c?.stop().catch(() => undefined);
+    closeInternalAudio(c);
+  }
+
+  /** For diagnostics: what state the audio is in. */
+  describe(): string {
+    return `face ${this.ready ? 'up' : 'down'}, mixer ${this.ctx?.state ?? 'none'}, voice ${
+      this.audio.muted ? 'muted' : 'on'
+    }${this.audio.paused ? ' (paused)' : ''}`;
   }
 
   /** Leaving the screen. */
@@ -164,4 +179,14 @@ export class PatientAvatar {
     await this.stop();
     void this.ctx?.close().catch(() => undefined);
   }
+}
+
+/**
+ * Simli's client opens its own audio context and never closes it. Phones
+ * only allow a few at once, so a leftover one from an earlier conversation
+ * can leave the next one silent.
+ */
+function closeInternalAudio(c: SimliClient | null) {
+  const ctx = (c as unknown as { audioContext?: AudioContext } | null)?.audioContext;
+  if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => undefined);
 }
