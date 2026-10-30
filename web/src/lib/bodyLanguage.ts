@@ -1,4 +1,5 @@
 import type { NonverbalCue } from '@plainspeak/shared';
+import { HeadMatcher } from './headMatch';
 
 export type Mood = 'guarded' | 'at_ease';
 
@@ -19,6 +20,10 @@ export const patientSlug = (name: string) =>
 export const CLIP_GAP_MS = 6000;
 /** Ray may start talking this long before a clip ends (it fades into his live face). */
 const NEAR_END_MS = 400;
+/** How long a clip takes to fade in or out (matches .stage-clip in styles.css). */
+const FADE_MS = 250;
+/** After fading in, the clip glides from the live head's position to its own, this slowly. */
+const SETTLE_MS = 700;
 
 /**
  * The patient's body language (test): short clips of the same face, played
@@ -36,11 +41,15 @@ export class BodyLanguage {
   private holding = false;
   /** The mood changed (the live face should switch to match). */
   onMood: ((m: Mood) => void) | null = null;
+  private heads = new HeadMatcher();
+  private settle: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly manifest: ClipManifest,
     private readonly base: string,
     private readonly el: HTMLVideoElement,
+    /** The live video face, to line clips up with where his head is. */
+    private readonly live: () => HTMLVideoElement | null = () => null,
   ) {
     this.mood = manifest.start;
     el.muted = true;
@@ -55,12 +64,16 @@ export class BodyLanguage {
       for (const f of Object.values(m.clips)) if (f) files.add(f);
     }
     for (const f of Object.values(this.manifest.transitions ?? {})) if (f) files.add(f);
-    await Promise.all(
-      [...files].map(async (f) => {
+    const posters = Object.values(this.manifest.moods).flatMap((m) =>
+      m?.poster ? [`${this.base}/${m.poster}`] : [],
+    );
+    await Promise.all([
+      ...posters.map((u) => this.heads.addReference(u).catch(() => undefined)),
+      ...[...files].map(async (f) => {
         const r = await fetchFn(`${this.base}/${f}`);
         if (r.ok) this.urls.set(f, URL.createObjectURL(await r.blob()));
       }),
-    );
+    ]);
   }
 
   /** His resting face for the current mood (shown under the live face). */
@@ -69,8 +82,32 @@ export class BodyLanguage {
     return p ? `${this.base}/${p}` : null;
   }
 
+  /**
+   * Fades the clip in or out. Every clip starts and ends on his resting face,
+   * but the live face sways a little, so the clip is first moved to where the
+   * live head is (no double image while both show), then glides back.
+   */
   private show(on: boolean) {
-    this.el.classList.toggle('on', on);
+    const el = this.el;
+    clearTimeout(this.settle);
+    const o = this.heads.offset(this.live(), this.poster);
+    const at = o ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%)` : '';
+    if (on) {
+      el.style.transition = 'none';
+      el.style.transform = at;
+      void el.offsetWidth; // apply that position before fading in
+      el.style.transition = '';
+      el.classList.add('on');
+      if (at)
+        this.settle = setTimeout(() => {
+          el.style.transition = `opacity ${FADE_MS}ms ease, transform ${SETTLE_MS}ms ease-in-out`;
+          el.style.transform = '';
+        }, FADE_MS);
+    } else {
+      el.style.transition = `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms ease-out`;
+      el.style.transform = at;
+      el.classList.remove('on');
+    }
   }
 
   private start(file: string): Promise<number> | null {
@@ -137,8 +174,9 @@ export class BodyLanguage {
     this.relaxPending = false;
     if (this.mood !== 'guarded') return;
     const file = this.manifest.transitions?.['guarded>at_ease'];
-    this.mood = 'at_ease';
+    // Starts from his guarded face, so line it up with that; then he's at ease.
     const started = file ? this.start(file) : null;
+    this.mood = 'at_ease';
     if (started) {
       this.playing = 'transition';
       // Holds on its last frame (his at-ease face) until the live face catches up.
@@ -166,6 +204,7 @@ export class BodyLanguage {
   }
 
   dispose() {
+    clearTimeout(this.settle);
     this.el.pause();
     for (const u of this.urls.values()) URL.revokeObjectURL(u);
     this.urls.clear();

@@ -32,7 +32,7 @@ export function useBodyLanguage(
       const manifest = (await r.json()) as ClipManifest;
       const el = stage.current?.clip;
       if (!live || !el) return;
-      const b = new BodyLanguage(manifest, base, el);
+      const b = new BodyLanguage(manifest, base, el, () => stage.current?.video ?? null);
       b.onMood = (m) => {
         setPoster(b.poster);
         restart.current(m);
