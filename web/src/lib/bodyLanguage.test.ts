@@ -55,23 +55,38 @@ describe('body language clips', () => {
     expect(await b.cue(['look_away'])).toBe(false);
   });
 
-  it('relaxes once he is quiet: the transition holds until the at-ease face is up', async () => {
+  it('relaxes once he is quiet: the faces swap at the end of the transition', async () => {
     const onMood = vi.fn();
     b.onMood = onMood;
     b.setSpeaking(true);
     b.relax();
-    expect(onMood).not.toHaveBeenCalled();
+    expect(el.classList.contains('on')).toBe(false); // not while he talks
     b.setSpeaking(false);
-    expect(onMood).toHaveBeenCalledWith('at_ease');
+    expect(el.classList.contains('on')).toBe(true); // the transition clip
     expect(b.mood).toBe('at_ease');
     expect(b.poster).toBe('/avatars/ray/at-ease.jpg');
-    el.finish(); // transition over, live face not up yet: hold the last frame
-    expect(el.classList.contains('on')).toBe(true);
+    expect(onMood).not.toHaveBeenCalled(); // the live face switches at its last frame
+    el.finish();
+    expect(onMood).toHaveBeenCalledWith('at_ease');
+    expect(el.classList.contains('on')).toBe(true); // holds until the new face is up
     b.reveal();
     expect(el.classList.contains('on')).toBe(false);
     // Only once.
     onMood.mockClear();
     b.relax();
     expect(onMood).not.toHaveBeenCalled();
+  });
+
+  it('connects his relaxed face first, and only then plays the transition', async () => {
+    let ready!: (ok: boolean) => void;
+    b.onPrepare = vi.fn(() => new Promise<boolean>((r) => (ready = r)));
+    b.relax();
+    expect(b.onPrepare).toHaveBeenCalledWith('at_ease');
+    expect(el.classList.contains('on')).toBe(false);
+    expect(b.mood).toBe('guarded');
+    ready(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(el.classList.contains('on')).toBe(true);
+    expect(b.mood).toBe('at_ease');
   });
 });

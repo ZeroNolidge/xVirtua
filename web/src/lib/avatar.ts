@@ -26,9 +26,12 @@ export class PatientAvatar {
   onFail: ((e: unknown) => void) | null = null;
 
   constructor(
-    private readonly video: HTMLVideoElement,
-    private readonly audio: HTMLAudioElement,
+    private video: HTMLVideoElement,
+    private audio: HTMLAudioElement,
+    /** A second, hidden video and audio element: the next face connects there (no gap). */
+    private spare: { video: HTMLVideoElement; audio: HTMLAudioElement } | null = null,
   ) {
+    if (spare) spare.video.style.opacity = '0';
     try {
       this.ctx = new AudioContext({ sampleRate: 16000 });
       void this.ctx.resume();
@@ -80,13 +83,7 @@ export class PatientAvatar {
       if (this.disposed) return false;
       const client = new SimliClient(token, this.video, this.audio, null, LogLevel.ERROR);
       this.client = client;
-      const lost = (e: unknown) => {
-        if (this.client !== client) return;
-        this.setReady(false);
-        this.onFail?.(e);
-      };
-      client.on('error', (d) => lost(new Error(`Simli: ${d}`)));
-      client.on('stop', () => lost(new Error('Simli session ended')));
+      this.watch(client);
       await Promise.race([
         client.start(),
         new Promise((_, no) => setTimeout(() => no(new Error('Simli start timed out')), timeoutMs)),
@@ -112,6 +109,97 @@ export class PatientAvatar {
       this.setReady(false);
       return false;
     }
+  }
+
+  /** The face showing now (it changes when switching faces). */
+  get activeVideo(): HTMLVideoElement {
+    return this.video;
+  }
+
+  /** If this session drops, the patient's voice plays from our own player again. */
+  private watch(client: SimliClient) {
+    const lost = (e: unknown) => {
+      // His next face dropped before taking over: there's nothing to swap to.
+      if (this.pending === client) this.pending = null;
+      if (this.client !== client) return;
+      this.setReady(false);
+      this.onFail?.(e);
+    };
+    client.on('error', (d) => lost(new Error(`Simli: ${d}`)));
+    client.on('stop', () => lost(new Error('Simli session ended')));
+  }
+
+  /** His next face, connected on the spare elements and waiting to take over. */
+  private pending: SimliClient | null = null;
+
+  /**
+   * Connects his next face (his other mood) in the background, on the spare
+   * elements, while this one keeps going. commitFace() then swaps to it.
+   * Resolves false if it can't connect (this face stays).
+   */
+  async prepareFace(getToken: GetAvatarToken, timeoutMs = 10_000): Promise<boolean> {
+    const spare = this.spare;
+    const current = this.client;
+    if (!spare || !current || !this.ready) return false;
+    this.dropPending();
+    let client: SimliClient | null = null;
+    try {
+      const [{ SimliClient, LogLevel }, token] = await Promise.all([
+        import('simli-client'),
+        getToken(),
+      ]);
+      if (this.disposed || this.client !== current) return false;
+      client = new SimliClient(token, spare.video, spare.audio, null, LogLevel.ERROR);
+      this.watch(client);
+      await Promise.race([
+        client.start(),
+        new Promise((_, no) => setTimeout(() => no(new Error('Simli start timed out')), timeoutMs)),
+      ]);
+    } catch (e) {
+      this.onFail?.(e);
+      hangUp(client);
+      return false;
+    }
+    if (this.disposed || this.client !== current) {
+      hangUp(client);
+      return false;
+    }
+    this.pending = client;
+    return true;
+  }
+
+  /**
+   * Swaps to the face prepareFace() connected: it shows and plays the voice,
+   * and the old one hangs up. The voice keeps flowing the same way. False if
+   * there was nothing ready to swap to.
+   */
+  commitFace(): boolean {
+    const next = this.pending;
+    const spare = this.spare;
+    const old = this.client;
+    if (!next || !spare || !old) return false;
+    this.pending = null;
+    const muted = this.audio.muted;
+    this.spare = { video: this.video, audio: this.audio };
+    this.video = spare.video;
+    this.audio = spare.audio;
+    this.audio.muted = muted;
+    this.audio.volume = 1;
+    this.client = next;
+    this.video.style.opacity = '';
+    this.spare.video.style.opacity = '0';
+    hangUp(old);
+    return true;
+  }
+
+  private dropPending() {
+    hangUp(this.pending);
+    this.pending = null;
+  }
+
+  /** prepareFace() then commitFace(). */
+  async switchFace(getToken: GetAvatarToken, timeoutMs = 10_000): Promise<boolean> {
+    return (await this.prepareFace(getToken, timeoutMs)) && this.commitFace();
   }
 
   /** Standard voice: send what this player plays (it goes quiet locally while the face runs). */
@@ -161,6 +249,7 @@ export class PatientAvatar {
 
   /** Hangs up Simli (pause, end). Our own player plays the voice again. */
   async stop() {
+    this.dropPending();
     const c = this.client;
     this.client = null;
     this.setReady(false);
@@ -188,6 +277,13 @@ export class PatientAvatar {
  * only allow a few at once, so a leftover one from an earlier conversation
  * can leave the next one silent.
  */
+function hangUp(c: SimliClient | null) {
+  void c?.stop().then(
+    () => closeInternalAudio(c),
+    () => undefined,
+  );
+}
+
 function closeInternalAudio(c: SimliClient | null) {
   const ctx = (c as unknown as { audioContext?: AudioContext } | null)?.audioContext;
   if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => undefined);

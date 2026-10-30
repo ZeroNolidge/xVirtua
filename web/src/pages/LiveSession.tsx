@@ -145,13 +145,19 @@ export function LiveConversation({
     enabled: faceEnabled,
     everReady: faceEverReady,
     restart: restartFace,
+    video: faceVideo,
+    prepare: prepareFace,
+    commit: commitFace,
     instance: faceInstance,
   } = useAvatar(sessionId);
   // His body language: clips over the live face while he isn't talking.
   const body = useBodyLanguage(persona.name, faceStage, {
     enabled: faceEnabled,
     ready: faceReady,
-    restart: (m) => void restartFace(m),
+    restart: (m) => restartFace(m),
+    video: faceVideo,
+    prepare: prepareFace,
+    commit: commitFace,
   });
   const bodyRef = useRef(body);
   useEffect(() => {

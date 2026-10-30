@@ -22,6 +22,8 @@ export const CLIP_GAP_MS = 6000;
 const NEAR_END_MS = 400;
 /** How long a clip takes to fade in or out (matches .stage-clip in styles.css). */
 const FADE_MS = 400;
+/** He relaxes once his relaxed face is ready, or after this long regardless. */
+const PREPARE_WAIT_MS = 8000;
 /** A clip waits at most this long for his live head to be still and near its resting spot. */
 const STILL_WAIT_MS = 800;
 /** "Near its resting spot" and "still", in head-match grid pixels (about 1% and 0.4%). */
@@ -44,8 +46,18 @@ export class BodyLanguage {
   private speaking = false;
   private relaxPending = false;
   private holding = false;
-  /** The mood changed (the live face should switch to match). */
+  /**
+   * Connects his live face for a mood in the background (the current one
+   * keeps going), so the switch later has no gap. Resolves when it's ready.
+   */
+  onPrepare: ((m: Mood) => Promise<boolean>) | null = null;
+  /**
+   * The mood changed: the live face should switch to match now (call reveal()
+   * once it has). The transition clip holds on its last frame until then.
+   */
   onMood: ((m: Mood) => void) | null = null;
+  /** His relaxed face has connected (or we stopped waiting for it). */
+  private prepared = false;
   private heads = new HeadMatcher();
   private settle: ReturnType<typeof setTimeout> | undefined;
 
@@ -157,6 +169,7 @@ export class BodyLanguage {
       if (this.playing !== 'cue') return;
       this.playing = null;
       this.show(false);
+      this.tryRelax();
     };
     const ms = await started;
     if (!ms) {
@@ -194,14 +207,29 @@ export class BodyLanguage {
       this.playing = null;
       this.show(false);
     }
-    if (!on && this.relaxPending) this.relaxNow();
+    if (!on) this.tryRelax();
   }
 
-  /** The resident earned his trust: he relaxes as soon as he's quiet (once). */
+  /**
+   * The resident earned his trust: he relaxes (once). His relaxed face
+   * connects first, in the background; then, as soon as he's quiet, the
+   * transition clip plays and the faces swap at its last frame.
+   */
   relax() {
-    if (this.mood !== 'guarded' || !this.manifest.moods.at_ease) return;
+    if (this.mood !== 'guarded' || !this.manifest.moods.at_ease || this.relaxPending) return;
     this.relaxPending = true;
-    if (!this.speaking && !this.playing) this.relaxNow();
+    this.prepared = false;
+    const ready = this.onPrepare ? this.onPrepare('at_ease').catch(() => false) : null;
+    const done = () => {
+      this.prepared = true;
+      this.tryRelax();
+    };
+    if (!ready) return done();
+    void Promise.race([ready, new Promise((r) => setTimeout(r, PREPARE_WAIT_MS))]).then(done);
+  }
+
+  private tryRelax() {
+    if (this.relaxPending && this.prepared && !this.speaking && !this.playing) this.relaxNow();
   }
 
   private relaxNow() {
@@ -211,22 +239,20 @@ export class BodyLanguage {
     // Starts from his guarded face, so line it up with that; then he's at ease.
     const started = file ? this.start(file) : null;
     this.mood = 'at_ease';
-    if (started) {
-      this.playing = 'transition';
-      // Holds on its last frame (his at-ease face) until the live face catches up.
+    if (!started) return this.onMood?.('at_ease');
+    this.playing = 'transition';
+    // At its last frame (his at-ease face), the live face switches underneath.
+    this.el.onended = () => {
+      if (this.playing === 'transition') this.playing = null;
       this.holding = true;
       this.faceReady = false;
-      this.el.onended = () => {
-        if (this.playing === 'transition') this.playing = null;
-        if (this.faceReady) this.release();
-      };
-    }
-    this.onMood?.('at_ease');
+      this.onMood?.('at_ease');
+    };
   }
 
   private faceReady = false;
 
-  /** The live face for the new mood is up: show it once the transition has played out. */
+  /** The live face for the new mood is up: the transition clip gives way to it. */
   reveal() {
     this.faceReady = true;
     if (this.holding && this.playing !== 'transition') this.release();

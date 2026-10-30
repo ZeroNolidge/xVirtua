@@ -2,21 +2,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Fake Simli client: records what it was sent.
 const sent: Uint8Array[] = [];
+/** Which client (1, 2, …) each piece of audio went to, and which were hung up. */
+const sentTo: number[] = [];
+const stopped: number[] = [];
+let clients = 0;
 let cleared = 0;
 let failStart = false;
 const handlers: Record<string, (d?: string) => void> = {};
 vi.mock('simli-client', () => ({
   LogLevel: { ERROR: 2 },
   SimliClient: class {
+    id = ++clients;
     on(ev: string, cb: (d?: string) => void) {
       handlers[ev] = cb;
     }
     async start() {
       if (failStart) throw 'ERROR: INVALID_FACE_ID';
     }
-    async stop() {}
+    async stop() {
+      stopped.push(this.id);
+    }
     sendAudioData(d: Uint8Array) {
       sent.push(d);
+      sentTo.push(this.id);
     }
     ClearBuffer() {
       cleared++;
@@ -57,6 +65,9 @@ class FakeContext {
 
 beforeEach(() => {
   sent.length = 0;
+  sentTo.length = 0;
+  stopped.length = 0;
+  clients = 0;
   links.length = 0;
   cleared = 0;
   failStart = false;
@@ -108,6 +119,40 @@ describe('video avatar', () => {
     a.mute(false); // his next line
     expect(audio.muted).toBe(false);
     expect(audio.volume).toBe(1);
+  });
+
+  it('switches to his other face with no gap: the voice keeps flowing to Simli', async () => {
+    const { video, audio } = els();
+    const spare = els();
+    const a = new PatientAvatar(video, audio, spare);
+    const changes: boolean[] = [];
+    a.onChange = (r) => changes.push(r);
+    await a.connect(async () => 'tok-guarded');
+    a.feedElement(document.createElement('audio'));
+    const chunk = () =>
+      worklet.port.onmessage!({ data: new Int16Array(1600).buffer } as MessageEvent<ArrayBuffer>);
+    chunk();
+    expect(await a.switchFace(async () => 'tok-at-ease')).toBe(true);
+    chunk();
+    // Never down in between, so our own player never took over the voice.
+    expect(changes).toEqual([true]);
+    expect(links).not.toContainEqual(['player', 'speakers']);
+    expect(sentTo).toEqual([1, 2]);
+    expect(stopped).toEqual([1]);
+    expect(a.activeVideo).toBe(spare.video);
+    expect(spare.video.style.opacity).toBe('');
+    expect(video.style.opacity).toBe('0');
+  });
+
+  it('if his other face can’t connect, the current one stays', async () => {
+    const { video, audio } = els();
+    const a = new PatientAvatar(video, audio, els());
+    await a.connect(async () => 'tok');
+    failStart = true;
+    expect(await a.switchFace(async () => 'tok-2')).toBe(false);
+    expect(a.ready).toBe(true);
+    expect(a.activeVideo).toBe(video);
+    expect(stopped).toEqual([2]);
   });
 
   it('if Simli fails, the patient’s voice plays from our own player again', async () => {

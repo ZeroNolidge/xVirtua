@@ -43,7 +43,7 @@ export function useAvatar(sessionId: string) {
   function start(mood?: 'guarded' | 'at_ease'): Promise<PatientAvatar | null> {
     if (!enabled || !stage.current) return Promise.resolve(null);
     if (!avatar.current) {
-      const a = new PatientAvatar(stage.current.video, stage.current.audio);
+      const a = new PatientAvatar(stage.current.video, stage.current.audio, stage.current.spare);
       a.onChange = (r) => {
         setReady(r);
         if (r) setEverReady(true);
@@ -52,13 +52,11 @@ export function useAvatar(sessionId: string) {
       avatar.current = a;
     }
     const a = avatar.current;
-    return a
-      .connect(
-        async () =>
-          (await sessionApi.avatarSession({ sessionId, ...(mood ? { mood } : {}) })).data.token,
-      )
-      .then((ok) => (ok ? a : null));
+    return a.connect(tokenFor(mood)).then((ok) => (ok ? a : null));
   }
+
+  const tokenFor = (mood?: 'guarded' | 'at_ease') => async () =>
+    (await sessionApi.avatarSession({ sessionId, ...(mood ? { mood } : {}) })).data.token;
 
   return {
     enabled,
@@ -69,7 +67,14 @@ export function useAvatar(sessionId: string) {
     instance: () => avatar.current,
     start,
     stop: () => void avatar.current?.stop(),
-    /** Switches to the face for another mood (hang up, then start again). */
+    /** The face showing now (it changes when he switches mood). */
+    video: () => avatar.current?.activeVideo ?? null,
+    /** Connects his face for another mood in the background (the current one keeps going). */
+    prepare: (mood: 'guarded' | 'at_ease') =>
+      avatar.current?.prepareFace(tokenFor(mood)) ?? Promise.resolve(false),
+    /** Swaps to the prepared face at once (no gap; the voice never moves). False: none ready. */
+    commit: () => avatar.current?.commitFace() ?? false,
+    /** Switches to the face for another mood the slow way (hang up, then start again). */
     restart: async (mood: 'guarded' | 'at_ease') => {
       if (!avatar.current) return;
       await avatar.current.stop();

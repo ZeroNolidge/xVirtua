@@ -12,14 +12,31 @@ import type { AvatarElements } from '../components/AvatarStage';
 export function useBodyLanguage(
   personaName: string,
   stage: RefObject<AvatarElements | null>,
-  face: { enabled: boolean; ready: boolean; restart(mood: Mood): void },
+  face: {
+    enabled: boolean;
+    ready: boolean;
+    /** Connects his face for another mood in the background; resolves true when ready. */
+    prepare?: (mood: Mood) => Promise<boolean>;
+    /** Swaps to the prepared face at once; false if none is ready. */
+    commit?: () => boolean;
+    /** Switches the live face to another mood the slow way; resolves once it has. */
+    restart(mood: Mood): Promise<void> | void;
+    /** The live face showing now. */
+    video?: () => HTMLVideoElement | null;
+  },
 ) {
   const body = useRef<BodyLanguage | null>(null);
   const [poster, setPoster] = useState<string | null>(null);
   const [startMood, setStartMood] = useState<Mood | null>(null);
   const restart = useRef(face.restart);
+  const prepare = useRef(face.prepare);
+  const commit = useRef(face.commit);
+  const liveVideo = useRef(face.video);
   useEffect(() => {
     restart.current = face.restart;
+    prepare.current = face.prepare;
+    commit.current = face.commit;
+    liveVideo.current = face.video;
   });
 
   useEffect(() => {
@@ -32,10 +49,21 @@ export function useBodyLanguage(
       const manifest = (await r.json()) as ClipManifest;
       const el = stage.current?.clip;
       if (!live || !el) return;
-      const b = new BodyLanguage(manifest, base, el, () => stage.current?.video ?? null);
+      const b = new BodyLanguage(
+        manifest,
+        base,
+        el,
+        () => liveVideo.current?.() ?? stage.current?.video ?? null,
+      );
+      b.onPrepare = (m) => prepare.current?.(m) ?? Promise.resolve(false);
       b.onMood = (m) => {
         setPoster(b.poster);
-        restart.current(m);
+        // His new face is already connected: swap at once. Otherwise the slow
+        // way, while the transition clip holds on its last frame.
+        if (commit.current?.()) return b.reveal();
+        void Promise.resolve(restart.current(m))
+          .catch(() => undefined)
+          .then(() => b.reveal());
       };
       body.current = b;
       setPoster(b.poster);
