@@ -139,6 +139,8 @@ export class PatientAvatar {
   mute(on: boolean) {
     this.audio.muted = on;
     if (on) this.clear();
+    // Back to full volume (he may have been turned down just before the cut-in).
+    else this.audio.volume = 1;
   }
 
   /** Almost silent while we check it's really the resident talking. */

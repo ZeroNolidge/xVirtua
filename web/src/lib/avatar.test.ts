@@ -99,6 +99,17 @@ describe('video avatar', () => {
     expect(audio.muted).toBe(true);
   });
 
+  it('after a cut-in, his voice comes back at full volume (not stuck turned down)', async () => {
+    const { video, audio } = els();
+    const a = new PatientAvatar(video, audio);
+    await a.connect(async () => 'tok');
+    a.duck(true); // the resident started talking: turned down while we check
+    a.mute(true); // it was the resident: cut him off
+    a.mute(false); // his next line
+    expect(audio.muted).toBe(false);
+    expect(audio.volume).toBe(1);
+  });
+
   it('if Simli fails, the patient’s voice plays from our own player again', async () => {
     const a = new PatientAvatar(els().video, els().audio);
     await a.connect(async () => 'tok');
