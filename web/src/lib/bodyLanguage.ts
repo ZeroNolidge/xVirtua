@@ -22,6 +22,8 @@ export const CLIP_GAP_MS = 6000;
 const NEAR_END_MS = 400;
 /** How long a clip takes to fade in or out (matches .stage-clip in styles.css). */
 const FADE_MS = 400;
+/** A clip's first frame normally draws within a frame or two; never wait longer than this. */
+const FIRST_FRAME_WAIT_MS = 250;
 /** He relaxes once his relaxed face is ready, or after this long regardless. */
 const PREPARE_WAIT_MS = 8000;
 /** A clip waits at most this long for his live head to be still and near its resting spot. */
@@ -104,10 +106,10 @@ export class BodyLanguage {
    * but the live face sways a little, so the clip is first moved to where the
    * live head is (no double image while both show), then glides back.
    */
-  private show(on: boolean) {
+  private show(on: boolean, rest: string | null = this.poster) {
     const el = this.el;
     clearTimeout(this.settle);
-    const o = this.heads.offset(this.live(), this.poster);
+    const o = this.heads.offset(this.live(), rest);
     const at = o ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%)` : '';
     if (on) {
       el.style.transition = 'none';
@@ -130,11 +132,24 @@ export class BodyLanguage {
   private start(file: string): Promise<number> | null {
     const url = this.urls.get(file);
     if (!url) return null;
-    this.el.src = url;
-    this.el.currentTime = 0;
-    this.show(true);
-    return this.el.play().then(
-      () => (Number.isFinite(this.el.duration) ? this.el.duration * 1000 : 4000),
+    const el = this.el;
+    const rest = this.poster; // the clip's first frame (his mood may change meanwhile)
+    el.src = url;
+    el.currentTime = 0;
+    // Fade in only once its first frame is on screen (else it pops in mid-fade).
+    const drawn = new Promise<void>((done) => {
+      const v = el as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => done());
+      else el.addEventListener('playing', () => done(), { once: true });
+      setTimeout(done, FIRST_FRAME_WAIT_MS);
+    });
+    return el.play().then(
+      async () => {
+        await drawn;
+        // Still wanted (he may have started talking meanwhile).
+        if (this.playing && el.src === url) this.show(true, rest);
+        return Number.isFinite(el.duration) ? el.duration * 1000 : 4000;
+      },
       () => {
         this.show(false);
         return 0;

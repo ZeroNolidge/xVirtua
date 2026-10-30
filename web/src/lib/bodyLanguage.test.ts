@@ -14,7 +14,8 @@ const manifest: ClipManifest = {
 function fakeVideo() {
   const el = document.createElement('video');
   Object.defineProperty(el, 'duration', { value: 4, configurable: true });
-  el.play = vi.fn(async () => undefined);
+  // "Plays" at once, and its first frame is drawn right after.
+  el.play = vi.fn(async () => void setTimeout(() => el.dispatchEvent(new Event('playing')), 0));
   el.pause = vi.fn();
   return Object.assign(el, { finish: () => el.onended?.(new Event('ended')) });
 }
@@ -48,6 +49,16 @@ describe('body language clips', () => {
     expect(await b.cue(['look_away'])).toBe(false);
   });
 
+  it('fades in only once the clip’s first frame is drawn', async () => {
+    el.play = vi.fn(async () => undefined); // its first frame never arrives on its own
+    const cued = b.cue(['frown']);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(el.classList.contains('on')).toBe(false);
+    el.dispatchEvent(new Event('playing'));
+    expect(await cued).toBe(true);
+    expect(el.classList.contains('on')).toBe(true);
+  });
+
   it('gives way to his live face the moment he talks, and never plays over his words', async () => {
     await b.cue(['frown']);
     b.setSpeaking(true);
@@ -62,6 +73,7 @@ describe('body language clips', () => {
     b.relax();
     expect(el.classList.contains('on')).toBe(false); // not while he talks
     b.setSpeaking(false);
+    await new Promise((r) => setTimeout(r, 5));
     expect(el.classList.contains('on')).toBe(true); // the transition clip
     expect(b.mood).toBe('at_ease');
     expect(b.poster).toBe('/avatars/ray/at-ease.jpg');
@@ -85,7 +97,7 @@ describe('body language clips', () => {
     expect(el.classList.contains('on')).toBe(false);
     expect(b.mood).toBe('guarded');
     ready(true);
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 5));
     expect(el.classList.contains('on')).toBe(true);
     expect(b.mood).toBe('at_ease');
   });
