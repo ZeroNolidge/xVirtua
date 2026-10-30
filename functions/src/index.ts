@@ -37,7 +37,7 @@ import type { VoiceService } from './voice/streamVoice.js';
 import { getSttToken as mintSttToken } from './voice/stt.js';
 import { startLiveCall as connectLive } from './voice/live.js';
 import { voiceSample as makeVoiceSample } from './voice/voiceSample.js';
-import { avatarSession as mintAvatar } from './voice/avatar.js';
+import { avatarSession as mintAvatar, faceCheckToken } from './voice/avatar.js';
 import type { Caller } from './lib/callable.js';
 import { APP_CHECK_ENFORCE } from './lib/appCheck.js';
 import { reportClientError as storeClientError } from './lib/clientErrors.js';
@@ -192,6 +192,11 @@ export const startLiveCall = callable(
 export const avatarSession = callable(
   { secrets: [SIMLI_API_KEY], timeoutSeconds: 20 },
   (req) => warmup(req) ?? mintAvatar(db(), callerOf(req), req.data, keyOf(SIMLI_API_KEY)),
+);
+
+/** Faculty tool (Face check): a short Simli session for one of the patient's faces. */
+export const faceCheck = callable({ secrets: [SIMLI_API_KEY], timeoutSeconds: 20 }, (req) =>
+  faceCheckToken(db(), callerOf(req), req.data, keyOf(SIMLI_API_KEY)),
 );
 
 /** Faculty tool: a recorded sample of a GPT-Live voice (see the Record voices workflow). */

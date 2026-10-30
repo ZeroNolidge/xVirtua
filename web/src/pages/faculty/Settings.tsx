@@ -8,6 +8,7 @@ import {
   type VoiceGroup,
   type VoiceMode,
 } from '@plainspeak/shared';
+import { Link } from 'react-router-dom';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../lib/auth';
 import { MODEL_LABELS } from '../../lib/models';
@@ -104,6 +105,10 @@ export function Settings() {
             }
           />
         ))}
+        <p className="small">
+          <Link to="/faculty/face-check">Face check</Link>: a one-minute test of a patient’s face
+          and clips, recorded for review.
+        </p>
         <p className="small muted">
           Patients with body-language clips (Ray) have two faces: guarded at the start, and at ease
           once the resident earns his trust. These replace the face above.

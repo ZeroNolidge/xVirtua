@@ -116,6 +116,11 @@ export class PatientAvatar {
     return this.video;
   }
 
+  /** Where Simli plays the voice now (it changes when switching faces). */
+  get activeAudio(): HTMLAudioElement {
+    return this.audio;
+  }
+
   /** If this session drops, the patient's voice plays from our own player again. */
   private watch(client: SimliClient) {
     const lost = (e: unknown) => {

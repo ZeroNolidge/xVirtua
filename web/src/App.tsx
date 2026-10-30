@@ -21,6 +21,7 @@ const Briefing = named(() => import('./pages/Briefing'), 'Briefing');
 const Session = named(() => import('./pages/Session'), 'Session');
 const SessionDone = named(() => import('./pages/SessionDone'), 'SessionDone');
 const Invites = named(() => import('./pages/faculty/Invites'), 'Invites');
+const FaceCheck = named(() => import('./pages/faculty/FaceCheck'), 'FaceCheck');
 
 export function App() {
   return (
@@ -85,6 +86,10 @@ function SignedInApp() {
             <Route
               path="/faculty"
               element={isFaculty ? <Invites /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="/faculty/face-check"
+              element={isFaculty ? <FaceCheck /> : <Navigate to="/" replace />}
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

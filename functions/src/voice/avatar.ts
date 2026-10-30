@@ -55,6 +55,18 @@ export async function avatarSession(
     throw new HttpsError('failed-precondition', 'No avatar face is chosen for this patient.');
 
   await consumeQuota(db, caller.uid, 'avatarSessions');
+  const token = await mintSimliToken(faceId, apiKey, doFetch, SESSION_LIMITS.maxMinutes * 60);
+  await ref.update({ avatarSessions: FieldValue.arrayUnion({ at: Date.now(), faceId }) });
+  return { token };
+}
+
+/** Asks Simli for a session token for this face. */
+async function mintSimliToken(
+  faceId: string,
+  apiKey: string,
+  doFetch: Fetch,
+  maxSessionLength: number,
+): Promise<string> {
   const res = await doFetch(SIMLI_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-simli-api-key': apiKey },
@@ -62,7 +74,7 @@ export async function avatarSession(
       faceId,
       // We stream the patient's voice, silence included.
       handleSilence: false,
-      maxSessionLength: SESSION_LIMITS.maxMinutes * 60,
+      maxSessionLength,
       // Paused or left open: Simli hangs up (and stops billing) by itself.
       maxIdleTime: 120,
     }),
@@ -85,6 +97,37 @@ export async function avatarSession(
     token = '';
   }
   if (!token) throw new HttpsError('unavailable', 'The video avatar returned no session.');
-  await ref.update({ avatarSessions: FieldValue.arrayUnion({ at: Date.now(), faceId }) });
-  return { token };
+  return token;
+}
+
+const checkInput = z.object({ mood: z.enum(['guarded', 'at_ease']) });
+
+/**
+ * Faculty tool (Face check): a short Simli session for one of the patient's
+ * mood faces, outside any conversation, to test the face and its clips.
+ */
+export async function faceCheckToken(
+  db: Firestore,
+  caller: Caller | null,
+  data: unknown,
+  apiKey: string,
+  doFetch: Fetch = fetch,
+) {
+  if (!caller) throw new HttpsError('unauthenticated', 'Please sign in.');
+  if (caller.claims.role !== 'faculty') throw new HttpsError('permission-denied', 'Faculty only.');
+  const { mood } = parse(checkInput, data);
+  const pid = caller.claims.programId;
+  if (typeof pid !== 'string' || !pid) throw new HttpsError('permission-denied', 'No program.');
+  const program = (await db.doc(`programs/${pid}`).get()).data() ?? {};
+  if (program.avatarOn !== true)
+    throw new HttpsError('failed-precondition', 'The video avatar is off.');
+  if (!apiKey || apiKey === 'unset')
+    throw new HttpsError('unavailable', 'The video avatar isn’t set up.');
+  const moodFaces = (program.avatarMoodFaces ?? {}) as Record<string, unknown>;
+  const faceId = String(moodFaces[mood] ?? '');
+  if (!FACE_ID.test(faceId))
+    throw new HttpsError('failed-precondition', `No ${mood.replace('_', '-')} face is set.`);
+  await consumeQuota(db, caller.uid, 'avatarSessions');
+  // A check takes about a minute; Simli hangs up after 3 regardless.
+  return { token: await mintSimliToken(faceId, apiKey, doFetch, 180), faceId };
 }

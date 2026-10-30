@@ -35,6 +35,20 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Face check (faculty test of a patient's video face): the recording and
+    // its timing notes. Faculty upload into their own folder, once per file.
+    match /faceChecks/{pid}/{uid}/{file} {
+      allow read: if facultyOf(pid);
+      allow create: if facultyOf(pid)
+        && request.auth.uid == uid
+        && resource == null
+        && file.matches('[A-Za-z0-9_-]{1,64}\\.(webm|mp4|json)')
+        && request.resource.size < 40 * 1024 * 1024
+        && (request.resource.contentType.matches('video/.*')
+          || request.resource.contentType == 'application/json');
+      allow update, delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

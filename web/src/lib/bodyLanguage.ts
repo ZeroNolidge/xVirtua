@@ -57,7 +57,10 @@ export class BodyLanguage {
   /** Counts a clip that didn't play, and why. */
   skip(reason: string) {
     this.stats.skipped[reason] = (this.stats.skipped[reason] ?? 0) + 1;
+    this.onEvent?.({ type: 'skipped', reason });
   }
+  /** Face check: a timing note for each fade (where his live head was, and so on). */
+  onEvent: ((e: Record<string, unknown>) => void) | null = null;
   private urls = new Map<string, string>();
   private playing: 'cue' | 'transition' | null = null;
   private lastAt = -Infinity;
@@ -85,6 +88,8 @@ export class BodyLanguage {
     private readonly el: HTMLVideoElement,
     /** The live video face, to line clips up with where his head is. */
     private readonly live: () => HTMLVideoElement | null = () => null,
+    /** Face check: clips can follow each other sooner. */
+    private readonly gapMs = CLIP_GAP_MS,
   ) {
     this.mood = manifest.start;
     el.muted = true;
@@ -126,6 +131,13 @@ export class BodyLanguage {
     const el = this.el;
     clearTimeout(this.settle);
     const o = this.heads.offset(this.live(), rest);
+    this.onEvent?.({
+      type: on ? 'fade-in' : 'fade-out',
+      src: el.src.slice(-40),
+      // Where his live head was, in % of the picture (the clip moves there).
+      headX: o ? +(o.x * 100).toFixed(2) : null,
+      headY: o ? +(o.y * 100).toFixed(2) : null,
+    });
     const at = o ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%)` : '';
     if (on) {
       el.style.transition = 'none';
@@ -161,7 +173,9 @@ export class BodyLanguage {
     });
     return el.play().then(
       async () => {
+        const asked = performance.now();
         await drawn;
+        this.onEvent?.({ type: 'first-frame', ms: Math.round(performance.now() - asked) });
         // Still wanted (he may have started talking meanwhile).
         if (this.playing && el.src === url) this.show(true, rest);
         return Number.isFinite(el.duration) ? el.duration * 1000 : 4000;
@@ -190,7 +204,7 @@ export class BodyLanguage {
           ? 'clip already playing'
           : this.speaking
             ? 'he was talking'
-            : now - this.lastAt < CLIP_GAP_MS
+            : now - this.lastAt < this.gapMs
               ? 'too soon after the last'
               : null;
     if (why || !cue) {
@@ -201,6 +215,7 @@ export class BodyLanguage {
     this.lastAt = now;
     await this.stillMoment();
     this.stats.stillWaitMs += Math.round(performance.now() - now);
+    this.onEvent?.({ type: 'still-wait', cue, ms: Math.round(performance.now() - now) });
     // He started talking (or something else took over) while we waited.
     if (this.playing !== 'cue' || this.speaking) {
       if (this.playing === 'cue') this.playing = null;

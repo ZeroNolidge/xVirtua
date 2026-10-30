@@ -105,3 +105,33 @@ describe('audio reads and deletes', () => {
     await assertFails(deleteObject(ref(a.facultyIrmc.storage(), pathA)));
   });
 });
+
+describe('face check uploads', () => {
+  const video = { contentType: 'video/webm' };
+  it('faculty can upload a face-check recording and its notes into their own folder', async () => {
+    await assertSucceeds(
+      uploadBytes(ref(a.facultyIrmc.storage(), 'faceChecks/irmc/facIrmc/fc1.webm'), audio, video),
+    );
+    await assertSucceeds(
+      uploadString(ref(a.facultyIrmc.storage(), 'faceChecks/irmc/facIrmc/fc1.json'), '{}', 'raw', {
+        contentType: 'application/json',
+      }),
+    );
+  });
+
+  it('residents and other folders are refused', async () => {
+    await assertFails(
+      uploadBytes(ref(a.resA.storage(), 'faceChecks/irmc/resA/fc1.webm'), audio, video),
+    );
+    await assertFails(
+      uploadBytes(
+        ref(a.facultyIrmc.storage(), 'faceChecks/irmc/someoneElse/fc1.webm'),
+        audio,
+        video,
+      ),
+    );
+    await assertFails(
+      uploadBytes(ref(a.facultyIrmc.storage(), 'faceChecks/irmc/facIrmc/fc1.exe'), audio, video),
+    );
+  });
+});

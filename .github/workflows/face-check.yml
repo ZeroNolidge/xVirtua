@@ -1,0 +1,50 @@
+name: Face check (fetch latest)
+
+# Copies the newest Face check recording and its timing notes (made by a
+# faculty member on the Face check screen) into face-checks/latest/ on this
+# branch, so they can be reviewed. Only the latest one is kept there.
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'Firebase project ID'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Google credentials
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EXPECTED: ${{ inputs.project_id }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          PID=$(jq -r .project_id "$RUNNER_TEMP/sa.json")
+          [ "$PID" = "$EXPECTED" ] || { echo "::error::key is for $PID"; exit 1; }
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet
+          echo "BUCKET=gs://$PID.firebasestorage.app" >> "$GITHUB_ENV"
+      - name: Download the newest face check
+        run: |
+          set -euo pipefail
+          LATEST=$(gcloud storage ls -l "$BUCKET/faceChecks/**" | grep '\.json$' | sort -k2 | tail -1 | awk '{print $3}')
+          [ -n "$LATEST" ] || { echo "::error::No face checks yet"; exit 1; }
+          echo "Newest: $LATEST"
+          rm -rf face-checks/latest && mkdir -p face-checks/latest
+          gcloud storage cp "${LATEST%.json}.*" face-checks/latest/
+          ls -la face-checks/latest
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A face-checks
+          git diff --cached --quiet && { echo "Nothing new"; exit 0; }
+          git commit -m "Face check: latest recording"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

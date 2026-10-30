@@ -8,7 +8,7 @@ import { endSession, patientTurn, saveHeard, saveLiveExchange, startSession } fr
 import { FakeBrain } from '../patient/fakeBrain.js';
 import type { Caller } from '../lib/callable.js';
 import { startLiveCall } from '../voice/live.js';
-import { avatarSession } from '../voice/avatar.js';
+import { avatarSession, faceCheckToken } from '../voice/avatar.js';
 import { FakeDirector } from '../patient/director.js';
 
 const PROJECT_ID = 'demo-plainspeak';
@@ -474,6 +474,28 @@ describe('GPT-Live test mode', () => {
     await expect(
       avatarSession(db, otherResident, { sessionId }, 'sk-simli', simli),
     ).rejects.toMatchObject({ code: 'not-found' });
+    await db.doc('programs/irmc').set({ avatarOn: false }, { merge: true });
+  });
+
+  it('face check: faculty can open either of the patient’s faces, outside any conversation', async () => {
+    const guarded = 'bf13113a-355a-4d97-8b90-4edccd1da7b2';
+    const bodies: string[] = [];
+    const simli = (async (_url: string, init: { body: string }) => {
+      bodies.push(init.body);
+      return new Response(JSON.stringify({ session_token: 'tok_c' }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await db.doc('programs/irmc').set({ avatarOn: true }, { merge: true });
+    await expect(
+      faceCheckToken(db, resident, { mood: 'guarded' }, 'sk-simli', simli),
+    ).rejects.toMatchObject({ code: 'permission-denied' });
+    // No guarded face set yet.
+    await expect(
+      faceCheckToken(db, faculty, { mood: 'guarded' }, 'sk-simli', simli),
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
+    await db.doc('programs/irmc').set({ avatarMoodFaces: { guarded } }, { merge: true });
+    const r = await faceCheckToken(db, faculty, { mood: 'guarded' }, 'sk-simli', simli);
+    expect(r).toEqual({ token: 'tok_c', faceId: guarded });
+    expect(JSON.parse(bodies[0]!)).toMatchObject({ faceId: guarded, maxSessionLength: 180 });
     await db.doc('programs/irmc').set({ avatarOn: false }, { merge: true });
   });
 
