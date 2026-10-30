@@ -75,6 +75,12 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
         run: npx tsx scripts/body-stats.ts
 
+      - name: Video avatar faces in settings
+        continue-on-error: true
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
+        run: npx tsx scripts/avatar-faces.ts
+
       - name: App Check tokens seen by the app
         continue-on-error: true
         env:
