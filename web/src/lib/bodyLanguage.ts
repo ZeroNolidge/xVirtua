@@ -1,5 +1,5 @@
 import type { NonverbalCue } from '@plainspeak/shared';
-import { HeadMatcher } from './headMatch';
+import { GRID, HeadMatcher } from './headMatch';
 
 export type Mood = 'guarded' | 'at_ease';
 
@@ -21,7 +21,12 @@ export const CLIP_GAP_MS = 6000;
 /** Ray may start talking this long before a clip ends (it fades into his live face). */
 const NEAR_END_MS = 400;
 /** How long a clip takes to fade in or out (matches .stage-clip in styles.css). */
-const FADE_MS = 250;
+const FADE_MS = 400;
+/** A clip waits at most this long for his live head to be still and near its resting spot. */
+const STILL_WAIT_MS = 800;
+/** "Near its resting spot" and "still", in head-match grid pixels (about 1% and 0.4%). */
+const NEAR_PX = 1;
+const STEADY_PX = 0.4;
 /** After fading in, the clip glides from the live head's position to its own, this slowly. */
 const SETTLE_MS = 700;
 
@@ -135,10 +140,19 @@ export class BodyLanguage {
     const cue = cues.find((c) => clips[c]);
     const now = performance.now();
     if (!cue || this.playing || this.speaking || now - this.lastAt < CLIP_GAP_MS) return false;
-    const started = this.start(clips[cue]!);
-    if (!started) return false;
     this.playing = 'cue';
     this.lastAt = now;
+    await this.stillMoment();
+    // He started talking (or something else took over) while we waited.
+    if (this.playing !== 'cue' || this.speaking) {
+      if (this.playing === 'cue') this.playing = null;
+      return false;
+    }
+    const started = this.start(clips[cue]!);
+    if (!started) {
+      this.playing = null;
+      return false;
+    }
     this.el.onended = () => {
       if (this.playing !== 'cue') return;
       this.playing = null;
@@ -149,8 +163,28 @@ export class BodyLanguage {
       this.playing = null;
       return false;
     }
-    await new Promise((r) => setTimeout(r, Math.min(maxWaitMs, Math.max(0, ms - NEAR_END_MS))));
+    // The wait for a still moment counts towards maxWaitMs.
+    const left = Math.max(0, maxWaitMs - (performance.now() - now));
+    await new Promise((r) => setTimeout(r, Math.min(left, Math.max(0, ms - NEAR_END_MS))));
     return true;
+  }
+
+  /**
+   * Waits (briefly) until his live head is still and close to where it is in
+   * the clip's first frame, so the switch to the clip is hard to see.
+   */
+  private async stillMoment() {
+    const until = performance.now() + STILL_WAIT_MS;
+    let prev: { x: number; y: number } | null = null;
+    while (performance.now() < until) {
+      const o = this.heads.offset(this.live(), this.poster);
+      if (!o) return; // can't tell: don't hold the clip up
+      const near = Math.hypot(o.x, o.y) * GRID <= NEAR_PX;
+      const steady = !!prev && Math.hypot(o.x - prev.x, o.y - prev.y) * GRID <= STEADY_PX;
+      if (near && steady) return;
+      prev = o;
+      await new Promise((r) => setTimeout(r, 80));
+    }
   }
 
   /** He started or stopped talking: a cue clip gives way to his live face. */

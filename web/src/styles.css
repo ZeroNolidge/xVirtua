@@ -976,7 +976,7 @@ p {
 /* Body-language clips fade in over the live face, and back out. */
 .avatar-stage .stage-clip {
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.4s ease;
   pointer-events: none;
 }
 .avatar-stage .stage-clip.on {
