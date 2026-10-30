@@ -100,5 +100,7 @@ export function useBodyLanguage(
     setSpeaking: (on: boolean) => body.current?.setSpeaking(on),
     relax: () => body.current?.relax(),
     mood: (): Mood | null => body.current?.mood ?? null,
+    /** The body language that fits what he just said (his own words first). */
+    cueFor: (text: string): NonverbalCue | null => body.current?.cueFor(text) ?? null,
   };
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import {
   LIVE_VOICES,
+  VIDEO_CHARACTERS,
   type LiveVoice,
   type PatientModel,
   type Program,
@@ -109,35 +110,17 @@ export function Settings() {
           <Link to="/faculty/face-check">Face check</Link>: a one-minute test of a patient’s face
           and clips, recorded for review.
         </p>
-        <p className="small muted">
-          Patients with body-language clips (Ray) have two faces: guarded at the start, and at ease
-          once the resident earns his trust. These replace the face above.
+        <p className="small">
+          <strong>Ready-made video characters</strong> (their own faces and body language, nothing
+          to set up):{' '}
+          {Object.values(VIDEO_CHARACTERS)
+            .map((c) => c.name)
+            .join(', ')}
+          . Other patients use the face above for their pronouns.
         </p>
-        <FaceField
-          label="Guarded face (start of the visit)"
-          value={program.avatarMoodFaces?.guarded ?? ''}
-          onSave={(id) =>
-            void save({
-              avatarMoodFaces: Object.fromEntries(
-                Object.entries({ ...program.avatarMoodFaces, guarded: id }).filter(([, v]) => v),
-              ),
-            })
-          }
-        />
-        <FaceField
-          label="At-ease face (once he relaxes)"
-          value={program.avatarMoodFaces?.at_ease ?? ''}
-          onSave={(id) =>
-            void save({
-              avatarMoodFaces: Object.fromEntries(
-                Object.entries({ ...program.avatarMoodFaces, at_ease: id }).filter(([, v]) => v),
-              ),
-            })
-          }
-        />
         <p className="small muted">
-          Copy a face ID from your Simli dashboard (Faces). The Simli key is added by the developer
-          as a GitHub secret, never here.
+          For the faces above, copy a face ID from your Simli dashboard (Faces). The Simli key is
+          added by the developer as a GitHub secret, never here.
         </p>
       </fieldset>
       <fieldset className="field">

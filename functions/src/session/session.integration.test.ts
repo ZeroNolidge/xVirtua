@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
-import { CONSENT_VERSION, DAILY_LIMITS, type PatientChunk } from '@plainspeak/shared';
+import {
+  CONSENT_VERSION,
+  DAILY_LIMITS,
+  videoCharacterFor,
+  voiceGroupOf,
+  type PatientChunk,
+} from '@plainspeak/shared';
 import { dayKey } from '../lib/quota.js';
 import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
 import { endSession, patientTurn, saveHeard, saveLiveExchange, startSession } from './session.js';
@@ -19,12 +25,14 @@ const otherResident: Caller = { uid: 'res2', claims: { role: 'resident', program
 const faculty: Caller = { uid: 'fac1', claims: { role: 'faculty', programId: 'irmc' } };
 const htn = SEED_SCENARIOS[0]!;
 
-async function seedScenario(status: 'active' | 'draft') {
-  const ref = db.doc(`scenarios/${htn.id}`);
-  await ref.set({ programId: 'irmc', status, currentVersion: '1', title: htn.briefing.title });
-  await ref.collection('versions').doc('1').set(htn.briefing);
-  await ref.collection('versions').doc('1').collection('private').doc('script').set(htn.script);
+async function seedScenario(status: 'active' | 'draft', sc = htn) {
+  const ref = db.doc(`scenarios/${sc.id}`);
+  await ref.set({ programId: 'irmc', status, currentVersion: '1', title: sc.briefing.title });
+  await ref.collection('versions').doc('1').set(sc.briefing);
+  await ref.collection('versions').doc('1').collection('private').doc('script').set(sc.script);
 }
+/** A case whose patient isn't a ready-made video character. */
+const plain = SEED_SCENARIOS.find((s) => !videoCharacterFor(s.briefing.persona.name))!;
 
 beforeAll(() => {
   app = initializeApp({ projectId: PROJECT_ID }, 'session-test');
@@ -439,8 +447,9 @@ describe('GPT-Live test mode', () => {
   });
 
   it('mints a video avatar session only when faculty turned it on, with the face for the patient', async () => {
+    await seedScenario('active', plain);
     const face = 'bf13113a-355a-4d97-8b90-4edccd1da7b2';
-    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const { sessionId } = await startSession(db, resident, { scenarioId: plain.id });
     const calls: { url: string; init: { headers: Record<string, string>; body: string } }[] = [];
     const simli = (async (url: string, init: { headers: Record<string, string>; body: string }) => {
       calls.push({ url, init });
@@ -452,22 +461,18 @@ describe('GPT-Live test mode', () => {
       avatarSession(db, resident, { sessionId }, 'sk-simli', simli),
     ).rejects.toMatchObject({ code: 'failed-precondition' });
     await db.doc('programs/irmc').set({ avatarOn: true }, { merge: true });
-    // On, but no face chosen yet.
+    // On, but no face for this patient's pronouns yet.
     await expect(
       avatarSession(db, resident, { sessionId }, 'sk-simli', simli),
     ).rejects.toMatchObject({ code: 'failed-precondition' });
-    await db.doc('programs/irmc').set({ avatarFaces: { he: face } }, { merge: true });
+    const group = voiceGroupOf(plain.briefing.persona.pronouns);
+    await db.doc('programs/irmc').set({ avatarFaces: { [group]: face } }, { merge: true });
     // Key not added yet.
     await expect(avatarSession(db, resident, { sessionId }, 'unset', simli)).rejects.toMatchObject({
       code: 'unavailable',
     });
     const r = await avatarSession(db, resident, { sessionId }, 'sk-simli', simli);
     expect(r.token).toBe('tok_1');
-    // A face for the patient's mood, once faculty chose one.
-    const eased = 'aaaaaaaa-355a-4d97-8b90-4edccd1da7b2';
-    await db.doc('programs/irmc').set({ avatarMoodFaces: { at_ease: eased } }, { merge: true });
-    await avatarSession(db, resident, { sessionId, mood: 'at_ease' }, 'sk-simli', simli);
-    expect(JSON.parse(calls.at(-1)!.init.body)).toMatchObject({ faceId: eased });
     expect(calls[0]!.url).toBe('https://api.simli.ai/compose/token');
     expect(calls[0]!.init.headers['x-simli-api-key']).toBe('sk-simli');
     expect(JSON.parse(calls[0]!.init.body)).toMatchObject({ faceId: face, handleSilence: false });
@@ -477,25 +482,39 @@ describe('GPT-Live test mode', () => {
     await db.doc('programs/irmc').set({ avatarOn: false }, { merge: true });
   });
 
-  it('face check: faculty can open either of the patient’s faces, outside any conversation', async () => {
-    const guarded = 'bf13113a-355a-4d97-8b90-4edccd1da7b2';
+  it('a ready-made video character (Ray) brings a face for each mood', async () => {
+    const ray = videoCharacterFor(htn.briefing.persona.name)!;
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const bodies: string[] = [];
+    const simli = (async (_url: string, init: { body: string }) => {
+      bodies.push(init.body);
+      return new Response(JSON.stringify({ session_token: 'tok_r' }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await db.doc('programs/irmc').set({ avatarOn: true }, { merge: true });
+    await avatarSession(db, resident, { sessionId }, 'sk-simli', simli);
+    await avatarSession(db, resident, { sessionId, mood: 'at_ease' }, 'sk-simli', simli);
+    expect(JSON.parse(bodies[0]!)).toMatchObject({ faceId: ray.faces.guarded });
+    expect(JSON.parse(bodies[1]!)).toMatchObject({ faceId: ray.faces.at_ease });
+    await db.doc('programs/irmc').set({ avatarOn: false }, { merge: true });
+  });
+
+  it('face check: faculty can open either face of a video character, outside any conversation', async () => {
+    const ray = videoCharacterFor(htn.briefing.persona.name)!;
     const bodies: string[] = [];
     const simli = (async (_url: string, init: { body: string }) => {
       bodies.push(init.body);
       return new Response(JSON.stringify({ session_token: 'tok_c' }), { status: 200 });
     }) as unknown as typeof fetch;
     await db.doc('programs/irmc').set({ avatarOn: true }, { merge: true });
-    await expect(
-      faceCheckToken(db, resident, { mood: 'guarded' }, 'sk-simli', simli),
-    ).rejects.toMatchObject({ code: 'permission-denied' });
-    // No guarded face set yet.
-    await expect(
-      faceCheckToken(db, faculty, { mood: 'guarded' }, 'sk-simli', simli),
-    ).rejects.toMatchObject({ code: 'failed-precondition' });
-    await db.doc('programs/irmc').set({ avatarMoodFaces: { guarded } }, { merge: true });
-    const r = await faceCheckToken(db, faculty, { mood: 'guarded' }, 'sk-simli', simli);
-    expect(r).toEqual({ token: 'tok_c', faceId: guarded });
-    expect(JSON.parse(bodies[0]!)).toMatchObject({ faceId: guarded, maxSessionLength: 180 });
+    const ask = (who: Caller, patient: string) =>
+      faceCheckToken(db, who, { patient, mood: 'at_ease' }, 'sk-simli', simli);
+    await expect(ask(resident, 'ray-kowalski')).rejects.toMatchObject({
+      code: 'permission-denied',
+    });
+    await expect(ask(faculty, 'nobody')).rejects.toMatchObject({ code: 'not-found' });
+    const r = await ask(faculty, 'ray-kowalski');
+    expect(r).toEqual({ token: 'tok_c', faceId: ray.faces.at_ease });
+    expect(JSON.parse(bodies[0]!)).toMatchObject({ maxSessionLength: 180 });
     await db.doc('programs/irmc').set({ avatarOn: false }, { merge: true });
   });
 

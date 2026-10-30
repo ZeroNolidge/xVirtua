@@ -22,7 +22,6 @@ import {
 import { useCaptions } from '../lib/useCaptions';
 import { useAvatar } from '../lib/useAvatar';
 import { useBodyLanguage } from '../lib/useBodyLanguage';
-import { cueForWords } from '../lib/cueWords';
 import { AvatarStage } from '../components/AvatarStage';
 import { Transcript, type Bubble } from './Session';
 import { nonverbalLine } from '../lib/voiceRenderer';
@@ -432,8 +431,7 @@ export function LiveConversation({
           save(r);
           showPatient(r, r.spoken);
           // He's done talking: his body language follows what he just said.
-          const mood = bodyRef.current.mood();
-          const fromWords = mood ? cueForWords(r.spoken, mood) : null;
+          const fromWords = bodyRef.current.cueFor(r.spoken);
           void bodyRef.current.cue([
             ...(r.nonverbal as NonverbalCue[]),
             ...(fromWords ? [fromWords] : []),

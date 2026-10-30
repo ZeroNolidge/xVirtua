@@ -3,17 +3,17 @@ import { Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, uploadString } from 'firebase/storage';
-import { LIVE_VOICES, type LiveVoice, type Program } from '@plainspeak/shared';
+import { LIVE_VOICES, VIDEO_CHARACTERS, type LiveVoice, type Program } from '@plainspeak/shared';
 import { db, functions, storage } from '../../lib/firebase';
 import { useAuth } from '../../lib/auth';
 import { friendlyError } from '../../lib/api';
 import { PatientAvatar } from '../../lib/avatar';
-import { BodyLanguage, patientSlug, type ClipManifest, type Mood } from '../../lib/bodyLanguage';
+import { BodyLanguage, type ClipManifest, type Mood } from '../../lib/bodyLanguage';
 import { HeadMatcher } from '../../lib/headMatch';
 import { StageRecorder } from '../../lib/stageRecorder';
 import { AvatarStage, type AvatarElements } from '../../components/AvatarStage';
 
-const faceToken = httpsCallable<{ mood: Mood }, { token: string; faceId: string }>(
+const faceToken = httpsCallable<{ patient: string; mood: Mood }, { token: string; faceId: string }>(
   functions,
   'faceCheck',
 );
@@ -44,7 +44,8 @@ interface Note {
 export function FaceCheck() {
   const { user, claims } = useAuth();
   const stage = useRef<AvatarElements | null>(null);
-  const [patient, setPatient] = useState('Ray Kowalski');
+  const [slug, setSlug] = useState(Object.keys(VIDEO_CHARACTERS)[0] ?? '');
+  const patient = VIDEO_CHARACTERS[slug]?.name ?? slug;
   const [voice, setVoice] = useState<LiveVoice>('stone');
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -95,7 +96,7 @@ export function FaceCheck() {
     };
     try {
       setStatus('Loading his clips and voice…');
-      const base = `/avatars/${patientSlug(patient)}`;
+      const base = `/avatars/${slug}`;
       const r = await fetch(`${base}/manifest.json`);
       if (!r.ok || !r.headers.get('content-type')?.includes('json'))
         throw new Error(`No clips found for ${patient}.`);
@@ -108,7 +109,9 @@ export function FaceCheck() {
       body.onEvent = (e) => note(String(e.type), e);
       body.onPrepare = async (m) => {
         const t = performance.now();
-        const ok = await avatar.prepareFace(async () => (await faceToken({ mood: m })).data.token);
+        const ok = await avatar.prepareFace(
+          async () => (await faceToken({ patient: slug, mood: m })).data.token,
+        );
         note('next-face-ready', { ok, ms: Math.round(performance.now() - t) });
         return ok;
       };
@@ -125,7 +128,7 @@ export function FaceCheck() {
       setStatus('Connecting his face…');
       const t = performance.now();
       const up = await avatar.connect(
-        async () => (await faceToken({ mood: 'guarded' })).data.token,
+        async () => (await faceToken({ patient: slug, mood: 'guarded' })).data.token,
       );
       if (!up) throw new Error('His face didn’t connect. Check the face IDs in Settings.');
       avatar.feedElement(voiceEl);
@@ -221,7 +224,13 @@ export function FaceCheck() {
       </p>
       <label className="field">
         <span>Patient</span>
-        <input value={patient} disabled={running} onChange={(e) => setPatient(e.target.value)} />
+        <select value={slug} disabled={running} onChange={(e) => setSlug(e.target.value)}>
+          {Object.entries(VIDEO_CHARACTERS).map(([id, c]) => (
+            <option key={id} value={id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="field">
         <span>Voice for his line</span>

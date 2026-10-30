@@ -20,5 +20,11 @@
   },
   "transitions": {
     "guarded>at_ease": "guarded-to-at-ease.mp4"
+  },
+  "cueWords": {
+    "guarded": [
+      ["\\b(dad|father|pop|stroke)\\b", "avoid_eye_contact"],
+      ["\\b(license|licence|cdl|truck|trucking|job|work|drive|driving|card|route)\\b", "fidget"]
+    ]
   }
 }

@@ -1,5 +1,6 @@
-import type { NonverbalCue } from '@plainspeak/shared';
+import { characterSlug, type NonverbalCue } from '@plainspeak/shared';
 import { GRID, HeadMatcher } from './headMatch';
+import { cueForWords, type CueRules } from './cueWords';
 
 export type Mood = 'guarded' | 'at_ease';
 
@@ -7,14 +8,12 @@ export interface ClipManifest {
   start: Mood;
   moods: Partial<Record<Mood, { poster: string; clips: Partial<Record<NonverbalCue, string>> }>>;
   transitions?: Partial<Record<`${Mood}>${Mood}`, string>>;
+  /** Their own word patterns for each mood, checked before the general ones. */
+  cueWords?: Partial<Record<Mood, CueRules>>;
 }
 
 /** Folder name for a patient's clips: "Ray Kowalski" → "ray-kowalski". */
-export const patientSlug = (name: string) =>
-  name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+export const patientSlug = characterSlug;
 
 /** At most one body-language clip this often (so it never looks like a loop). */
 export const CLIP_GAP_MS = 6000;
@@ -266,6 +265,11 @@ export class BodyLanguage {
       prev = o;
       await new Promise((r) => setTimeout(r, 80));
     }
+  }
+
+  /** The body language that fits what he just said, in his current mood (or none). */
+  cueFor(text: string): NonverbalCue | null {
+    return cueForWords(text, this.mood, this.manifest.cueWords?.[this.mood]);
   }
 
   /** He started or stopped talking: a cue clip gives way to his live face. */

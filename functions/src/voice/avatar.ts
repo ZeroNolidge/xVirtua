@@ -1,7 +1,12 @@
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
-import { SESSION_LIMITS, voiceGroupOf } from '@plainspeak/shared';
+import {
+  SESSION_LIMITS,
+  VIDEO_CHARACTERS,
+  videoCharacterFor,
+  voiceGroupOf,
+} from '@plainspeak/shared';
 import { parse, type Caller } from '../lib/callable.js';
 import { consumeQuota } from '../lib/quota.js';
 import { loadScenario } from '../session/scenario.js';
@@ -45,11 +50,11 @@ export async function avatarSession(
   const sc = await loadScenario(db, s.scenarioId, s.scenarioVersion);
   if (!sc) throw new HttpsError('not-found', 'Scenario not found.');
   const faces = (program.avatarFaces ?? {}) as Record<string, unknown>;
-  const moodFaces = (program.avatarMoodFaces ?? {}) as Record<string, unknown>;
-  const moodFace = mood ? String(moodFaces[mood] ?? '') : '';
-  // A face for this mood if faculty chose one, else the face for the patient's pronouns.
-  const faceId = FACE_ID.test(moodFace)
-    ? moodFace
+  // A ready-made video character has a face for each mood; anyone else gets
+  // the program's face for their pronouns.
+  const character = videoCharacterFor(sc.briefing.persona.name);
+  const faceId = character
+    ? ((mood && character.faces[mood]) ?? character.faces.guarded)
     : String(faces[voiceGroupOf(sc.briefing.persona.pronouns)] ?? '');
   if (!FACE_ID.test(faceId))
     throw new HttpsError('failed-precondition', 'No avatar face is chosen for this patient.');
@@ -100,7 +105,11 @@ async function mintSimliToken(
   return token;
 }
 
-const checkInput = z.object({ mood: z.enum(['guarded', 'at_ease']) });
+const checkInput = z.object({
+  /** The video character's folder name, e.g. "ray-kowalski". */
+  patient: z.string().max(64),
+  mood: z.enum(['guarded', 'at_ease']),
+});
 
 /**
  * Faculty tool (Face check): a short Simli session for one of the patient's
@@ -115,7 +124,7 @@ export async function faceCheckToken(
 ) {
   if (!caller) throw new HttpsError('unauthenticated', 'Please sign in.');
   if (caller.claims.role !== 'faculty') throw new HttpsError('permission-denied', 'Faculty only.');
-  const { mood } = parse(checkInput, data);
+  const { patient, mood } = parse(checkInput, data);
   const pid = caller.claims.programId;
   if (typeof pid !== 'string' || !pid) throw new HttpsError('permission-denied', 'No program.');
   const program = (await db.doc(`programs/${pid}`).get()).data() ?? {};
@@ -123,10 +132,14 @@ export async function faceCheckToken(
     throw new HttpsError('failed-precondition', 'The video avatar is off.');
   if (!apiKey || apiKey === 'unset')
     throw new HttpsError('unavailable', 'The video avatar isn’t set up.');
-  const moodFaces = (program.avatarMoodFaces ?? {}) as Record<string, unknown>;
-  const faceId = String(moodFaces[mood] ?? '');
+  const character = Object.hasOwn(VIDEO_CHARACTERS, patient) ? VIDEO_CHARACTERS[patient] : null;
+  if (!character) throw new HttpsError('not-found', 'No video character by that name.');
+  const faceId = character.faces[mood] ?? '';
   if (!FACE_ID.test(faceId))
-    throw new HttpsError('failed-precondition', `No ${mood.replace('_', '-')} face is set.`);
+    throw new HttpsError(
+      'failed-precondition',
+      `${character.name} has no ${mood.replace('_', '-')} face yet.`,
+    );
   await consumeQuota(db, caller.uid, 'avatarSessions');
   // A check takes about a minute; Simli hangs up after 3 regardless.
   return { token: await mintSimliToken(faceId, apiKey, doFetch, 180), faceId };
