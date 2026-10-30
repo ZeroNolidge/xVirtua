@@ -37,8 +37,6 @@ const STEADY_PX = 0.3;
  * sub-pixel difference in his head does.
  */
 const MIN_SHIFT_PCT = 0.6;
-/** After fading in, the clip glides from the live head's position to its own, this slowly. */
-const SETTLE_MS = 700;
 
 /**
  * The patient's body language (test): short clips of the same face, played
@@ -86,7 +84,6 @@ export class BodyLanguage {
   /** His relaxed face has connected (or we stopped waiting for it). */
   private prepared = false;
   private heads = new HeadMatcher();
-  private settle: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly manifest: ClipManifest,
@@ -130,12 +127,12 @@ export class BodyLanguage {
 
   /**
    * Fades the clip in or out. Every clip starts and ends on his resting face,
-   * but the live face sways a little, so the clip is first moved to where the
-   * live head is (no double image while both show), then glides back.
+   * but the live face sways a little. If his head is noticeably off, the clip
+   * is moved to where it is for the whole clip (no double image while both
+   * show, and the wall behind him never slides).
    */
   private show(on: boolean, rest: string | null = this.poster) {
     const el = this.el;
-    clearTimeout(this.settle);
     const o = this.heads.offset(this.live(), rest);
     this.onEvent?.({
       type: on ? 'fade-in' : 'fade-out',
@@ -144,26 +141,23 @@ export class BodyLanguage {
       headX: o ? +(o.x * 100).toFixed(2) : null,
       headY: o ? +(o.y * 100).toFixed(2) : null,
     });
+    // Fading out, the clip stays where it is: moving it would slide the wall.
+    if (!on) {
+      el.style.transition = '';
+      el.classList.remove('on');
+      return;
+    }
+    // Fading in: if his live head is noticeably off his resting spot, the clip
+    // starts there and stays there (no glide back, which also slid the wall).
     const at =
       o && Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT
         ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%)`
         : '';
-    if (on) {
-      el.style.transition = 'none';
-      el.style.transform = at;
-      void el.offsetWidth; // apply that position before fading in
-      el.style.transition = '';
-      el.classList.add('on');
-      if (at)
-        this.settle = setTimeout(() => {
-          el.style.transition = `opacity ${FADE_MS}ms ease, transform ${SETTLE_MS}ms ease-in-out`;
-          el.style.transform = '';
-        }, FADE_MS);
-    } else {
-      el.style.transition = `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms ease-out`;
-      el.style.transform = at;
-      el.classList.remove('on');
-    }
+    el.style.transition = 'none';
+    el.style.transform = at;
+    void el.offsetWidth; // apply that position before fading in
+    el.style.transition = '';
+    el.classList.add('on');
   }
 
   private start(file: string): Promise<number> | null {
@@ -348,7 +342,6 @@ export class BodyLanguage {
   }
 
   dispose() {
-    clearTimeout(this.settle);
     this.el.pause();
     for (const u of this.urls.values()) URL.revokeObjectURL(u);
     this.urls.clear();
