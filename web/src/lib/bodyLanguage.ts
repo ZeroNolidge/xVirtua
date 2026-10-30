@@ -29,8 +29,14 @@ const PREPARE_WAIT_MS = 8000;
 /** A clip waits at most this long for his live head to be still and near its resting spot. */
 const STILL_WAIT_MS = 800;
 /** "Near its resting spot" and "still", in head-match grid pixels (about 1% and 0.4%). */
-const NEAR_PX = 1;
-const STEADY_PX = 0.4;
+const NEAR_PX = 0.45;
+const STEADY_PX = 0.3;
+/**
+ * Below this (in % of the picture) the clip isn't moved to meet his head:
+ * moving it slides the wall behind him too, which shows more than a
+ * sub-pixel difference in his head does.
+ */
+const MIN_SHIFT_PCT = 0.6;
 /** After fading in, the clip glides from the live head's position to its own, this slowly. */
 const SETTLE_MS = 700;
 
@@ -138,7 +144,10 @@ export class BodyLanguage {
       headX: o ? +(o.x * 100).toFixed(2) : null,
       headY: o ? +(o.y * 100).toFixed(2) : null,
     });
-    const at = o ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%)` : '';
+    const at =
+      o && Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT
+        ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%)`
+        : '';
     if (on) {
       el.style.transition = 'none';
       el.style.transform = at;
@@ -272,6 +281,11 @@ export class BodyLanguage {
       this.playing = null;
       this.show(false);
     }
+    // Talking during the mood change: switch faces now, so his mouth moves.
+    if (on && this.playing === 'transition') {
+      this.el.pause();
+      this.endTransition();
+    }
     if (!on) this.tryRelax();
   }
 
@@ -309,12 +323,15 @@ export class BodyLanguage {
     if (!started) return this.onMood?.('at_ease');
     this.playing = 'transition';
     // At its last frame (his at-ease face), the live face switches underneath.
-    this.el.onended = () => {
-      if (this.playing === 'transition') this.playing = null;
-      this.holding = true;
-      this.faceReady = false;
-      this.onMood?.('at_ease');
-    };
+    this.el.onended = () => this.endTransition();
+  }
+
+  private endTransition() {
+    if (this.playing !== 'transition') return;
+    this.playing = null;
+    this.holding = true;
+    this.faceReady = false;
+    this.onMood?.('at_ease');
   }
 
   private faceReady = false;

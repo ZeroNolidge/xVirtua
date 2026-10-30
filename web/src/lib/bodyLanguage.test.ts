@@ -105,6 +105,18 @@ describe('body language clips', () => {
     expect(onMood).not.toHaveBeenCalled();
   });
 
+  it('if he starts talking during the mood change, the faces swap at once', async () => {
+    const onMood = vi.fn();
+    b.onMood = onMood;
+    b.relax();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(el.classList.contains('on')).toBe(true);
+    b.setSpeaking(true);
+    expect(onMood).toHaveBeenCalledWith('at_ease');
+    b.reveal();
+    expect(el.classList.contains('on')).toBe(false);
+  });
+
   it('connects his relaxed face first, and only then plays the transition', async () => {
     let ready!: (ok: boolean) => void;
     b.onPrepare = vi.fn(() => new Promise<boolean>((r) => (ready = r)));

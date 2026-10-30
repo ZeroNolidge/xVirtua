@@ -112,8 +112,10 @@ export function FaceCheck() {
         note('next-face-ready', { ok, ms: Math.round(performance.now() - t) });
         return ok;
       };
+      let swappedFaces = false;
       body.onMood = (m) => {
         const swapped = avatar.commitFace();
+        swappedFaces = true;
         note('face-swap', { mood: m, swapped });
         recorder.attachVoice();
         body.reveal();
@@ -168,7 +170,7 @@ export function FaceCheck() {
         setStatus('He relaxes…');
         note('relax');
         body.relax();
-        await until(() => body.mood === 'at_ease' && !els.clip.classList.contains('on'), 30_000);
+        await until(() => swappedFaces && !els.clip.classList.contains('on'), 30_000);
         await sleep(1500);
         setStatus('He says a line (at-ease face)…');
         await say();
