@@ -87,8 +87,16 @@ export function useBodyLanguage(
     /** The mood the live face should start in (null: no clips for this patient). */
     startMood,
     /** Plays a fitting clip; resolves when it's nearly done (at most `maxWaitMs`). */
-    cue: (cues: readonly NonverbalCue[], maxWaitMs = 0) =>
-      body.current && face.ready ? body.current.cue(cues, maxWaitMs) : Promise.resolve(false),
+    cue: (cues: readonly NonverbalCue[], maxWaitMs = 0) => {
+      if (!body.current) return Promise.resolve(false);
+      if (!face.ready) {
+        body.current.skip('face not up');
+        return Promise.resolve(false);
+      }
+      return body.current.cue(cues, maxWaitMs);
+    },
+    /** This session's clip counts (null: no clips for this patient). */
+    stats: () => (body.current ? structuredClone(body.current.stats) : null),
     setSpeaking: (on: boolean) => body.current?.setSpeaking(on),
     relax: () => body.current?.relax(),
     mood: (): Mood | null => body.current?.mood ?? null,

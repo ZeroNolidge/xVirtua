@@ -59,6 +59,22 @@ describe('body language clips', () => {
     expect(el.classList.contains('on')).toBe(true);
   });
 
+  it('counts which clips played, and why others didn’t', async () => {
+    await b.cue([]);
+    await b.cue(['nod']); // no nod while guarded
+    await b.cue(['frown']);
+    await b.cue(['look_away']); // the frown is still playing
+    el.finish();
+    await b.cue(['look_away']); // too soon after the frown
+    expect(b.stats.shown).toEqual({ frown: 1 });
+    expect(b.stats.skipped).toEqual({
+      'no cue': 1,
+      'no guarded clip': 1,
+      'clip already playing': 1,
+      'too soon after the last': 1,
+    });
+  });
+
   it('gives way to his live face the moment he talks, and never plays over his words', async () => {
     await b.cue(['frown']);
     b.setSpeaking(true);

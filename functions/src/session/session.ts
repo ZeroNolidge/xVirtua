@@ -750,8 +750,25 @@ export async function saveHeard(db: Firestore, caller: Caller | null, data: unkn
 
 // ---------- end ----------
 
+/** Counts by name (cue or reason): a handful of short names. */
+const counts = z
+  .record(z.string().max(40), z.number().int().nonnegative().max(10_000))
+  .refine((r) => Object.keys(r).length <= 30, 'too many names');
 const endInput = z.object({
   sessionId: z.string().min(1).max(64),
+  /** How often body-language clips played, and why others didn't (for tuning). */
+  bodyStats: z
+    .object({
+      shown: counts,
+      skipped: counts,
+      stillWaitMs: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(24 * 3600 * 1000),
+      relaxed: z.boolean(),
+    })
+    .nullish(),
   audioExt: z.enum(['webm', 'm4a', 'mp4', 'ogg']).nullish(),
   /** Seconds the resident spent waiting on the app; left out of practice time. */
   appWaitSec: z
@@ -769,13 +786,14 @@ export async function endSession(
   audioExists: (path: string) => Promise<boolean>,
 ) {
   const me = requireMember(caller);
-  const { sessionId, audioExt, appWaitSec } = parse(endInput, data);
+  const { sessionId, audioExt, appWaitSec, bodyStats } = parse(endInput, data);
   const ref = db.doc(`sessions/${sessionId}`);
   const snap = await ref.get();
   const s = snap.data() as SessionDoc | undefined;
   if (!s || s.uid !== me.uid) throw new HttpsError('not-found', 'Session not found.');
 
   const update: Record<string, unknown> = {};
+  if (bodyStats) update.bodyStats = bodyStats;
   if (s.status === 'live') {
     const durationSec = Math.round((Date.now() - s.startedAt.toMillis()) / 1000);
     Object.assign(update, {

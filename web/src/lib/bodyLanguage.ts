@@ -40,8 +40,24 @@ const SETTLE_MS = 700;
  * on his resting face, so it fades cleanly back to the live face. He starts
  * guarded and can relax once (a transition clip, then the at-ease face).
  */
+/** How often clips played this session, and why others didn't (saved with the session). */
+export interface BodyStats {
+  /** Clips that played, by cue (and "relax" for the mood change). */
+  shown: Record<string, number>;
+  /** Times a clip was asked for but didn't play, by reason. */
+  skipped: Record<string, number>;
+  /** Total time clips waited for his head to be still. */
+  stillWaitMs: number;
+  relaxed: boolean;
+}
+
 export class BodyLanguage {
   mood: Mood;
+  readonly stats: BodyStats = { shown: {}, skipped: {}, stillWaitMs: 0, relaxed: false };
+  /** Counts a clip that didn't play, and why. */
+  skip(reason: string) {
+    this.stats.skipped[reason] = (this.stats.skipped[reason] ?? 0) + 1;
+  }
   private urls = new Map<string, string>();
   private playing: 'cue' | 'transition' | null = null;
   private lastAt = -Infinity;
@@ -166,18 +182,35 @@ export class BodyLanguage {
     const clips = this.manifest.moods[this.mood]?.clips ?? {};
     const cue = cues.find((c) => clips[c]);
     const now = performance.now();
-    if (!cue || this.playing || this.speaking || now - this.lastAt < CLIP_GAP_MS) return false;
+    const why = !cues.length
+      ? 'no cue'
+      : !cue
+        ? `no ${this.mood} clip`
+        : this.playing
+          ? 'clip already playing'
+          : this.speaking
+            ? 'he was talking'
+            : now - this.lastAt < CLIP_GAP_MS
+              ? 'too soon after the last'
+              : null;
+    if (why || !cue) {
+      this.skip(why ?? 'no cue');
+      return false;
+    }
     this.playing = 'cue';
     this.lastAt = now;
     await this.stillMoment();
+    this.stats.stillWaitMs += Math.round(performance.now() - now);
     // He started talking (or something else took over) while we waited.
     if (this.playing !== 'cue' || this.speaking) {
       if (this.playing === 'cue') this.playing = null;
+      this.skip('he talked while it waited');
       return false;
     }
     const started = this.start(clips[cue]!);
     if (!started) {
       this.playing = null;
+      this.skip('clip missing');
       return false;
     }
     this.el.onended = () => {
@@ -189,8 +222,10 @@ export class BodyLanguage {
     const ms = await started;
     if (!ms) {
       this.playing = null;
+      this.skip('clip would not play');
       return false;
     }
+    this.stats.shown[cue] = (this.stats.shown[cue] ?? 0) + 1;
     // The wait for a still moment counts towards maxWaitMs.
     const left = Math.max(0, maxWaitMs - (performance.now() - now));
     await new Promise((r) => setTimeout(r, Math.min(left, Math.max(0, ms - NEAR_END_MS))));
@@ -254,6 +289,8 @@ export class BodyLanguage {
     // Starts from his guarded face, so line it up with that; then he's at ease.
     const started = file ? this.start(file) : null;
     this.mood = 'at_ease';
+    this.stats.relaxed = true;
+    if (started) this.stats.shown.relax = (this.stats.shown.relax ?? 0) + 1;
     if (!started) return this.onMood?.('at_ease');
     this.playing = 'transition';
     // At its last frame (his at-ease face), the live face switches underneath.

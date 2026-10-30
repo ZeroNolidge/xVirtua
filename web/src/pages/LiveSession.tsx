@@ -838,7 +838,12 @@ export function LiveConversation({
     await call.current?.close().catch(() => undefined);
     release();
     try {
-      await sessionApi.end({ sessionId, appWaitSec: Math.round(totalWaitMs.current / 1000) });
+      const bodyStats = bodyRef.current.stats();
+      await sessionApi.end({
+        sessionId,
+        appWaitSec: Math.round(totalWaitMs.current / 1000),
+        ...(bodyStats ? { bodyStats } : {}),
+      });
     } catch (e) {
       console.warn('end failed', e);
     }

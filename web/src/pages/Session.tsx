@@ -932,6 +932,7 @@ function Conversation({
       await sessionApi.end({
         sessionId,
         appWaitSec: Math.round(timing.current.totalAppWaitMs / 1000),
+        ...(body.stats() ? { bodyStats: body.stats()! } : {}),
       });
     } catch (e) {
       // The transcript is already saved; scoring ends the session if this didn't.

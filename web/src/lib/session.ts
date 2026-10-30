@@ -78,7 +78,18 @@ export const sessionApi = {
     'startLiveCall',
   ),
   end: httpsCallable<
-    { sessionId: string; audioExt?: string; appWaitSec?: number },
+    {
+      sessionId: string;
+      audioExt?: string;
+      appWaitSec?: number;
+      /** How often body-language clips played, and why others didn't. */
+      bodyStats?: {
+        shown: Record<string, number>;
+        skipped: Record<string, number>;
+        stillWaitMs: number;
+        relaxed: boolean;
+      };
+    },
     { sessionId: string; status: 'ended' }
   >(functions, 'endSession'),
   sttToken: httpsCallable<
