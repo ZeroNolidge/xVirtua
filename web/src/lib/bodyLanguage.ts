@@ -26,16 +26,21 @@ const FIRST_FRAME_WAIT_MS = 250;
 /** He relaxes once his relaxed face is ready, or after this long regardless. */
 const PREPARE_WAIT_MS = 8000;
 /** A clip waits at most this long for his live head to be still and near its resting spot. */
-const STILL_WAIT_MS = 800;
+const STILL_WAIT_MS = 1500;
 /** "Near its resting spot" and "still", in head-match grid pixels (about 1% and 0.4%). */
 const NEAR_PX = 0.45;
 const STEADY_PX = 0.3;
+/** "Close to resting size" and "not still changing size" (head size; 1 = resting). */
+const NEAR_SCALE = 0.005;
+const STEADY_SCALE = 0.003;
 /**
  * Below this (in % of the picture) the clip isn't moved to meet his head:
  * moving it slides the wall behind him too, which shows more than a
  * sub-pixel difference in his head does.
  */
 const MIN_SHIFT_PCT = 0.6;
+/** Likewise for head size: below this the clip isn't zoomed to match (0.6%). */
+const MIN_ZOOM = 0.006;
 
 /**
  * The patient's body language (test): short clips of the same face, played
@@ -139,6 +144,7 @@ export class BodyLanguage {
       // Where his live head was, in % of the picture (the clip moves there).
       headX: o ? +(o.x * 100).toFixed(2) : null,
       headY: o ? +(o.y * 100).toFixed(2) : null,
+      headScale: o ? +o.scale.toFixed(3) : null,
     });
     // Fading out, the clip stays where it is: moving it would slide the wall.
     if (!on) {
@@ -149,8 +155,8 @@ export class BodyLanguage {
     // Fading in: if his live head is noticeably off his resting spot, the clip
     // starts there and stays there (no glide back, which also slid the wall).
     const at =
-      o && Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT
-        ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%)`
+      o && (Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT || Math.abs(o.scale - 1) > MIN_ZOOM)
+        ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%) scale(${o.scale.toFixed(4)})`
         : '';
     el.style.transition = 'none';
     el.style.transform = at;
@@ -255,12 +261,15 @@ export class BodyLanguage {
    */
   private async stillMoment() {
     const until = performance.now() + STILL_WAIT_MS;
-    let prev: { x: number; y: number } | null = null;
+    let prev: { x: number; y: number; scale: number } | null = null;
     while (performance.now() < until) {
       const o = this.heads.offset(this.live(), this.poster);
       if (!o) return; // can't tell: don't hold the clip up
-      const near = Math.hypot(o.x, o.y) * GRID <= NEAR_PX;
-      const steady = !!prev && Math.hypot(o.x - prev.x, o.y - prev.y) * GRID <= STEADY_PX;
+      const near = Math.hypot(o.x, o.y) * GRID <= NEAR_PX && Math.abs(o.scale - 1) <= NEAR_SCALE;
+      const steady =
+        !!prev &&
+        Math.hypot(o.x - prev.x, o.y - prev.y) * GRID <= STEADY_PX &&
+        Math.abs(o.scale - prev.scale) <= STEADY_SCALE;
       if (near && steady) return;
       prev = o;
       await new Promise((r) => setTimeout(r, 80));

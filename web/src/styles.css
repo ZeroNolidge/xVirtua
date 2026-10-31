@@ -978,6 +978,11 @@ p {
   opacity: 0;
   transition: opacity 0.4s ease;
   pointer-events: none;
+  /* Only the patient comes from the clip, with a soft edge: the wall around
+     them stays the live picture, so it never jumps when the clip is moved or
+     zoomed to meet the live head. (Matches CLIP_MASK in stageRecorder.ts.) */
+  -webkit-mask-image: radial-gradient(ellipse 40% 62% at 50% 60%, #000 60%, transparent 100%);
+  mask-image: radial-gradient(ellipse 40% 62% at 50% 60%, #000 60%, transparent 100%);
 }
 .avatar-stage .stage-clip.on {
   opacity: 1;

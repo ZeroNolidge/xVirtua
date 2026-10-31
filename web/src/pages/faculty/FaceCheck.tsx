@@ -163,7 +163,12 @@ export function FaceCheck() {
         if (m?.poster) await heads.addReference(`${base}/${m.poster}`).catch(() => undefined);
       sampler = window.setInterval(() => {
         const o = heads.offset(avatar.activeVideo, body.poster);
-        if (o) note('head', { x: +(o.x * 100).toFixed(2), y: +(o.y * 100).toFixed(2) });
+        if (o)
+          note('head', {
+            x: +(o.x * 100).toFixed(2),
+            y: +(o.y * 100).toFixed(2),
+            scale: +o.scale.toFixed(3),
+          });
       }, 250);
 
       const say = async () => {

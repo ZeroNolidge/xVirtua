@@ -6,6 +6,8 @@
  */
 export class StageRecorder {
   private canvas = document.createElement('canvas');
+  /** The clip is drawn here first, then trimmed to the soft oval. */
+  private layer = document.createElement('canvas');
   private ctx: CanvasRenderingContext2D | null;
   private raf = 0;
   private rec: MediaRecorder | null = null;
@@ -23,6 +25,7 @@ export class StageRecorder {
     private readonly size = 480,
   ) {
     this.canvas.width = this.canvas.height = size;
+    this.layer.width = this.layer.height = size;
     this.ctx = this.canvas.getContext('2d');
     const types = ['video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
     this.mimeType =
@@ -91,12 +94,24 @@ export class StageRecorder {
     const cs = getComputedStyle(clip);
     const opacity = parseFloat(cs.opacity || '0');
     if (opacity > 0 && clip.readyState >= 2) {
-      // The clip's current shift (it lines up with the live head while fading).
+      // The clip's current shift and zoom (it lines up with the live head),
+      // about the middle of the picture as in the page.
       const m = /matrix\(([^)]+)\)/.exec(cs.transform);
-      const v = m ? m[1]!.split(',').map(Number) : [];
+      const v = m ? m[1]!.split(',').map(Number) : [1, 0, 0, 1, 0, 0];
       const k = clip.clientWidth ? n / clip.clientWidth : 1;
+      const lay = this.layer.getContext('2d')!;
+      lay.setTransform(1, 0, 0, 1, 0, 0);
+      lay.globalCompositeOperation = 'source-over';
+      lay.clearRect(0, 0, n, n);
+      lay.translate(n / 2, n / 2);
+      lay.transform(v[0] ?? 1, v[1] ?? 0, v[2] ?? 0, v[3] ?? 1, (v[4] ?? 0) * k, (v[5] ?? 0) * k);
+      lay.drawImage(clip, -n / 2, -n / 2, n, n);
+      // The same soft oval as the page (only the patient comes from the clip).
+      lay.globalCompositeOperation = 'destination-in';
+      lay.fillStyle = this.mask(lay);
+      lay.fillRect(-n / 2, -n / 2, n, n);
       ctx.globalAlpha = opacity;
-      ctx.drawImage(clip, (v[4] ?? 0) * k, (v[5] ?? 0) * k, n, n);
+      ctx.drawImage(this.layer, 0, 0);
       ctx.globalAlpha = 1;
     }
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -104,6 +119,19 @@ export class StageRecorder {
     ctx.fillStyle = '#fff';
     ctx.font = '14px monospace';
     ctx.fillText(`${this.now().toFixed(2)}s`, 6, n - 6);
+  }
+
+  /** CLIP_MASK: an oval 40% × 62% of the picture around (50%, 60%), solid to 60%, then fading out. */
+  private mask(ctx: CanvasRenderingContext2D) {
+    const n = this.size;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, '#000');
+    g.addColorStop(0.6, '#000');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    // An oval: draw a unit circle stretched to the oval's size, about its centre.
+    ctx.translate(0, 0.1 * n);
+    ctx.scale(0.4 * n, 0.62 * n);
+    return g;
   }
 
   stop(): Promise<Blob | null> {

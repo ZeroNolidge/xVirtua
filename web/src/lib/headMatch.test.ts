@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestShift, GRID } from './headMatch';
+import { bestFit, bestShift, GRID, scaleAbout, SCALES } from './headMatch';
 
 /** A soft "face": a bright blob with a darker band, centred at (cx, cy). */
 function face(cx: number, cy: number, brightness = 0) {
@@ -30,5 +30,15 @@ describe('bestShift', () => {
     const s = bestShift(face(48, 40), face(46, 41, 25));
     expect(s.x).toBeCloseTo(-2, 0);
     expect(s.y).toBeCloseTo(1, 0);
+  });
+
+  it('finds how much bigger or smaller the live head is (it leans in while talking)', () => {
+    const rest = face(48, 34);
+    const zoomed = SCALES.map((z) => scaleAbout(rest, z));
+    for (const z of [0.985, 1, 1.02]) {
+      const f = bestFit(zoomed, scaleAbout(rest, z));
+      expect(f.scale).toBeCloseTo(z, 2);
+      expect(Math.abs(f.x)).toBeLessThan(0.6);
+    }
   });
 });
