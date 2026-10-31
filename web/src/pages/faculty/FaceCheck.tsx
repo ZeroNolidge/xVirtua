@@ -88,7 +88,28 @@ export function FaceCheck() {
       () => avatar.activeAudio,
     );
     let sampler = 0;
+    // Keep the screen on: a locked screen or another app pauses the videos.
+    const nav = navigator as Navigator & {
+      wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> };
+    };
+    const lock = await nav.wakeLock?.request('screen').catch(() => null);
+    let hidden = false;
+    const onHide = () => {
+      if (document.hidden) {
+        hidden = true;
+        note('page-hidden');
+      }
+    };
+    document.addEventListener('visibilitychange', onHide);
+    const stillHere = () => {
+      if (hidden)
+        throw new Error(
+          'The face check stopped because the screen locked or another app opened. Keep this page open and run it again.',
+        );
+    };
     cleanup.current = async () => {
+      document.removeEventListener('visibilitychange', onHide);
+      void lock?.release().catch(() => undefined);
       window.clearInterval(sampler);
       voiceEl.pause();
       await recorder.stop();
@@ -146,6 +167,7 @@ export function FaceCheck() {
       }, 250);
 
       const say = async () => {
+        stillHere();
         note('says');
         body.setSpeaking(true);
         voiceEl.currentTime = 0;
@@ -156,6 +178,7 @@ export function FaceCheck() {
       };
       const clips = async (mood: Mood) => {
         for (const cue of Object.keys(manifest.moods[mood]?.clips ?? {})) {
+          stillHere();
           setStatus(`Clip: ${cue.replace(/_/g, ' ')}`);
           note('cue', { cue });
           const played = await body.cue([cue as never]);
@@ -180,6 +203,7 @@ export function FaceCheck() {
         await sleep(1000);
         await clips('at_ease');
       }
+      stillHere();
       note('stats', { ...body.stats });
 
       setStatus('Uploading the recording…');
@@ -207,6 +231,8 @@ export function FaceCheck() {
       await cleanup.current?.();
       cleanup.current = null;
     } finally {
+      document.removeEventListener('visibilitychange', onHide);
+      void lock?.release().catch(() => undefined);
       setRunning(false);
     }
   }
