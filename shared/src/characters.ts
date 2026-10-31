@@ -25,6 +25,10 @@ export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
       at_ease: '8abb4a89-e5b6-42e2-ba92-717de4593d6b',
     },
   },
+  'linda-shaffer': {
+    name: 'Linda Shaffer',
+    faces: { guarded: '7cc2fd4a-8472-445d-bac9-b2674d2eff31' },
+  },
 };
 
 /** The video character for this patient, if there is one. */
