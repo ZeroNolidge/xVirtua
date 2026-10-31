@@ -107,9 +107,11 @@ export class StageRecorder {
       lay.transform(v[0] ?? 1, v[1] ?? 0, v[2] ?? 0, v[3] ?? 1, (v[4] ?? 0) * k, (v[5] ?? 0) * k);
       lay.drawImage(clip, -n / 2, -n / 2, n, n);
       // The same soft oval as the page (only the patient comes from the clip).
-      lay.globalCompositeOperation = 'destination-in';
-      lay.fillStyle = this.mask(lay);
-      lay.fillRect(-n / 2, -n / 2, n, n);
+      if (!clip.classList.contains('whole')) {
+        lay.globalCompositeOperation = 'destination-in';
+        lay.fillStyle = this.mask(lay);
+        lay.fillRect(-n / 2, -n / 2, n, n);
+      }
       ctx.globalAlpha = opacity;
       ctx.drawImage(this.layer, 0, 0);
       ctx.globalAlpha = 1;

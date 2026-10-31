@@ -984,6 +984,11 @@ p {
   -webkit-mask-image: radial-gradient(ellipse 40% 62% at 50% 60%, #000 60%, transparent 100%);
   mask-image: radial-gradient(ellipse 40% 62% at 50% 60%, #000 60%, transparent 100%);
 }
+/* A mood change blends one live face's room into the other's: all of it shows. */
+.avatar-stage .stage-clip.whole {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
 .avatar-stage .stage-clip.on {
   opacity: 1;
 }

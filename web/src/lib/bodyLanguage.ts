@@ -154,7 +154,9 @@ export class BodyLanguage {
     }
     // Fading in: if his live head is noticeably off his resting spot, the clip
     // starts there and stays there (no glide back, which also slid the wall).
+    // A mood change shows the whole room, so moving it would move the wall: never.
     const at =
+      !el.classList.contains('whole') &&
       o && (Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT || Math.abs(o.scale - 1) > MIN_ZOOM)
         ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%) scale(${o.scale.toFixed(4)})`
         : '';
@@ -165,10 +167,15 @@ export class BodyLanguage {
     el.classList.add('on');
   }
 
-  private start(file: string): Promise<number> | null {
+  /**
+   * `whole`: a mood change. It plays full-frame, since it blends one live
+   * face's room into the other's; expression clips show only the patient.
+   */
+  private start(file: string, whole = false): Promise<number> | null {
     const url = this.urls.get(file);
     if (!url) return null;
     const el = this.el;
+    el.classList.toggle('whole', whole);
     const rest = this.poster; // the clip's first frame (his mood may change meanwhile)
     el.src = url;
     el.currentTime = 0;
@@ -323,7 +330,7 @@ export class BodyLanguage {
     if (this.mood !== 'guarded') return;
     const file = this.manifest.transitions?.['guarded>at_ease'];
     // Starts from his guarded face, so line it up with that; then he's at ease.
-    const started = file ? this.start(file) : null;
+    const started = file ? this.start(file, true) : null;
     this.mood = 'at_ease';
     this.stats.relaxed = true;
     if (started) this.stats.shown.relax = (this.stats.shown.relax ?? 0) + 1;
