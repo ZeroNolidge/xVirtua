@@ -39,6 +39,11 @@ jobs:
           for name in $(jq -r 'keys[]' "$SRC"); do
             [[ "$name" =~ ^[a-z0-9-]+\.(jpg|mp4)$ ]] || { echo "::error::bad file name $name"; exit 1; }
             url=$(jq -r --arg n "$name" '.[$n]' "$SRC")
+            # Optional per-clip speed-up (quicker flashes of emotion), from <patient>.speed.json.
+            SPEED=$(jq -r --arg n "$name" '.[$n] // 1' "scripts/avatar-sources/$PATIENT.speed.json" 2>/dev/null || echo 1)
+            [[ "$SPEED" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "::error::bad speed for $name"; exit 1; }
+            PACE=""
+            [ "$SPEED" != "1" ] && PACE="setpts=PTS/$SPEED,fps=24,"
             curl -sSfL "$url" -o "$RUNNER_TEMP/raw/$name.src"
             case "$name" in
               *.jpg)
@@ -46,7 +51,7 @@ jobs:
                 ffmpeg -loglevel error -y -i "$RUNNER_TEMP/raw/$name.src" -vf scale=768:768 -q:v 4 "$OUT/$name" ;;
               *.mp4)
                 # 768 px, H.264 (plays everywhere), no sound, starts playing at once.
-                ffmpeg -loglevel error -y -i "$RUNNER_TEMP/raw/$name.src" -vf "${FIX}scale=768:768,format=yuv420p" \
+                ffmpeg -loglevel error -y -i "$RUNNER_TEMP/raw/$name.src" -vf "${PACE}${FIX}scale=768:768,format=yuv420p" \
                   -c:v libx264 -preset slow -crf 20 -an -movflags +faststart "$OUT/$name" ;;
             esac
             echo "$name: $(du -h "$OUT/$name" | cut -f1)"
