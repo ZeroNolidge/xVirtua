@@ -28,6 +28,13 @@ jobs:
           [[ "$PATIENT" =~ ^[a-z0-9-]+$ ]] || { echo "::error::bad patient name"; exit 1; }
           SRC="scripts/avatar-sources/$PATIENT.json"
           OUT="web/public/avatars/$PATIENT"
+          # Optional per-patient touch-up for the clips (e.g. sharpening and a small
+          # brightness lift so they match the live Simli face): an ffmpeg filter.
+          FIX=""
+          if [ -f "scripts/avatar-sources/$PATIENT.filter" ]; then
+            FIX="$(tr -d '\n' < "scripts/avatar-sources/$PATIENT.filter"),"
+            [[ "$FIX" =~ ^[a-z0-9=:.,_-]+,$ ]] || { echo "::error::bad filter"; exit 1; }
+          fi
           mkdir -p "$OUT" "$RUNNER_TEMP/raw"
           for name in $(jq -r 'keys[]' "$SRC"); do
             [[ "$name" =~ ^[a-z0-9-]+\.(jpg|mp4)$ ]] || { echo "::error::bad file name $name"; exit 1; }
@@ -39,8 +46,8 @@ jobs:
                 ffmpeg -loglevel error -y -i "$RUNNER_TEMP/raw/$name.src" -vf scale=768:768 -q:v 4 "$OUT/$name" ;;
               *.mp4)
                 # 768 px, H.264 (plays everywhere), no sound, starts playing at once.
-                ffmpeg -loglevel error -y -i "$RUNNER_TEMP/raw/$name.src" -vf scale=768:768,format=yuv420p \
-                  -c:v libx264 -preset slow -crf 24 -an -movflags +faststart "$OUT/$name" ;;
+                ffmpeg -loglevel error -y -i "$RUNNER_TEMP/raw/$name.src" -vf "${FIX}scale=768:768,format=yuv420p" \
+                  -c:v libx264 -preset slow -crf 20 -an -movflags +faststart "$OUT/$name" ;;
             esac
             echo "$name: $(du -h "$OUT/$name" | cut -f1)"
           done
