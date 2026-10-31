@@ -99,6 +99,8 @@ export function useBodyLanguage(
     stats: () => (body.current ? structuredClone(body.current.stats) : null),
     setSpeaking: (on: boolean) => body.current?.setSpeaking(on),
     relax: () => body.current?.relax(),
+    /** The patient's mood should now be this (they move there one step at a time). */
+    moveTo: (m: Mood) => body.current?.moveTo(m),
     mood: (): Mood | null => body.current?.mood ?? null,
     /** The body language that fits what he just said (his own words first). */
     cueFor: (text: string): NonverbalCue | null => body.current?.cueFor(text) ?? null,

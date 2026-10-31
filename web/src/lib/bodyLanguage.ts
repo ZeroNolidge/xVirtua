@@ -1,8 +1,14 @@
-import { characterSlug, type NonverbalCue } from '@plainspeak/shared';
+import {
+  characterSlug,
+  MOODS,
+  stepToward,
+  type Mood,
+  type NonverbalCue,
+} from '@plainspeak/shared';
 import { GRID, HeadMatcher } from './headMatch';
 import { cueForWords, type CueRules } from './cueWords';
 
-export type Mood = 'guarded' | 'at_ease';
+export type { Mood };
 
 export interface ClipManifest {
   start: Mood;
@@ -23,8 +29,10 @@ const NEAR_END_MS = 400;
 const FADE_MS = 400;
 /** A clip's first frame normally draws within a frame or two; never wait longer than this. */
 const FIRST_FRAME_WAIT_MS = 250;
-/** He relaxes once his relaxed face is ready, or after this long regardless. */
+/** A mood change waits for the next face to connect, or this long regardless. */
 const PREPARE_WAIT_MS = 8000;
+/** Mood changes at most this often, so the face doesn't flicker between moods. */
+export const MOOD_GAP_MS = 15000;
 /** A clip waits at most this long for his live head to be still and near its resting spot. */
 const STILL_WAIT_MS = 1500;
 /** "Near its resting spot" and "still", in head-match grid pixels (about 1% and 0.4%). */
@@ -45,12 +53,13 @@ const MIN_ZOOM = 0.006;
 /**
  * The patient's body language (test): short clips of the same face, played
  * over the live video face while he isn't talking. Each clip starts and ends
- * on his resting face, so it fades cleanly back to the live face. He starts
- * guarded and can relax once (a transition clip, then the at-ease face).
+ * on his resting face, so it fades cleanly back to the live face. His mood
+ * moves along the ladder (upset, guarded, at ease, happy) one step at a time,
+ * through a transition clip, then his live face for the new mood.
  */
 /** How often clips played this session, and why others didn't (saved with the session). */
 export interface BodyStats {
-  /** Clips that played, by cue (and "relax" for the mood change). */
+  /** Clips that played, by cue (and "from>to" for each mood change). */
   shown: Record<string, number>;
   /** Times a clip was asked for but didn't play, by reason. */
   skipped: Record<string, number>;
@@ -73,8 +82,13 @@ export class BodyLanguage {
   private playing: 'cue' | 'transition' | null = null;
   private lastAt = -Infinity;
   private speaking = false;
-  private relaxPending = false;
   private holding = false;
+  /** The mood the director wants; he moves toward it one step at a time. */
+  private target: Mood | null = null;
+  /** The next step, being connected (his live face for it). */
+  private next: Mood | null = null;
+  private lastMoodAt = -Infinity;
+  private stepTimer: ReturnType<typeof setTimeout> | undefined;
   /**
    * Connects his live face for a mood in the background (the current one
    * keeps going), so the switch later has no gap. Resolves when it's ready.
@@ -85,7 +99,7 @@ export class BodyLanguage {
    * once it has). The transition clip holds on its last frame until then.
    */
   onMood: ((m: Mood) => void) | null = null;
-  /** His relaxed face has connected (or we stopped waiting for it). */
+  /** His face for the next mood has connected (or we stopped waiting for it). */
   private prepared = false;
   private heads = new HeadMatcher();
 
@@ -97,6 +111,8 @@ export class BodyLanguage {
     private readonly live: () => HTMLVideoElement | null = () => null,
     /** Face check: clips can follow each other sooner. */
     private readonly gapMs = CLIP_GAP_MS,
+    /** Face check: moods can change sooner. */
+    private readonly moodGapMs = MOOD_GAP_MS,
   ) {
     this.mood = manifest.start;
     el.muted = true;
@@ -247,7 +263,7 @@ export class BodyLanguage {
       if (this.playing !== 'cue') return;
       this.playing = null;
       this.show(false);
-      this.tryRelax();
+      this.tryStep();
     };
     const ms = await started;
     if (!ms) {
@@ -300,43 +316,81 @@ export class BodyLanguage {
       this.el.pause();
       this.endTransition();
     }
-    if (!on) this.tryRelax();
+    if (!on) this.tryStep();
+  }
+
+  /** The resident earned their trust: at least at ease. */
+  relax() {
+    if (MOODS.indexOf(this.mood) < MOODS.indexOf('at_ease')) this.moveTo('at_ease');
   }
 
   /**
-   * The resident earned his trust: he relaxes (once). His relaxed face
-   * connects first, in the background; then, as soon as he's quiet, the
+   * Their mood should now be `m` (the director's call). They move toward it one
+   * step at a time, at most every MOOD_GAP_MS. For each step the next face
+   * connects first, in the background; then, as soon as they're quiet, the
    * transition clip plays and the faces swap at its last frame.
    */
-  relax() {
-    if (this.mood !== 'guarded' || !this.manifest.moods.at_ease || this.relaxPending) return;
-    this.relaxPending = true;
+  moveTo(m: Mood) {
+    this.target = m;
+    this.planStep();
+  }
+
+  private planStep() {
+    if (this.next || !this.target || this.target === this.mood) return;
+    const n = stepToward(this.mood, this.target);
+    // No face for that mood (e.g. Ray has no upset face): stay where they are.
+    if (!this.manifest.moods[n]) {
+      this.target = null;
+      return;
+    }
+    const wait = this.lastMoodAt + this.moodGapMs - performance.now();
+    if (wait > 0) {
+      clearTimeout(this.stepTimer);
+      this.stepTimer = setTimeout(() => this.planStep(), wait);
+      return;
+    }
+    this.next = n;
     this.prepared = false;
-    const ready = this.onPrepare ? this.onPrepare('at_ease').catch(() => false) : null;
+    const ready = this.onPrepare ? this.onPrepare(n).catch(() => false) : null;
     const done = () => {
+      if (this.next !== n) return;
       this.prepared = true;
-      this.tryRelax();
+      this.tryStep();
     };
     if (!ready) return done();
     void Promise.race([ready, new Promise((r) => setTimeout(r, PREPARE_WAIT_MS))]).then(done);
   }
 
-  private tryRelax() {
-    if (this.relaxPending && this.prepared && !this.speaking && !this.playing) this.relaxNow();
+  private tryStep() {
+    if (!this.next || !this.prepared || this.speaking || this.playing) return;
+    // The director changed their mind while the face connected: start over.
+    if (!this.target || stepToward(this.mood, this.target) !== this.next) {
+      this.next = null;
+      return this.planStep();
+    }
+    this.stepNow();
   }
 
-  private relaxNow() {
-    this.relaxPending = false;
-    if (this.mood !== 'guarded') return;
-    const file = this.manifest.transitions?.['guarded>at_ease'];
-    // Starts from his guarded face, so line it up with that; then he's at ease.
+  private stepNow() {
+    const from = this.mood;
+    const to = this.next!;
+    this.next = null;
+    const file = this.manifest.transitions?.[`${from}>${to}`];
+    // Starts from their old face, so line it up with that; then the new mood.
     const started = file ? this.start(file, true) : null;
-    this.mood = 'at_ease';
-    this.stats.relaxed = true;
-    if (started) this.stats.shown.relax = (this.stats.shown.relax ?? 0) + 1;
-    if (!started) return this.onMood?.('at_ease');
+    this.mood = to;
+    this.lastMoodAt = performance.now();
+    if (MOODS.indexOf(to) >= MOODS.indexOf('at_ease')) this.stats.relaxed = true;
+    const key = `${from}>${to}`;
+    this.stats.shown[key] = (this.stats.shown[key] ?? 0) + 1;
+    this.onEvent?.({ type: 'mood', from, to, clip: !!started });
+    if (!started) {
+      this.holding = true;
+      this.faceReady = false;
+      return this.onMood?.(to);
+    }
     this.playing = 'transition';
-    // At its last frame (his at-ease face), the live face switches underneath.
+    // At its last frame (the new mood's face), the live face switches underneath.
     this.el.onended = () => this.endTransition();
   }
 
@@ -345,7 +399,7 @@ export class BodyLanguage {
     this.playing = null;
     this.holding = true;
     this.faceReady = false;
-    this.onMood?.('at_ease');
+    this.onMood?.(this.mood);
   }
 
   private faceReady = false;
@@ -359,9 +413,12 @@ export class BodyLanguage {
   private release() {
     this.holding = false;
     this.show(false);
+    // Further along the ladder still to go?
+    this.planStep();
   }
 
   dispose() {
+    clearTimeout(this.stepTimer);
     this.el.pause();
     for (const u of this.urls.values()) URL.revokeObjectURL(u);
     this.urls.clear();

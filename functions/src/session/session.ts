@@ -24,6 +24,9 @@ import {
   type LiveBrain,
   cueAlreadyCovered,
   VOICE_MODES,
+  MOODS,
+  stepToward,
+  type Mood,
 } from '@plainspeak/shared';
 import type { Caller } from '../lib/callable.js';
 import { parse } from '../lib/callable.js';
@@ -59,8 +62,8 @@ export interface SessionDoc {
   inputMode?: 'voice' | 'typed' | 'mixed';
   voiceMode?: VoiceMode;
   liveBrain?: LiveBrain;
-  /** Video avatar: the patient relaxed (set once by the director in GPT-Live mode). */
-  mood?: 'at_ease';
+  /** Video avatar: the patient's mood (set by the director in GPT-Live mode). */
+  mood?: Mood;
   /** Steer mode: the cue the last director note asked for. */
   directedCueId?: string | null;
 }
@@ -666,9 +669,9 @@ export async function saveLiveExchange(
     return { residentIdx: rIdx, patientIdx: pIdx, cue: decision.cue };
   });
   // Steer mode: a private note for the patient's next reply (never blocks the call),
-  // and whether the patient has relaxed (for the video avatar).
+  // and the patient's mood (for the video avatar).
   let note: string | null = null;
-  let atEase = first?.mood === 'at_ease';
+  let mood: Mood = first?.mood ?? 'guarded';
   if (director && sc && first?.liveBrain !== 'claude') {
     const transcript = [
       ...prior.docs
@@ -684,20 +687,26 @@ export async function saveLiveExchange(
         script: sc.script,
         transcript,
         cue: saved.cue,
-        alreadyAtEase: atEase,
+        mood,
       })
       .catch((e: unknown) => {
         console.warn('director note failed', e instanceof Error ? e.message : e);
         return null;
       });
     note = out?.note ?? null;
-    // One way for now: once he relaxes, he stays relaxed.
-    if (out?.atEase && !atEase) {
-      atEase = true;
-      await ref.update({ mood: 'at_ease' }).catch(() => undefined);
+    if (out && out.mood !== mood) {
+      mood = stepToward(mood, out.mood);
+      await ref.update({ mood }).catch(() => undefined);
     }
   }
-  return { residentIdx: saved.residentIdx, patientIdx: saved.patientIdx, note, atEase };
+  return {
+    residentIdx: saved.residentIdx,
+    patientIdx: saved.patientIdx,
+    note,
+    mood,
+    // For an app that hasn't updated yet.
+    atEase: MOODS.indexOf(mood) >= MOODS.indexOf('at_ease'),
+  };
 }
 
 // ---------- what was actually said ----------

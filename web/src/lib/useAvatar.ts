@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { Mood } from '@plainspeak/shared';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './auth';
@@ -40,7 +41,7 @@ export function useAvatar(sessionId: string) {
   );
 
   /** Creates the avatar (in the tap) and connects it. Resolves when it's up, or has failed. */
-  function start(mood?: 'guarded' | 'at_ease'): Promise<PatientAvatar | null> {
+  function start(mood?: Mood): Promise<PatientAvatar | null> {
     if (!enabled || !stage.current) return Promise.resolve(null);
     if (!avatar.current) {
       const a = new PatientAvatar(stage.current.video, stage.current.audio, stage.current.spare);
@@ -55,7 +56,7 @@ export function useAvatar(sessionId: string) {
     return a.connect(tokenFor(mood)).then((ok) => (ok ? a : null));
   }
 
-  const tokenFor = (mood?: 'guarded' | 'at_ease') => async () =>
+  const tokenFor = (mood?: Mood) => async () =>
     (await sessionApi.avatarSession({ sessionId, ...(mood ? { mood } : {}) })).data.token;
 
   return {
@@ -70,12 +71,12 @@ export function useAvatar(sessionId: string) {
     /** The face showing now (it changes when he switches mood). */
     video: () => avatar.current?.activeVideo ?? null,
     /** Connects his face for another mood in the background (the current one keeps going). */
-    prepare: (mood: 'guarded' | 'at_ease') =>
+    prepare: (mood: Mood) =>
       avatar.current?.prepareFace(tokenFor(mood)) ?? Promise.resolve(false),
     /** Swaps to the prepared face at once (no gap; the voice never moves). False: none ready. */
     commit: () => avatar.current?.commitFace() ?? false,
     /** Switches to the face for another mood the slow way (hang up, then start again). */
-    restart: async (mood: 'guarded' | 'at_ease') => {
+    restart: async (mood: Mood) => {
       if (!avatar.current) return;
       await avatar.current.stop();
       await start(mood);

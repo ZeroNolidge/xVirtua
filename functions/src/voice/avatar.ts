@@ -2,6 +2,7 @@ import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 import {
+  MOODS,
   SESSION_LIMITS,
   VIDEO_CHARACTERS,
   videoCharacterFor,
@@ -22,8 +23,8 @@ export const FACE_ID =
 
 const input = z.object({
   sessionId: z.string().min(1).max(64),
-  /** Which of the patient's faces (guarded at first, at ease once he relaxes). */
-  mood: z.enum(['guarded', 'at_ease']).nullish(),
+  /** Which of the patient's mood faces (guarded at first). */
+  mood: z.enum(MOODS).nullish(),
 });
 
 type Fetch = typeof fetch;
@@ -108,7 +109,7 @@ async function mintSimliToken(
 const checkInput = z.object({
   /** The video character's folder name, e.g. "ray-kowalski". */
   patient: z.string().max(64),
-  mood: z.enum(['guarded', 'at_ease']),
+  mood: z.enum(MOODS),
 });
 
 /**

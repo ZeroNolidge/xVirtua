@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import type {
+  Mood,
   PatientChunk,
   PatientModel,
   PatientUtterance,
@@ -65,11 +66,18 @@ export const sessionApi = {
   /** Saves an exchange GPT-Live answered on its own. */
   saveLiveExchange: httpsCallable<
     { sessionId: string; resident: string; patient: string },
-    { residentIdx: number; patientIdx: number; note: string | null; atEase?: boolean }
+    {
+      residentIdx: number;
+      patientIdx: number;
+      note: string | null;
+      /** The patient's mood now (the video face follows). */
+      mood?: Mood;
+      atEase?: boolean;
+    }
   >(functions, 'saveLiveExchange'),
   /** Test: a video avatar session for the patient (Simli). */
   avatarSession: httpsCallable<
-    { sessionId: string; mood?: 'guarded' | 'at_ease' },
+    { sessionId: string; mood?: Mood },
     { token: string }
   >(functions, 'avatarSession'),
   /** GPT-Live test mode: trades the browser's WebRTC offer for OpenAI's answer. */

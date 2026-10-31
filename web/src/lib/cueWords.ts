@@ -1,4 +1,4 @@
-import type { NonverbalCue } from '@plainspeak/shared';
+import { MOODS, type Mood, type NonverbalCue } from '@plainspeak/shared';
 
 /** A character's own word patterns (from their manifest): [pattern, cue], checked first. */
 export type CueRules = [string, NonverbalCue][];
@@ -20,7 +20,7 @@ const AT_EASE: [RegExp, NonverbalCue][] = [
 
 export function cueForWords(
   text: string,
-  mood: 'guarded' | 'at_ease',
+  mood: Mood,
   own: CueRules = [],
 ): NonverbalCue | null {
   for (const [pattern, cue] of own) {
@@ -30,6 +30,8 @@ export function cueForWords(
       // A bad pattern in a manifest: skip it.
     }
   }
-  for (const [re, cue] of mood === 'guarded' ? GUARDED : AT_EASE) if (re.test(text)) return cue;
+  // Upset and guarded share the wary patterns; at ease and happy the warm ones.
+  const wary = MOODS.indexOf(mood) <= MOODS.indexOf('guarded');
+  for (const [re, cue] of wary ? GUARDED : AT_EASE) if (re.test(text)) return cue;
   return null;
 }

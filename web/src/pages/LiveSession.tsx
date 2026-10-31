@@ -258,8 +258,9 @@ export function LiveConversation({
       .saveLiveExchange({ sessionId, resident, patient })
       .then(({ data }) => {
         r.idx = data.patientIdx;
-        // The resident earned his trust: he relaxes once he's quiet.
-        if (data.atEase) bodyRef.current.relax();
+        // The patient's mood follows the conversation (the face changes once they're quiet).
+        if (data.mood) bodyRef.current.moveTo(data.mood);
+        else if (data.atEase) bodyRef.current.relax();
         // Claude's private note steers the patient's next reply (never spoken).
         if (data.note)
           call.current?.note(

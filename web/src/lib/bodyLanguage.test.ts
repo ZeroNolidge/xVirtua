@@ -129,4 +129,34 @@ describe('body language clips', () => {
     expect(el.classList.contains('on')).toBe(true);
     expect(b.mood).toBe('at_ease');
   });
+
+  it('moves down to upset (when there is an upset face), and never skips a step', async () => {
+    const ladder: ClipManifest = {
+      ...manifest,
+      moods: { ...manifest.moods, upset: { poster: 'upset.jpg', clips: { look_away: 'u.mp4' } } },
+    };
+    const lb = new BodyLanguage(ladder, '/avatars/linda', el);
+    await lb.load((async () => ({ ok: true, blob: async () => new Blob(['x']) })) as unknown as typeof fetch);
+    const moods: string[] = [];
+    lb.onMood = (m) => {
+      moods.push(m);
+      lb.reveal();
+    };
+    lb.moveTo('upset');
+    expect(lb.mood).toBe('upset'); // no transition clip: the faces swap at once
+    expect(moods).toEqual(['upset']);
+    expect(lb.stats.shown['guarded>upset']).toBe(1);
+    // Asked for happy straight away: one step at a time, and not within the gap.
+    lb.moveTo('happy');
+    expect(lb.mood).toBe('upset');
+    lb.dispose();
+  });
+
+  it('stays put when there is no face for the next mood (Ray has no upset face)', () => {
+    const onMood = vi.fn();
+    b.onMood = onMood;
+    b.moveTo('upset');
+    expect(b.mood).toBe('guarded');
+    expect(onMood).not.toHaveBeenCalled();
+  });
 });

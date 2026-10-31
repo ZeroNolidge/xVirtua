@@ -3,7 +3,13 @@ import { Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, uploadString } from 'firebase/storage';
-import { LIVE_VOICES, VIDEO_CHARACTERS, type LiveVoice, type Program } from '@plainspeak/shared';
+import {
+  LIVE_VOICES,
+  MOODS,
+  VIDEO_CHARACTERS,
+  type LiveVoice,
+  type Program,
+} from '@plainspeak/shared';
 import { db, functions, storage } from '../../lib/firebase';
 import { useAuth } from '../../lib/auth';
 import { friendlyError } from '../../lib/api';
@@ -126,7 +132,7 @@ export function FaceCheck() {
       const wav = Uint8Array.from(atob(data.wav), (c) => c.charCodeAt(0));
       voiceEl.src = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
 
-      const body = new BodyLanguage(manifest, base, els.clip, () => avatar.activeVideo, 1500);
+      const body = new BodyLanguage(manifest, base, els.clip, () => avatar.activeVideo, 1500, 0);
       body.onEvent = (e) => note(String(e.type), e);
       body.onPrepare = async (m) => {
         const t = performance.now();
@@ -196,17 +202,26 @@ export function FaceCheck() {
       setStatus('He says a line (guarded face)…');
       await say();
       await sleep(1000);
-      await clips('guarded');
-      if (manifest.moods.at_ease) {
-        setStatus('He relaxes…');
-        note('relax');
-        body.relax();
+      await clips(manifest.start);
+      // Then every other mood they have: down the ladder and back, then up.
+      const have = (m: Mood) => !!manifest.moods[m];
+      const at = MOODS.indexOf(manifest.start);
+      const down = MOODS.slice(0, at).reverse().filter(have);
+      const higher = MOODS.slice(at + 1).filter(have);
+      const route = [...down, ...(down.length && higher.length ? [manifest.start] : []), ...higher];
+      for (const m of route) {
+        stillHere();
+        setStatus(`Mood: ${m.replace('_', ' ')}…`);
+        note('move', { to: m });
+        swappedFaces = false;
+        body.moveTo(m);
         await until(() => swappedFaces && !els.clip.classList.contains('on'), 30_000);
         await sleep(1500);
-        setStatus('He says a line (at-ease face)…');
+        if (m === manifest.start) continue; // already tested
+        setStatus(`A line (${m.replace('_', ' ')} face)…`);
         await say();
         await sleep(1000);
-        await clips('at_ease');
+        await clips(m);
       }
       stillHere();
       note('stats', { ...body.stats });

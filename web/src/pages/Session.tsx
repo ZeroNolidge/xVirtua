@@ -5,6 +5,8 @@ import {
   endOfTurnDelayMs,
   isCutIn,
   isResidentSpeech,
+  stepToward,
+  type Mood,
   type NonverbalCue,
   type PatientChunk,
   type VoiceMode,
@@ -351,8 +353,10 @@ function Conversation({
   });
   /** Resident turns so far (he only relaxes once the visit is under way). */
   const residentTurns = useRef(0);
-  /** He sounded relieved: relax once this reply is over. */
-  const relaxAfter = useRef(false);
+  /** Where his mood goes once this reply is over (null: stays). */
+  const moodAfter = useRef<Mood | null>(null);
+  /** Upset or frustrated replies in a row (two in a row: a step down). */
+  const lowReplies = useRef(0);
   // Typing needs the words on screen.
   const showWords = captions || typed;
   const lastPatient = [...bubbles].reverse().find((b) => b.who === 'patient');
@@ -596,11 +600,21 @@ function Conversation({
         if (c.t === 'meta') {
           meta = { nonverbal: c.nonverbal };
           pauseMs = c.delivery.pauseBeforeMs;
+          // His mood follows how he sounds: relieved lifts it a step (once the
+          // visit is under way); two frustrated or sad replies in a row lower it.
+          const now = bodyRef.current.mood();
+          const low = c.delivery.emotion === 'frustrated' || c.delivery.emotion === 'sad';
+          lowReplies.current = low ? lowReplies.current + 1 : 0;
           if (
+            now &&
             residentTurns.current >= 3 &&
             (c.delivery.emotion === 'relieved' || c.nonverbal.includes('smile'))
           )
-            relaxAfter.current = true;
+            moodAfter.current = stepToward(now, 'happy');
+          else if (now && lowReplies.current >= 2) {
+            moodAfter.current = stepToward(now, 'upset');
+            lowReplies.current = 0;
+          }
           run();
         } else if (c.t === 'say') {
           p.say(c.seq, c.text);
@@ -665,9 +679,9 @@ function Conversation({
         if (p.noVoice.length)
           reportError('voice.missing', new Error(`${p.noVoice.length} sentence(s) had no voice`));
         bodyRef.current.setSpeaking(false);
-        if (relaxAfter.current) {
-          relaxAfter.current = false;
-          bodyRef.current.relax();
+        if (moodAfter.current) {
+          bodyRef.current.moveTo(moodAfter.current);
+          moodAfter.current = null;
         }
         if (phaseRef.current !== 'listening') startListening();
       } catch (e) {

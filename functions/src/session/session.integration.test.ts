@@ -696,7 +696,13 @@ describe('GPT-Live voice and self-replies', () => {
       resident: 'Your blood pressure is a little high.',
       patient: 'Oh, okay. Is that bad?',
     });
-    expect(r).toEqual({ residentIdx: 1, patientIdx: 2, note: null, atEase: false });
+    expect(r).toEqual({
+      residentIdx: 1,
+      patientIdx: 2,
+      note: null,
+      mood: 'guarded',
+      atEase: false,
+    });
     const [t1, t2, s] = await Promise.all([
       db.doc(`sessions/${sessionId}/turns/1`).get(),
       db.doc(`sessions/${sessionId}/turns/2`).get(),
@@ -764,8 +770,8 @@ describe('GPT-Live steer mode', () => {
       speaker: 'patient',
       text: cue.performance.say,
     });
-    // He relaxes once the director says so, and stays relaxed.
-    expect(r.atEase).toBe(false);
+    // His mood follows the director, one step at a time.
+    expect(r.mood).toBe('guarded');
     const eased = await saveLiveExchange(
       db,
       resident,
@@ -776,6 +782,7 @@ describe('GPT-Live steer mode', () => {
       },
       director,
     );
+    expect(eased.mood).toBe('at_ease');
     expect(eased.atEase).toBe(true);
     expect((await db.doc(`sessions/${sessionId}`).get()).get('mood')).toBe('at_ease');
     const later = await saveLiveExchange(
@@ -784,6 +791,22 @@ describe('GPT-Live steer mode', () => {
       { sessionId, resident: 'Any questions?', patient: 'No.' },
       director,
     );
-    expect(later.atEase).toBe(true);
+    expect(later.mood).toBe('at_ease');
+    // Thanked again: one more step up, to happy.
+    const happier = await saveLiveExchange(
+      db,
+      resident,
+      { sessionId, resident: 'You did great today.', patient: 'Thank you so much.' },
+      director,
+    );
+    expect(happier.mood).toBe('happy');
+    // Brushed off: back down one step only.
+    const hurt = await saveLiveExchange(
+      db,
+      resident,
+      { sessionId, resident: 'We’re out of time.', patient: 'Whatever.' },
+      director,
+    );
+    expect(hurt.mood).toBe('at_ease');
   });
 });
