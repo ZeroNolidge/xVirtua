@@ -20,7 +20,10 @@
     },
     "at_ease": {
       "poster": "at-ease.jpg",
-      "clips": {}
+      "clips": {
+        "nod": "at-ease-nod.mp4",
+        "smile": "at-ease-smile.mp4"
+      }
     }
   },
   "cueWords": {
