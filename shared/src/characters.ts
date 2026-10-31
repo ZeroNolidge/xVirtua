@@ -44,6 +44,7 @@ export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
     faces: {
       guarded: '7cc2fd4a-8472-445d-bac9-b2674d2eff31',
       upset: '2fc453f8-fac3-4519-aae5-45f44ff4658e',
+      at_ease: '3acd22be-3c57-472e-ab24-2e7c1f557bd4',
     },
   },
 };

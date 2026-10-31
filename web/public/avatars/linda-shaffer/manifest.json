@@ -17,6 +17,10 @@
         "avoid_eye_contact": "upset-avoid-eye-contact.mp4",
         "look_away": "upset-look-away.mp4"
       }
+    },
+    "at_ease": {
+      "poster": "at-ease.jpg",
+      "clips": {}
     }
   },
   "cueWords": {
@@ -42,6 +46,8 @@
   },
   "transitions": {
     "guarded>upset": "guarded-to-upset.mp4",
-    "upset>guarded": "upset-to-guarded.mp4"
+    "upset>guarded": "upset-to-guarded.mp4",
+    "guarded>at_ease": "guarded-to-at-ease.mp4",
+    "at_ease>guarded": "at-ease-to-guarded.mp4"
   }
 }
