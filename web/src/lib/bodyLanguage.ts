@@ -27,6 +27,8 @@ export const CLIP_GAP_MS = 6000;
 const NEAR_END_MS = 400;
 /** How long a clip takes to fade in or out (matches .stage-clip in styles.css). */
 const FADE_MS = 400;
+/** How often a playing clip re-checks where his live head is. */
+const FOLLOW_MS = 250;
 /** A clip's first frame normally draws within a frame or two; never wait longer than this. */
 const FIRST_FRAME_WAIT_MS = 250;
 /** A mood change waits for the next face to connect, or this long regardless. */
@@ -114,6 +116,7 @@ export class BodyLanguage {
   /** His face for the next mood has connected (or we stopped waiting for it). */
   private prepared = false;
   private heads = new HeadMatcher();
+  private follow: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     private readonly manifest: ClipManifest,
@@ -159,9 +162,8 @@ export class BodyLanguage {
 
   /**
    * Fades the clip in or out. Every clip starts and ends on his resting face,
-   * but the live face sways a little. If his head is noticeably off, the clip
-   * is moved to where it is for the whole clip (no double image while both
-   * show, and the wall behind him never slides).
+   * but the live face sways a little. The clip starts where his live head is
+   * and follows it while it plays (no double image while both show).
    */
   private show(on: boolean, rest: string | null = this.poster) {
     const el = this.el;
@@ -174,7 +176,8 @@ export class BodyLanguage {
       headY: o ? +(o.y * 100).toFixed(2) : null,
       headScale: o ? +o.scale.toFixed(3) : null,
     });
-    // Fading out, the clip stays where it is: moving it would slide the wall.
+    clearInterval(this.follow);
+    // Fading out, the clip stays where it is (it already follows his head).
     if (!on) {
       el.style.transition = '';
       el.classList.remove('on');
@@ -187,6 +190,27 @@ export class BodyLanguage {
     void el.offsetWidth; // apply that position before fading in
     el.style.transition = '';
     el.classList.add('on');
+    // His live head keeps settling (he leans in while talking and eases back
+    // for a few seconds): the clip follows it, so they still match when it
+    // fades out. Only the patient comes from the clip (the soft oval), so the
+    // wall never moves. A mood change can't: it shows the whole room.
+    if (!el.classList.contains('whole')) {
+      let at = o;
+      this.follow = setInterval(() => {
+        const now = this.heads.offset(this.live(), rest);
+        if (!now) return;
+        // Smoothed, so measuring noise doesn't make it shimmer.
+        at = at
+          ? {
+              x: at.x + (now.x - at.x) * 0.5,
+              y: at.y + (now.y - at.y) * 0.5,
+              scale: at.scale + (now.scale - at.scale) * 0.5,
+            }
+          : now;
+        el.style.transition = `opacity ${FADE_MS / 1000}s ease, transform ${FOLLOW_MS / 1000}s linear`;
+        el.style.transform = `translate(${(at.x * 100).toFixed(2)}%, ${(at.y * 100).toFixed(2)}%) scale(${at.scale.toFixed(4)})`;
+      }, FOLLOW_MS);
+    }
     // A mood change shows the whole room. Simli's live picture can sit a
     // little off its own still (the whole picture, wall too), so the blend
     // glides from where the old face is to where the new face is, and the
@@ -440,6 +464,7 @@ export class BodyLanguage {
   }
 
   dispose() {
+    clearInterval(this.follow);
     clearTimeout(this.stepTimer);
     this.el.pause();
     for (const u of this.urls.values()) URL.revokeObjectURL(u);
