@@ -1,0 +1,9 @@
+{
+  "room": "linda-shaffer-room.png",
+  "moods": {
+    "guarded": { "files": ["guarded"], "at": [0.09, -0.04, 1.0] },
+    "upset": { "files": ["upset"], "at": [-0.13, -0.01, 1.0] },
+    "at_ease": { "files": ["at-ease"], "at": [1.65, -0.07, 1.007] },
+    "happy": { "files": ["happy"], "at": [-0.22, 0.02, 1.005] }
+  }
+}

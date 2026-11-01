@@ -1,0 +1,7 @@
+{
+  "room": "ray-kowalski-room.png",
+  "moods": {
+    "guarded": { "files": ["guarded"], "at": [-0.51, 0.21, 0.965] },
+    "at_ease": { "files": ["at-ease", "happy"], "at": [-0.38, 0.55, 1.01] }
+  }
+}

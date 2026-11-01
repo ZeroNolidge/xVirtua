@@ -56,6 +56,22 @@ jobs:
             esac
             echo "$name: $(du -h "$OUT/$name" | cut -f1)"
           done
+      - name: Put them on the patient's shared room
+        # When the patient has one Simli background for all their faces
+        # (scripts/avatar-sources/<patient>.room.json), every still, clip and
+        # mood-change blend is rebuilt on that room (scripts/avatar-tools/rebase.py).
+        env:
+          PATIENT: ${{ inputs.patient }}
+        run: |
+          set -euo pipefail
+          [ -f "scripts/avatar-sources/$PATIENT.room.json" ] || { echo "No shared room"; exit 0; }
+          sudo apt-get install -y -qq libgles2 libegl1 >/dev/null
+          pip install -q mediapipe==0.10.35 opencv-python-headless numpy
+          curl -sSfL -o "$RUNNER_TEMP/seg.tflite" \
+            https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite
+          FIX=""
+          [ -f "scripts/avatar-sources/$PATIENT.filter" ] && FIX="$(tr -d '\n' < "scripts/avatar-sources/$PATIENT.filter")"
+          python3 scripts/avatar-tools/rebase-all.py "$PATIENT" "$RUNNER_TEMP/seg.tflite" "$FIX"
       - name: Commit
         env:
           PATIENT: ${{ inputs.patient }}
