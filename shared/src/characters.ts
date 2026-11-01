@@ -47,6 +47,8 @@ export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
       // happy mood keeps the at-ease face and shows happier clips instead.
       happy: '8abb4a89-e5b6-42e2-ba92-717de4593d6b',
     },
+    // His own room, empty (scripts/avatar-tools/plate.py), behind every face.
+    background: 'aace53d2-49b5-48ba-b556-9df798e07c49',
   },
   'linda-shaffer': {
     name: 'Linda Shaffer',
