@@ -33,8 +33,8 @@ for key, file in (man.get('transitions') or {}).items():
     a, b = key.split('>')
     pa, pb = (f"{out}/{man['moods'][x]['poster']}" for x in (a, b))
     d = f'{tmp}/al-{a}-{b}'; os.makedirs(d, exist_ok=True)
-    run('-I', f'{tools}/align.py', pa, pb, d)
-    run('-I', f'{tools}/morph.py', pa, pb, f'{d}/Mface.npy', f'{tmp}/blend.mp4', '2')
+    run(f'{tools}/align.py', pa, pb, d)
+    run(f'{tools}/morph.py', pa, pb, f'{d}/Mface.npy', f'{tmp}/blend.mp4', '2')
     # The blend moves the whole picture with her face; put her back on the room.
     run(f'{tools}/rebase.py', model, room, f'{tmp}/blend.mp4', f'{out}/{file}', '0', '0', '1')
     print('blend', file, flush=True)
