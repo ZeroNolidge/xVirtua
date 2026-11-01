@@ -116,6 +116,11 @@ export class PatientAvatar {
     return this.video;
   }
 
+  /** His next face, once connected out of sight (null if none is waiting). */
+  get nextVideo(): HTMLVideoElement | null {
+    return this.pending && this.spare ? this.spare.video : null;
+  }
+
   /** Where Simli plays the voice now (it changes when switching faces). */
   get activeAudio(): HTMLAudioElement {
     return this.audio;

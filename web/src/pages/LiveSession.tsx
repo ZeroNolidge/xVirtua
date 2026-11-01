@@ -145,6 +145,7 @@ export function LiveConversation({
     everReady: faceEverReady,
     restart: restartFace,
     video: faceVideo,
+    nextVideo: faceNextVideo,
     prepare: prepareFace,
     commit: commitFace,
     instance: faceInstance,
@@ -155,6 +156,7 @@ export function LiveConversation({
     ready: faceReady,
     restart: (m) => restartFace(m),
     video: faceVideo,
+    nextVideo: faceNextVideo,
     prepare: prepareFace,
     commit: commitFace,
   });

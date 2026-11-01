@@ -134,6 +134,7 @@ export function FaceCheck() {
 
       const body = new BodyLanguage(manifest, base, els.clip, () => avatar.activeVideo, 1500, 0);
       body.onEvent = (e) => note(String(e.type), e);
+      body.nextLive = () => avatar.nextVideo;
       body.onPrepare = async (m) => {
         const t = performance.now();
         const ok = await avatar.prepareFace(

@@ -68,6 +68,13 @@ export interface BodyStats {
   relaxed: boolean;
 }
 
+/** Where to put a clip so it meets the live head (nothing if it's close enough). */
+function place(o: { x: number; y: number; scale: number } | null) {
+  return o && (Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT || Math.abs(o.scale - 1) > MIN_ZOOM)
+    ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%) scale(${o.scale.toFixed(4)})`
+    : 'none';
+}
+
 export class BodyLanguage {
   mood: Mood;
   readonly stats: BodyStats = { shown: {}, skipped: {}, stillWaitMs: 0, relaxed: false };
@@ -99,6 +106,11 @@ export class BodyLanguage {
    * once it has). The transition clip holds on its last frame until then.
    */
   onMood: ((m: Mood) => void) | null = null;
+  /**
+   * His face for the next mood, connected out of sight (see onPrepare). A
+   * mood change starts where his live face is and ends where that one is.
+   */
+  nextLive: () => HTMLVideoElement | null = () => null;
   /** His face for the next mood has connected (or we stopped waiting for it). */
   private prepared = false;
   private heads = new HeadMatcher();
@@ -170,17 +182,27 @@ export class BodyLanguage {
     }
     // Fading in: if his live head is noticeably off his resting spot, the clip
     // starts there and stays there (no glide back, which also slid the wall).
-    // A mood change shows the whole room, so moving it would move the wall: never.
-    const at =
-      !el.classList.contains('whole') &&
-      o && (Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT || Math.abs(o.scale - 1) > MIN_ZOOM)
-        ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%) scale(${o.scale.toFixed(4)})`
-        : '';
     el.style.transition = 'none';
-    el.style.transform = at;
+    el.style.transform = place(o);
     void el.offsetWidth; // apply that position before fading in
     el.style.transition = '';
     el.classList.add('on');
+    // A mood change shows the whole room. Simli's live picture can sit a
+    // little off its own still (the whole picture, wall too), so the blend
+    // glides from where the old face is to where the new face is, and the
+    // swap at its end doesn't jump.
+    if (el.classList.contains('whole')) {
+      const end = this.heads.offset(this.nextLive(), this.poster);
+      this.onEvent?.({
+        type: 'glide',
+        toX: end ? +(end.x * 100).toFixed(2) : null,
+        toY: end ? +(end.y * 100).toFixed(2) : null,
+        toScale: end ? +end.scale.toFixed(3) : null,
+      });
+      const secs = Number.isFinite(el.duration) ? el.duration : 2;
+      el.style.transition = `opacity ${FADE_MS / 1000}s ease, transform ${secs}s ease-in-out`;
+      el.style.transform = place(end);
+    }
   }
 
   /**

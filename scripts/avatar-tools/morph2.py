@@ -1,6 +1,8 @@
 # Like morph.py, but the room is lined up separately from the patient (for faces whose scene was re-drawn at a different zoom).
 # Usage: python3 -I morph2.py start.png end.png Mface.npy Mbg.npy out.mp4  (Mface from align.py, Mbg from bgfit.py)
-import cv2, numpy as np, sys, subprocess
+# Set FIX to the patient's touch-up (scripts/avatar-sources/<patient>.filter) so it
+# matches the live face, like the clips: FIX=$(cat ...filter) python3 -I ...
+import cv2, numpy as np, sys, subprocess, os
 a,b=cv2.imread(sys.argv[1]),cv2.imread(sys.argv[2]); Mf=np.load(sys.argv[3]).copy(); Mb=np.load(sys.argv[4]).copy(); out=sys.argv[5]
 size,fps=768,24; k=size/a.shape[1]
 a=cv2.resize(a,(size,size),interpolation=cv2.INTER_AREA); b=cv2.resize(b,(size,size),interpolation=cv2.INTER_AREA)
@@ -21,7 +23,7 @@ def room(img,mask):
     w=cv2.GaussianBlur(big.astype(np.float32)/255,(0,0),6)[...,None]
     return (img*(1-w)+f*w).astype(np.uint8)
 ra=room(a,hard); rb=room(b,cv2.warpAffine(hard,inv(Mf).astype(np.float32),(size,size)))
-p=subprocess.Popen(['ffmpeg','-loglevel','error','-y','-f','rawvideo','-pix_fmt','bgr24','-s',f'{size}x{size}','-r',str(fps),'-i','-','-c:v','libx264','-preset','slow','-crf','20','-pix_fmt','yuv420p','-an','-movflags','+faststart',out],stdin=subprocess.PIPE)
+p=subprocess.Popen(['ffmpeg','-loglevel','error','-y','-f','rawvideo','-pix_fmt','bgr24','-s',f'{size}x{size}','-r',str(fps),'-i','-',*(['-vf', os.environ['FIX'] + ',format=yuv420p'] if os.environ.get('FIX') else []), '-c:v','libx264','-preset','slow','-crf','20','-pix_fmt','yuv420p','-an','-movflags','+faststart',out],stdin=subprocess.PIPE)
 def frame(M,s,a=a,b=b):
     Mi=inv(M)
     fa=cv2.warpAffine(a,(I*(1-s)+Mi*s).astype(np.float32),(size,size),flags=cv2.INTER_CUBIC,borderMode=cv2.BORDER_REPLICATE)

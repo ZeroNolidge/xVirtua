@@ -70,6 +70,8 @@ export function useAvatar(sessionId: string) {
     stop: () => void avatar.current?.stop(),
     /** The face showing now (it changes when he switches mood). */
     video: () => avatar.current?.activeVideo ?? null,
+    /** His next face, connected out of sight and waiting to take over. */
+    nextVideo: () => avatar.current?.nextVideo ?? null,
     /** Connects his face for another mood in the background (the current one keeps going). */
     prepare: (mood: Mood) =>
       avatar.current?.prepareFace(tokenFor(mood)) ?? Promise.resolve(false),

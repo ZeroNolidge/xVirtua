@@ -335,6 +335,7 @@ function Conversation({
     everReady: faceEverReady,
     restart: restartFace,
     video: faceVideo,
+    nextVideo: faceNextVideo,
     prepare: prepareFace,
     commit: commitFace,
   } = useAvatar(sessionId);
@@ -344,6 +345,7 @@ function Conversation({
     ready: faceReady,
     restart: (m) => restartFace(m),
     video: faceVideo,
+    nextVideo: faceNextVideo,
     prepare: prepareFace,
     commit: commitFace,
   });

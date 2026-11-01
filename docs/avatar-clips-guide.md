@@ -49,6 +49,18 @@ that it opened the mouth (8 of 8 tries, even with an edited end frame). Instead:
    makes a 2-second blend from one face to the other with the faces kept lined
    up, so the expression eases over and the mouth stays shut. It starts and ends
    exactly on the two faces. Copy it into the patient folder by hand.
+   Run it with `FIX="$(cat scripts/avatar-sources/<patient>.filter)"` set, so it
+   gets the same touch-up as the clips (Simli's downloaded video is a little
+   darker and softer than the live face; without it the picture dims during
+   the blend).
+3. If Simli re-drew the new face's room at a different zoom (the wall
+   equipment is bigger or smaller), use `bgfit.py` and `morph2.py` instead:
+   they line up the room and the patient separately, so the wall doesn't
+   double up halfway.
+
+In the app, the blend glides from where the old live face sits to where the
+new one sits (it's connected out of sight first), since Simli's live picture
+can sit about 1% off its own download.
 
 ## 2. The clips
 

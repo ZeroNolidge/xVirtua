@@ -23,6 +23,8 @@ export function useBodyLanguage(
     restart(mood: Mood): Promise<void> | void;
     /** The live face showing now. */
     video?: () => HTMLVideoElement | null;
+    /** His next face, connected out of sight. */
+    nextVideo?: () => HTMLVideoElement | null;
   },
 ) {
   const body = useRef<BodyLanguage | null>(null);
@@ -32,11 +34,13 @@ export function useBodyLanguage(
   const prepare = useRef(face.prepare);
   const commit = useRef(face.commit);
   const liveVideo = useRef(face.video);
+  const nextVideo = useRef(face.nextVideo);
   useEffect(() => {
     restart.current = face.restart;
     prepare.current = face.prepare;
     commit.current = face.commit;
     liveVideo.current = face.video;
+    nextVideo.current = face.nextVideo;
   });
 
   useEffect(() => {
@@ -55,6 +59,7 @@ export function useBodyLanguage(
         el,
         () => liveVideo.current?.() ?? stage.current?.video ?? null,
       );
+      b.nextLive = () => nextVideo.current?.() ?? null;
       b.onPrepare = (m) => prepare.current?.(m) ?? Promise.resolve(false);
       b.onMood = (m) => {
         setPoster(b.poster);
