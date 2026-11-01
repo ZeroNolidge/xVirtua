@@ -15,7 +15,13 @@ from it, so get it right first.
   - **A truly neutral face: no smile at all.** Lips relaxed and closed, mouth corners level, cheeks not lifted, no smile lines at the eyes. For a worried patient, add only a faint hint of concern (eyebrows very slightly lifted in the middle). Every clip ends on this face, so even a slight smile makes every cue end in a smile. With Ray, a frown that relaxed into his slightly smiling portrait read as if he were laughing to himself.
   - If a portrait you like has a slight smile, don't start over: edit it with Nano Banana Pro (image-to-image, 2K, about 40 credits), asking it to change only the expression and keep everything else the same.
   - Head and upper chest centred, a little space above the head, hands just visible (resting on knees) so fidgeting can show.
-  - Soft, even light on the face, no harsh shadows; softly blurred clinic background.
+  - Soft, even light on the face, no harsh shadows.
+  - **A plain background:** one muted wall colour, softly out of focus, with
+    nothing behind the head or shoulders (no chair, wall equipment, window or
+    cabinet). Simli redraws the room when it creates each mood's face (Ray lost
+    his chair; Linda's room came back zoomed out), and a busy room then fades
+    from one version to the other at every mood change. A plain wall looks the
+    same however Simli redraws it.
   - "Realistic and unretouched, documentary style. No text, no logos."
 - **Describe the person in detail:** age, background, job, build, hair, clothes (e.g. "58-year-old long-haul truck driver, light stubble, short graying brown hair, faded navy work jacket over a gray t-shirt").
 - **Check before using:** eyes, teeth and hands look normal; nothing odd in the background.
