@@ -16,6 +16,13 @@
         "nod": "at-ease-nod.mp4",
         "smile": "at-ease-smile.mp4"
       }
+    },
+    "happy": {
+      "poster": "at-ease.jpg",
+      "clips": {
+        "smile": "happy-smile.mp4",
+        "nod": "at-ease-nod.mp4"
+      }
     }
   },
   "transitions": {
