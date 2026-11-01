@@ -12,3 +12,4 @@ functions/.runtime.local
 .firebase/
 .DS_Store
 *.tsbuildinfo
+__pycache__/
