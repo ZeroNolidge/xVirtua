@@ -58,6 +58,8 @@ export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
       at_ease: '3acd22be-3c57-472e-ab24-2e7c1f557bd4',
       happy: '8ace120b-34e2-4201-b44b-442672c143ef',
     },
+    // Her own room, empty (scripts/avatar-tools/plate.py), behind every face.
+    background: '1eca0d69-fa28-488f-b8f4-51b73c469b8f',
   },
 };
 
