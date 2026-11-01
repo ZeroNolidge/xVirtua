@@ -29,7 +29,7 @@ def frame(f):
     if prev is not None: a = 0.6 * a + 0.4 * prev              # steady edges from frame to frame
     prev = a
     fw = cv2.warpAffine(f.astype(np.float32), T, (N, N), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-    aw = cv2.warpAffine(a, T, (N, N))[..., None]
+    aw = cv2.warpAffine(a, T, (N, N), borderMode=cv2.BORDER_REPLICATE)[..., None]  # body runs off the bottom
     return np.clip(fw * aw + room * (1 - aw), 0, 255).astype(np.uint8)
 if src.endswith(('.jpg', '.png')):
     cv2.imwrite(out, frame(cv2.resize(cv2.imread(src), (N, N))), [cv2.IMWRITE_JPEG_QUALITY, 92])
