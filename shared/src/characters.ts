@@ -22,6 +22,12 @@ export interface VideoCharacter {
   name: string;
   /** Simli face for each mood (guarded is the start; others are optional). */
   faces: { guarded: string } & Partial<Record<Mood, string>>;
+  /**
+   * Simli background shown behind every one of their faces (their own room,
+   * empty), so the room never changes between moods. Simli redraws the room
+   * when it creates each face; this puts the original back.
+   */
+  background?: string;
 }
 
 /** Folder name for a patient: "Ray Kowalski" → "ray-kowalski". */

@@ -61,7 +61,13 @@ export async function avatarSession(
     throw new HttpsError('failed-precondition', 'No avatar face is chosen for this patient.');
 
   await consumeQuota(db, caller.uid, 'avatarSessions');
-  const token = await mintSimliToken(faceId, apiKey, doFetch, SESSION_LIMITS.maxMinutes * 60);
+  const token = await mintSimliToken(
+    faceId,
+    apiKey,
+    doFetch,
+    SESSION_LIMITS.maxMinutes * 60,
+    character?.background,
+  );
   await ref.update({ avatarSessions: FieldValue.arrayUnion({ at: Date.now(), faceId }) });
   return { token };
 }
@@ -72,6 +78,8 @@ async function mintSimliToken(
   apiKey: string,
   doFetch: Fetch,
   maxSessionLength: number,
+  /** Their room, the same behind every mood's face (a Simli background ID). */
+  background?: string,
 ): Promise<string> {
   const res = await doFetch(SIMLI_TOKEN_URL, {
     method: 'POST',
@@ -83,6 +91,7 @@ async function mintSimliToken(
       maxSessionLength,
       // Paused or left open: Simli hangs up (and stops billing) by itself.
       maxIdleTime: 120,
+      ...(background && FACE_ID.test(background) ? { background_id: background } : {}),
     }),
   }).catch((e: unknown) => {
     console.error('Simli unreachable', e);
@@ -143,5 +152,8 @@ export async function faceCheckToken(
     );
   await consumeQuota(db, caller.uid, 'avatarSessions');
   // A check takes about a minute; Simli hangs up after 3 regardless.
-  return { token: await mintSimliToken(faceId, apiKey, doFetch, 180), faceId };
+  return {
+    token: await mintSimliToken(faceId, apiKey, doFetch, 180, character.background),
+    faceId,
+  };
 }

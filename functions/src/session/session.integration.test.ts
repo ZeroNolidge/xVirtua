@@ -495,6 +495,8 @@ describe('GPT-Live test mode', () => {
     await avatarSession(db, resident, { sessionId, mood: 'at_ease' }, 'sk-simli', simli);
     expect(JSON.parse(bodies[0]!)).toMatchObject({ faceId: ray.faces.guarded });
     expect(JSON.parse(bodies[1]!)).toMatchObject({ faceId: ray.faces.at_ease });
+    // His own room behind every face (when he has one).
+    expect(JSON.parse(bodies[1]!).background_id).toBe(ray.background);
     await db.doc('programs/irmc').set({ avatarOn: false }, { merge: true });
   });
 
