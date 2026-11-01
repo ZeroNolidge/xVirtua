@@ -27,7 +27,10 @@
     },
     "happy": {
       "poster": "happy.jpg",
-      "clips": {}
+      "clips": {
+        "nod": "happy-nod.mp4",
+        "smile": "happy-smile.mp4"
+      }
     }
   },
   "cueWords": {
