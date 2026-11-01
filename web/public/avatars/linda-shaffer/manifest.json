@@ -24,6 +24,10 @@
         "nod": "at-ease-nod.mp4",
         "smile": "at-ease-smile.mp4"
       }
+    },
+    "happy": {
+      "poster": "happy.jpg",
+      "clips": {}
     }
   },
   "cueWords": {
@@ -51,6 +55,8 @@
     "guarded>upset": "guarded-to-upset.mp4",
     "upset>guarded": "upset-to-guarded.mp4",
     "guarded>at_ease": "guarded-to-at-ease.mp4",
-    "at_ease>guarded": "at-ease-to-guarded.mp4"
+    "at_ease>guarded": "at-ease-to-guarded.mp4",
+    "at_ease>happy": "at-ease-to-happy.mp4",
+    "happy>at_ease": "happy-to-at-ease.mp4"
   }
 }
