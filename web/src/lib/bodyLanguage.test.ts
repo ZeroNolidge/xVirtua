@@ -161,6 +161,23 @@ describe('body language clips', () => {
     lb.dispose();
   });
 
+  it('a mood on the same face just switches clips (no new face to connect)', () => {
+    const same: ClipManifest = {
+      ...manifest,
+      moods: { ...manifest.moods, happy: { poster: 'at-ease.jpg', clips: { smile: 'big.mp4' } } },
+    };
+    const sb = new BodyLanguage({ ...same, start: 'at_ease' }, '/avatars/ray', el);
+    const onPrepare = vi.fn(async () => true);
+    const onMood = vi.fn();
+    sb.onPrepare = onPrepare;
+    sb.onMood = onMood;
+    sb.moveTo('happy');
+    expect(sb.mood).toBe('happy');
+    expect(onPrepare).not.toHaveBeenCalled();
+    expect(onMood).not.toHaveBeenCalled();
+    sb.dispose();
+  });
+
   it('stays put when there is no face for the next mood (Ray has no upset face)', () => {
     const onMood = vi.fn();
     b.onMood = onMood;

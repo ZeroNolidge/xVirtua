@@ -381,7 +381,7 @@ export class BodyLanguage {
     this.planStep();
   }
 
-  private planStep() {
+  private planStep(): void {
     if (this.next || !this.target || this.target === this.mood) return;
     const n = stepToward(this.mood, this.target);
     // No face for that mood (e.g. Ray has no upset face): stay where they are.
@@ -394,6 +394,17 @@ export class BodyLanguage {
       clearTimeout(this.stepTimer);
       this.stepTimer = setTimeout(() => this.planStep(), wait);
       return;
+    }
+    // The same face (Ray's happy mood is his at-ease face with happier clips):
+    // nothing to connect or swap, only his clips change.
+    if (this.manifest.moods[n]?.poster === this.manifest.moods[this.mood]?.poster) {
+      const key = `${this.mood}>${n}`;
+      this.stats.shown[key] = (this.stats.shown[key] ?? 0) + 1;
+      this.onEvent?.({ type: 'mood', from: this.mood, to: n, clip: false, sameFace: true });
+      this.mood = n;
+      this.lastMoodAt = performance.now();
+      if (MOODS.indexOf(n) >= MOODS.indexOf('at_ease')) this.stats.relaxed = true;
+      return this.planStep();
     }
     this.next = n;
     this.prepared = false;

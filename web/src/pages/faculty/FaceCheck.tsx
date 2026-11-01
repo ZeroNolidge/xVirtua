@@ -215,8 +215,14 @@ export function FaceCheck() {
         setStatus(`Mood: ${m.replace('_', ' ')}…`);
         note('move', { to: m });
         swappedFaces = false;
+        const from = body.mood;
+        // Some moods share a face (Ray's happy is his at-ease face): no swap then.
+        const sameFace = manifest.moods[m]?.poster === manifest.moods[from]?.poster;
         body.moveTo(m);
-        await until(() => swappedFaces && !els.clip.classList.contains('on'), 30_000);
+        await until(
+          () => (sameFace ? body.mood === m : swappedFaces) && !els.clip.classList.contains('on'),
+          30_000,
+        );
         await sleep(1500);
         if (m === manifest.start) continue; // already tested
         setStatus(`A line (${m.replace('_', ' ')} face)…`);
