@@ -121,3 +121,17 @@ can sit about 1% off its own download.
 If a clip fails one check, change only the rule that covers it and make 2 new
 versions. If the same model fails twice on the same check, try another model
 (Kling 3.0 first, then Veo 3.1, which only makes 16:9 or 9:16, not square).
+
+## Shared room (Simli background)
+
+Simli redraws the room for every face it creates, so each character gets one
+Simli background (their own room, empty) shown behind all their faces:
+
+1. `scripts/avatar-tools/plate.py` makes the empty room from their Simli still
+   plus an AI-emptied copy. Upload it under Simli → Your Faces → Backgrounds and
+   put its ID in `background` in `shared/src/characters.ts`.
+2. Run a face check, then `scripts/avatar-tools/measure.py` to find where each
+   mood's live face sits relative to its still.
+3. Put the room and those numbers in `scripts/avatar-sources/<patient>.room.json`.
+   The asset workflow then rebuilds every still, clip and mood-change blend on
+   that room (`rebase.py`, `rebase-all.py`), so nothing in the room doubles up.
