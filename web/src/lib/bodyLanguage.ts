@@ -35,8 +35,12 @@ const FIRST_FRAME_WAIT_MS = 250;
 const PREPARE_WAIT_MS = 8000;
 /** Mood changes at most this often, so the face doesn't flicker between moods. */
 export const MOOD_GAP_MS = 15000;
-/** A clip waits at most this long for his live head to be still and near its resting spot. */
-const STILL_WAIT_MS = 1500;
+/**
+ * A clip waits at most this long for his live head to be still and near its
+ * resting spot. Simli leans the face in while talking and takes about 3 s to
+ * settle back; a clip started sooner has to zoom with it, which shows.
+ */
+const STILL_WAIT_MS = 5000;
 /** "Near its resting spot" and "still", in head-match grid pixels (about 1% and 0.4%). */
 const NEAR_PX = 0.45;
 const STEADY_PX = 0.3;
