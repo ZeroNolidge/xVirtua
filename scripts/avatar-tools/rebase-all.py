@@ -1,7 +1,7 @@
 # Rebuilds a patient's stills, clips and mood-change blends on their shared
 # room (scripts/avatar-sources/<patient>.room.json): see rebase.py.
 # Usage: python3 rebase-all.py PATIENT MODEL [FIX]   (run from the repo root)
-import json, os, subprocess, sys, tempfile
+import json, os, shutil, subprocess, sys, tempfile
 patient, model = sys.argv[1], sys.argv[2]
 fix = sys.argv[3] if len(sys.argv) > 3 else ''
 cfg = json.load(open(f'scripts/avatar-sources/{patient}.room.json'))
@@ -26,7 +26,7 @@ for mood, m in cfg['moods'].items():
             src = t
         dst = f'{tmp}/out-{name}'
         run(f'{tools}/rebase.py', model, room, src, dst, dx, dy, sc)
-        os.replace(dst, f'{out}/{name}')
+        shutil.move(dst, f'{out}/{name}')
         print('rebased', name, flush=True)
 # Mood-change blends, from the rebuilt stills (same room, so only the patient changes).
 for key, file in (man.get('transitions') or {}).items():
