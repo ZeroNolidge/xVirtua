@@ -25,7 +25,9 @@ for mood, m in cfg['moods'].items():
             subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-vf', fix, '-q:v', '2', t], check=True)
             src = t
         dst = f'{tmp}/out-{name}'
-        run(f'{tools}/rebase.py', model, room, src, dst, dx, dy, sc)
+        # Colour shift to match the live face (stills and clips differ a little).
+        tint = m.get('tint_still' if name.endswith('.jpg') else 'tint')
+        run(f'{tools}/rebase.py', model, room, src, dst, dx, dy, sc, *(str(v) for v in tint or []))
         shutil.move(dst, f'{out}/{name}')
         print('rebased', name, flush=True)
 # Mood-change blends, from the rebuilt stills (same room, so only the patient changes).

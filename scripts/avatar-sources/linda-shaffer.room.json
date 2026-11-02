@@ -1,9 +1,30 @@
 {
   "room": "linda-shaffer-room.png",
   "moods": {
-    "guarded": { "files": ["guarded"], "at": [0.09, -0.04, 1.0] },
-    "upset": { "files": ["upset"], "at": [-0.13, -0.01, 1.0] },
-    "at_ease": { "files": ["at-ease"], "at": [1.65, -0.07, 1.007] },
-    "happy": { "files": ["happy"], "at": [-0.22, 0.02, 1.005] }
-  }
+    "guarded": {
+      "files": ["guarded"],
+      "at": [0.09, -0.04, 1.0],
+      "tint": [6.6, 2.4, 3.1],
+      "tint_still": [3.3, 3.3, 3.1]
+    },
+    "upset": {
+      "files": ["upset"],
+      "at": [-0.13, -0.01, 1.0],
+      "tint": [7, 2.4, 3.2],
+      "tint_still": [3.6, 3.3, 3.1]
+    },
+    "at_ease": {
+      "files": ["at-ease"],
+      "at": [1.65, -0.07, 1.007],
+      "tint": [8.7, 2.4, 3.2],
+      "tint_still": [5.4, 3.3, 3.2]
+    },
+    "happy": {
+      "files": ["happy"],
+      "at": [-0.22, 0.02, 1.005],
+      "tint": [7.9, 2.2, 3.4],
+      "tint_still": [4.5, 3.2, 3.3]
+    }
+  },
+  "_tint": "Colour shift (OpenCV Lab: lightness, red-green, yellow-blue) so the patient matches the live face; measured from a face check."
 }
