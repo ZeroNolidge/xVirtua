@@ -4,21 +4,21 @@
     "guarded": {
       "files": ["guarded"],
       "at": [-0.51, 0.21, 0.965],
-      "tint": [4, 3.3, -1.1],
-      "tint_still": [0, 4.3, -1.1]
+      "tint": [-1.2, 0.8, -3.9],
+      "tint_still": [1.1, 2.4, -5.5]
     },
     "at_ease": {
       "files": ["at-ease"],
       "at": [-0.38, 0.55, 1.01],
-      "tint": [3.1, 3.3, -0.6],
-      "tint_still": [-0.9, 4.3, -0.5]
+      "tint": [0.4, 0.6, -4.1],
+      "tint_still": [0.2, 1.0, -6.9]
     },
     "happy": {
       "files": ["happy"],
       "at": [-0.13, 0.04, 1.01],
-      "tint": [7.8, 2.8, 3.5],
-      "tint_still": [3.9, 3.9, 3.7]
+      "tint": [6.0, 0.3, 0.0],
+      "tint_still": [3.9, 1.3, -2.0]
     }
   },
-  "_tint": "Colour shift (OpenCV Lab: lightness, red-green, yellow-blue) so the patient matches the live face; measured from a face check."
+  "_tint": "Colour shift (OpenCV Lab: lightness, red-green, yellow-blue) so the patient matches the live face. Measured in a face check recording: clip (0.5 s after it fades in) minus the live face just before."
 }
