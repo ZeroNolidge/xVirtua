@@ -43,9 +43,7 @@ export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
     faces: {
       guarded: '04342b6e-bd80-4125-a926-761c68025194',
       at_ease: '8abb4a89-e5b6-42e2-ba92-717de4593d6b',
-      // Simli redraws his room for every new face (it dropped the chair), so his
-      // happy mood keeps the at-ease face and shows happier clips instead.
-      happy: '8abb4a89-e5b6-42e2-ba92-717de4593d6b',
+      happy: 'e8f9d24f-f918-4e97-bb91-b874da8a50bd',
     },
     // His own room, empty (scripts/avatar-tools/plate.py), behind every face.
     background: 'aace53d2-49b5-48ba-b556-9df798e07c49',

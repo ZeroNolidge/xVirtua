@@ -18,15 +18,14 @@
       }
     },
     "happy": {
-      "poster": "at-ease.jpg",
-      "clips": {
-        "smile": "happy-smile.mp4",
-        "nod": "at-ease-nod.mp4"
-      }
+      "poster": "happy.jpg",
+      "clips": {}
     }
   },
   "transitions": {
-    "guarded>at_ease": "guarded-to-at-ease.mp4"
+    "guarded>at_ease": "guarded-to-at-ease.mp4",
+    "at_ease>happy": "at-ease-to-happy.mp4",
+    "happy>at_ease": "happy-to-at-ease.mp4"
   },
   "cueWords": {
     "guarded": [
