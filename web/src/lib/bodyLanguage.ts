@@ -21,12 +21,19 @@ export interface ClipManifest {
 /** Folder name for a patient's clips: "Ray Kowalski" → "ray-kowalski". */
 export const patientSlug = characterSlug;
 
-/** At most one body-language clip this often (so it never looks like a loop). */
-export const CLIP_GAP_MS = 6000;
+/**
+ * At most one body-language clip this often: rarer clips at the moments that
+ * matter read better, and mean fewer handovers to and from the live face.
+ */
+export const CLIP_GAP_MS = 12000;
 /** Ray may start talking this long before a clip ends (it fades into his live face). */
-const NEAR_END_MS = 400;
-/** How long a clip takes to fade in or out (matches .stage-clip in styles.css). */
-const FADE_MS = 400;
+const NEAR_END_MS = 800;
+/**
+ * How long a clip takes to fade in or out (matches .stage-clip in styles.css).
+ * Slow enough that small differences from the live face (its own head
+ * movements) blend away rather than jump.
+ */
+const FADE_MS = 800;
 /** How often a playing clip re-checks where his live head is. */
 const FOLLOW_MS = 250;
 /** A clip's first frame normally draws within a frame or two; never wait longer than this. */
