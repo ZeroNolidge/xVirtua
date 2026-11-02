@@ -19,7 +19,10 @@
     },
     "happy": {
       "poster": "happy.jpg",
-      "clips": {}
+      "clips": {
+        "smile": "happy-smile.mp4",
+        "nod": "happy-nod.mp4"
+      }
     }
   },
   "transitions": {
