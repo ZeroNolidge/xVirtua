@@ -1,12 +1,12 @@
 {
-  "avatar_ready_s": 2.46,
+  "avatar_ready_s": 3.26,
   "voice_s": 4.59,
-  "first_voiced_frame_after_s": 1.122,
-  "frames": 183,
-  "frames_per_s": 21.3,
+  "first_voiced_frame_after_s": 1.897,
+  "frames": 77,
+  "frames_per_s": 8.8,
   "frame_size": [
     1080,
-    1920
+    1080
   ],
   "cpu_cores": 4
 }
