@@ -13,6 +13,9 @@ import { RETENTION_NOTICE } from '@plainspeak/shared';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
 import { ProgressDashboard } from '../components/ProgressDashboard';
+import { PatientBadge } from '../components/PatientBadge';
+import { usePatientProgress } from '../lib/patientProgress';
+import { useScenarioList } from '../lib/scenarios';
 
 interface Row {
   id: string;
@@ -49,6 +52,7 @@ export function Progress() {
   return (
     <section>
       <h1>Your progress</h1>
+      <PatientsDone />
       <ProgressDashboard uid={user?.uid} />
       <div className="card">
         <h2>Your history</h2>
@@ -95,5 +99,40 @@ export function Progress() {
         </p>
       </div>
     </section>
+  );
+}
+
+/** How many patients they've completed, and each one's status. */
+function PatientsDone() {
+  const { claims, user } = useAuth();
+  const rows = useScenarioList(claims)?.filter((s) => s.status === 'active');
+  const progress = usePatientProgress(user?.uid);
+  if (!rows?.length || !progress) return null;
+  const done = rows.filter((s) => ['completed', 'mastered'].includes(progress[s.id]?.status ?? ''));
+  const mastered = rows.filter((s) => progress[s.id]?.status === 'mastered');
+  return (
+    <div className="card">
+      <h2>Your patients</h2>
+      <p>
+        <strong>
+          {done.length} of {rows.length}
+        </strong>{' '}
+        completed{mastered.length ? `, ${mastered.length} mastered` : ''}.
+      </p>
+      <ul className="tight">
+        {rows.map((s) => (
+          <li key={s.id} className="scenario-top">
+            <Link to={`/scenario/${s.id}`}>
+              {s.patientName}: {s.title}
+            </Link>
+            <PatientBadge status={progress[s.id]?.status} />
+          </li>
+        ))}
+      </ul>
+      <p className="small muted">
+        Complete a patient with Solid or better in all four areas, and by picking up on what matters
+        most to them, in one conversation.
+      </p>
+    </div>
   );
 }

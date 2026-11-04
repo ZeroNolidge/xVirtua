@@ -4,6 +4,15 @@ import { FieldValue, type Firestore, type Timestamp } from 'firebase-admin/fires
 import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 import {
+  bestStatus,
+  completionOf,
+  KEY_MOMENTS,
+  METRICS,
+  shortOf,
+  statusRank,
+  type Band,
+  type Metric,
+  type PatientStatus,
   createJargonMatcher,
   DEFAULT_SCORING_WEIGHTS,
   overallScore,
@@ -661,7 +670,45 @@ export async function scoreSession(
     };
     const feedback = toResidentFeedback(full, prev);
 
+    // Their progress with this patient: completed or mastered, or what's left.
+    const keyIds = sc.script.keyCueIds ?? KEY_MOMENTS[s.scenarioId] ?? [];
+    const keyMoments = keyIds.map((id) => {
+      const r = full.metrics.cue.cueResults.find((c) => c.cueId === id);
+      // Never came up: not named (it would give the patient's worry away).
+      return r ? { cue: r.cue, addressed: r.addressed } : { cue: null, addressed: false };
+    });
+    const bands = Object.fromEntries(METRICS.map((m) => [m, feedback.areas[m].band])) as Record<
+      Metric,
+      Band
+    >;
+    const reached = completionOf(bands, keyMoments);
+    const progressRef = db.doc(`userProgress/${s.uid}`);
+    const before = (await progressRef.get()).get(`scenarios.${s.scenarioId}.status`) as
+      PatientStatus | undefined;
+    const improved = statusRank(reached ?? 'started') > statusRank(before);
+    feedback.completion = {
+      status: reached,
+      short: shortOf(bands),
+      keyMoments,
+      newlyReached: !!reached && improved,
+    };
+
     const batch = db.batch();
+    batch.set(
+      progressRef,
+      {
+        programId: s.programId,
+        scenarios: {
+          [s.scenarioId]: {
+            status: bestStatus(before, reached ?? 'started'),
+            ...(improved ? { sessionId } : {}),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+        },
+        ...(reached && improved ? { scenariosCompleted: FieldValue.arrayUnion(s.scenarioId) } : {}),
+      },
+      { merge: true },
+    );
     batch.set(ref.collection('scores').doc(RUBRIC_VERSION), full);
     batch.set(feedbackRef, feedback);
     batch.update(ref, {

@@ -86,6 +86,12 @@ describe('scoreSession', () => {
       feedbackBand: fb.overall!.band,
     });
     expect(s.overall).toBeUndefined();
+    // Their progress with this patient is kept (the best they've reached).
+    expect(fb.completion).toBeDefined();
+    const progress = (await db.doc(`userProgress/${resident.uid}`).get()).data()!;
+    expect(['started', 'completed', 'mastered']).toContain(
+      progress.scenarios[s.scenarioId as string].status,
+    );
     const full = (await db.doc(`sessions/${sessionId}/scores/${RUBRIC_VERSION}`).get()).data()!;
     expect(typeof full.overall).toBe('number');
     expect(typeof full.metrics.clarity.score).toBe('number');

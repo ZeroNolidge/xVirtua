@@ -84,6 +84,52 @@ function Area({ name, a, extra }: { name: string; a: AreaFeedback; extra?: React
  * Residents see words and trends, never numbers. The overall word is the
  * page heading (SessionDone).
  */
+/** Completing the patient: a celebration, or what's still needed. */
+function CompletionCard({
+  c,
+  patientFirstName: name,
+}: {
+  c: NonNullable<ResidentFeedback['completion']>;
+  patientFirstName: string;
+}) {
+  if (c.status && c.newlyReached)
+    return (
+      <div className="card completion done" role="status">
+        <h2>{c.status === 'mastered' ? `★ You mastered ${name}!` : `✓ You completed ${name}!`}</h2>
+        <p>
+          {c.status === 'mastered'
+            ? 'Strong in every area, and you picked up on what mattered most.'
+            : 'Solid or better in every area, and you picked up on what mattered most.'}
+        </p>
+        {c.status === 'completed' && (
+          <p className="small muted">Next challenge: Strong in all four to master {name}.</p>
+        )}
+      </div>
+    );
+  if (c.status) return null; // Done before: no need to say it again.
+  const missed = c.keyMoments.filter((k) => !k.addressed);
+  return (
+    <div className="card completion">
+      <h2>To complete {name}</h2>
+      <ul className="tight">
+        {c.short.length > 0 && (
+          <li>Reach Solid in {c.short.map((m) => METRIC_LABEL[m]).join(', ')}.</li>
+        )}
+        {missed.map((k, i) =>
+          k.cue ? (
+            <li key={i}>Respond to this moment: “{k.cue}”.</li>
+          ) : (
+            <li key={i}>
+              {name} had something on their mind they didn’t get to share. Ask what worries them.
+            </li>
+          ),
+        )}
+      </ul>
+      <p className="small muted">All in the same conversation.</p>
+    </div>
+  );
+}
+
 export function ScoreView({
   feedback,
   patientFirstName,
@@ -120,6 +166,10 @@ export function ScoreView({
         <p className="overall-word" aria-label="Compared with last time">
           {trendLine(feedback.overall.trend)}
         </p>
+      )}
+
+      {feedback.completion && (
+        <CompletionCard c={feedback.completion} patientFirstName={patientFirstName} />
       )}
 
       {feedback.highlight && (

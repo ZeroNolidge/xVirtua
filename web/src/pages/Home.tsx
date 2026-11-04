@@ -2,11 +2,14 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useScenarioList } from '../lib/scenarios';
 import { Difficulty } from '../components/Difficulty';
+import { PatientBadge } from '../components/PatientBadge';
+import { usePatientProgress } from '../lib/patientProgress';
 import { Loading } from './StatusScreens';
 
 export function Home() {
-  const { claims, userDoc } = useAuth();
+  const { claims, userDoc, user } = useAuth();
   const rows = useScenarioList(claims);
+  const progress = usePatientProgress(user?.uid);
   const isFaculty = claims?.role === 'faculty';
   const firstName = userDoc?.displayName?.split(/[\s.]/)[0];
 
@@ -36,6 +39,7 @@ export function Home() {
               <div className="scenario-top">
                 <span className="scenario-title">{s.title}</span>
                 {s.status === 'draft' && <span className="badge">Draft</span>}
+                <PatientBadge status={progress?.[s.id]?.status} />
               </div>
               <div>
                 {s.patientName}, {s.patientAge}

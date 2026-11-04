@@ -141,6 +141,8 @@ export interface ScenarioScript {
   patientKnows: string[];
   speakingStyle: string;
   cueScript: CueScriptEntry[];
+  /** Cue ids the conversation turns on (completing the patient needs them); see KEY_MOMENTS. */
+  keyCueIds?: string[];
 }
 
 export type ScenarioStatus = 'draft' | 'active' | 'archived';
@@ -291,5 +293,7 @@ export interface ResidentFeedback {
     empathy: AreaFeedback;
     cue: AreaFeedback & { cueResults: { cue: string; addressed: boolean; quote: string | null }[] };
   };
+  /** Progress with this patient: completed or mastered, or what's still needed. */
+  completion?: import('./completion.js').CompletionResult;
   createdAt: string;
 }

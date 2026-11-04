@@ -102,6 +102,36 @@ describe('score screen', () => {
     expect(container.textContent).not.toMatch(/\b\d{2,3}\b/);
   });
 
+  it('celebrates completing the patient, or says what is left without giving the worry away', () => {
+    const { rerender } = render(
+      <ScoreView
+        feedback={{
+          ...feedback,
+          completion: { status: 'completed', short: [], keyMoments: [], newlyReached: true },
+        }}
+        patientFirstName="Ray"
+      />,
+    );
+    expect(screen.getByText('✓ You completed Ray!')).toBeInTheDocument();
+    rerender(
+      <ScoreView
+        feedback={{
+          ...feedback,
+          completion: {
+            status: null,
+            short: ['cue'],
+            keyMoments: [{ cue: null, addressed: false }],
+            newlyReached: false,
+          },
+        }}
+        patientFirstName="Ray"
+      />,
+    );
+    expect(screen.getByText('To complete Ray')).toBeInTheDocument();
+    expect(screen.getByText(/Reach Solid in Picking up on cues/)).toBeInTheDocument();
+    expect(screen.getByText(/had something on their mind/)).toBeInTheDocument();
+  });
+
   it('says nothing about a trend for a first conversation', () => {
     render(
       <ScoreView

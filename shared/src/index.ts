@@ -9,3 +9,4 @@ export * from './stream.js';
 export * from './endOfTurn.js';
 export * from './duplex.js';
 export * from './characters.js';
+export * from './completion.js';

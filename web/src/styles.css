@@ -1183,3 +1183,21 @@ p {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
+/* Progress with a patient. */
+.badge.progress-started {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.badge.progress-completed {
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--text);
+}
+.badge.progress-mastered {
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+  color: var(--text);
+}
+.completion.done {
+  border-color: var(--primary);
+}
