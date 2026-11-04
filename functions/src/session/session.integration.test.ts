@@ -16,6 +16,7 @@ import type { Caller } from '../lib/callable.js';
 import { startLiveCall } from '../voice/live.js';
 import { avatarSession, faceCheckToken } from '../voice/avatar.js';
 import { FakeDirector } from '../patient/director.js';
+import { measureSpeech } from '../voice/speechClarity.js';
 
 const PROJECT_ID = 'demo-plainspeak';
 let app: App;
@@ -810,5 +811,38 @@ describe('GPT-Live steer mode', () => {
       director,
     );
     expect(hurt.mood).toBe('at_ease');
+  });
+
+  it('live mode: measures speech clarity from the recording afterwards (counts only)', async () => {
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const lp = (t: string, p: number) => ({ token: t, logprob: Math.log(p) });
+    let sent: FormData | null = null;
+    const openai = (async (_url: string, init: { body: FormData }) => {
+      sent = init.body;
+      return new Response(
+        JSON.stringify({
+          text: 'x',
+          logprobs: [lp('Your', 0.99), lp(' blood', 0.4), lp(' pressure', 0.95)],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    const audio = async () => Buffer.from('fake audio');
+    // No recording yet: nothing to measure.
+    expect(await measureSpeech(db, resident, { sessionId }, 'sk-x', audio, openai)).toEqual({
+      measured: false,
+    });
+    await db.doc(`sessions/${sessionId}`).update({ audioPath: 'audio/irmc/res1/s/recording.webm' });
+    const r = await measureSpeech(db, resident, { sessionId }, 'sk-x', audio, openai);
+    expect(r).toEqual({ measured: true, speechStats: { words: 3, clear: 2 } });
+    expect(sent!.get('include[]')).toBe('logprobs');
+    expect((await db.doc(`sessions/${sessionId}`).get()).get('speechStats')).toEqual({
+      words: 3,
+      clear: 2,
+    });
+    // Once only.
+    expect((await measureSpeech(db, resident, { sessionId }, 'sk-x', audio, openai)).measured).toBe(
+      false,
+    );
   });
 });

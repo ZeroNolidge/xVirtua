@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
+import { measureSpeech } from './voice/speechClarity.js';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import {
   HttpsError,
@@ -175,6 +176,17 @@ export const endSession = callable({}, (req) =>
     const [exists] = await getStorage().bucket().file(path).exists();
     return exists;
   }),
+);
+
+/** Live mode: speech clarity from the recording, after the conversation (see voice/speechClarity.ts). */
+export const measureSpeechClarity = callable(
+  { secrets: [OPENAI_API_KEY], timeoutSeconds: 120, memory: '512MiB' },
+  (req) =>
+    measureSpeech(db(), callerOf(req), req.data, keyOf(OPENAI_API_KEY), async (path) => {
+      const f = getStorage().bucket().file(path);
+      const [exists] = await f.exists();
+      return exists ? (await f.download())[0] : null;
+    }),
 );
 
 export const getSttToken = callable(

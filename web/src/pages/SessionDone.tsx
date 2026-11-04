@@ -242,7 +242,7 @@ export function SessionDone() {
       {fb.state === 'ok' && (
         <ScoreView feedback={fb.feedback} patientFirstName={first} previous={previous} />
       )}
-      {fb.state === 'ok' && <SpeechClarity stats={meta.speechStats} />}
+      {fb.state === 'ok' && <SpeechClarity sessionId={id} first={meta.speechStats} />}
 
       <button
         className="btn btn-text"
@@ -279,8 +279,24 @@ function speechClarityWords(pct: number): string {
  * Speech clarity: kept apart from the feedback score, with its caveat (the
  * microphone, the room and accents affect it, not just how clearly they spoke).
  */
-function SpeechClarity({ stats }: { stats: SpeechStats | undefined }) {
-  const pct = speechClarityPct(stats);
+function SpeechClarity({
+  sessionId,
+  first,
+}: {
+  sessionId: string;
+  first: SpeechStats | undefined;
+}) {
+  // Live mode measures it from the recording just after: it can arrive later.
+  const [later, setLater] = useState<SpeechStats | undefined>(undefined);
+  useEffect(() => {
+    if (first) return;
+    return onSnapshot(
+      doc(db, 'sessions', sessionId),
+      (s) => setLater(s.get('speechStats') as SpeechStats | undefined),
+      () => undefined,
+    );
+  }, [sessionId, first]);
+  const pct = speechClarityPct(first ?? later);
   if (pct === null) return null;
   return (
     <div className="card">

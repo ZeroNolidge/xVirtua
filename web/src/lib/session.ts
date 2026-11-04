@@ -102,6 +102,11 @@ export const sessionApi = {
     },
     { sessionId: string; status: 'ended' }
   >(functions, 'endSession'),
+  /** Live mode: speech clarity from the saved recording (after the conversation). */
+  measureSpeechClarity: httpsCallable<{ sessionId: string }, { measured: boolean }>(
+    functions,
+    'measureSpeechClarity',
+  ),
   sttToken: httpsCallable<
     { sessionId: string },
     {

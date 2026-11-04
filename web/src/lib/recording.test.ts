@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./firebase', () => ({ storage: {} }));
 const end = vi.fn(async (_x: unknown) => ({ data: {} }));
-vi.mock('./session', () => ({ sessionApi: { end: (x: unknown) => end(x) } }));
+vi.mock('./session', () => ({
+  sessionApi: { end: (x: unknown) => end(x), measureSpeechClarity: () => Promise.resolve() },
+}));
 let behave: 'ok' | 'stall' = 'ok';
 const cancel = vi.fn();
 vi.mock('firebase/storage', () => ({

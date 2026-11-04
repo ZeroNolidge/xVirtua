@@ -55,4 +55,7 @@ export async function uploadRecording(
     );
   });
   await sessionApi.end({ sessionId: job.sessionId, audioExt: job.ext });
+  // Speech clarity from the recording, if it wasn't measured during the
+  // conversation (live mode). Runs on while the feedback opens; never waited for.
+  void sessionApi.measureSpeechClarity({ sessionId: job.sessionId }).catch(() => undefined);
 }
