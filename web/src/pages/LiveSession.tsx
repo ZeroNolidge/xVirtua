@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isBackchannel, isCutIn, type NonverbalCue } from '@plainspeak/shared';
+import { isBackchannel, isCutIn, tallyWords, type NonverbalCue } from '@plainspeak/shared';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
 import { sessionApi, streamTurn, type TurnInput, type Utterance } from '../lib/session';
 import { LiveVoiceCall, toneNote } from '../lib/liveVoice';
 import { ECHO_WINDOW_MS, isEcho, LiveReply, MIC_EVIDENCE_MS } from '../lib/liveReply';
 import { SessionRecorder } from '../lib/recorder';
+import { OpenAIRealtimeStt } from '../lib/stt';
 import { PlainWordSearch } from '../components/PlainWordSearch';
 import { UploadRetry } from '../components/UploadRetry';
 import { SavingCard } from '../components/SavingCard';
@@ -167,6 +168,8 @@ export function LiveConversation({
   // A clip gives way to his live face as soon as he talks.
   useEffect(() => {
     bodyRef.current.setSpeaking(speaking);
+    // The clarity count is for the resident's words, not his echo.
+    clarity.current?.setMuted(speaking);
   }, [speaking]);
   // The face is up (again, after switching to his relaxed face): it gets the
   // patient's voice and plays it in step. Gone: our own player plays it.
@@ -181,6 +184,12 @@ export function LiveConversation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [faceReady]);
   const mic = useRef<MediaStream | null>(null);
+  /**
+   * Our own transcriber running alongside GPT-Live, only to measure speech
+   * clarity (GPT-Live's transcript has no word confidence). Counts only.
+   */
+  const clarity = useRef<OpenAIRealtimeStt | null>(null);
+  const speech = useRef({ words: 0, clear: 0 });
   const recorder = useRef<SessionRecorder | null>(null);
   const started = useRef(false);
   const ended = useRef(false);
@@ -457,7 +466,40 @@ export function LiveConversation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  /** Starts the clarity transcriber (best effort: the call never depends on it). */
+  async function startClarity(stream: MediaStream) {
+    try {
+      const { data } = await sessionApi.sttToken({ sessionId });
+      if (!stillMic(stream)) return;
+      const t = new OpenAIRealtimeStt({
+        onSpeechStart: () => undefined,
+        onPartial: () => undefined,
+        onFinal: (_text, _at, logprobs) => {
+          if (!logprobs?.length) return;
+          const w = tallyWords(logprobs);
+          speech.current.words += w.words;
+          speech.current.clear += w.clear;
+        },
+        onError: () => undefined,
+      });
+      await t.start(stream, data.value);
+      if (!stillMic(stream)) return t.stop();
+      clarity.current?.stop();
+      clarity.current = t;
+    } catch (e) {
+      reportError('live.clarity', e);
+    }
+  }
+  /** Still the same call's mic (not paused, ended or restarted meanwhile). */
+  const stillMic = (stream: MediaStream) => mic.current === stream && !ended.current;
+
+  function stopClarity() {
+    clarity.current?.stop();
+    clarity.current = null;
+  }
+
   function release() {
+    stopClarity();
     call.current?.hangUp();
     call.current = null;
     mic.current?.getTracks().forEach((t) => t.stop());
@@ -764,6 +806,7 @@ export function LiveConversation({
         return data.sdp;
       });
       if (!mine()) return c.hangUp();
+      void startClarity(stream);
       // Then GPT-Live itself has START_TIMEOUT_MS to start talking.
       window.setTimeout(tooSlow, START_TIMEOUT_MS);
     } catch (e) {
@@ -814,6 +857,7 @@ export function LiveConversation({
     const c = call.current;
     call.current = null;
     stopFace();
+    stopClarity();
     recorder.current?.pause();
     mic.current?.getTracks().forEach((t) => t.stop());
     mic.current = null;
@@ -844,6 +888,7 @@ export function LiveConversation({
         sessionId,
         appWaitSec: Math.round(totalWaitMs.current / 1000),
         ...(bodyStats ? { bodyStats } : {}),
+        ...(speech.current.words ? { speechStats: { ...speech.current } } : {}),
       });
     } catch (e) {
       console.warn('end failed', e);
@@ -856,6 +901,7 @@ export function LiveConversation({
   useEffect(
     () => () => {
       ended.current = true;
+      clarity.current?.stop();
       call.current?.hangUp();
       mic.current?.getTracks().forEach((t) => t.stop());
     },
