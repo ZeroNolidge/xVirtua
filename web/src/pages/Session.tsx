@@ -6,6 +6,7 @@ import {
   isCutIn,
   isResidentSpeech,
   stepToward,
+  tallyWords,
   type Mood,
   type NonverbalCue,
   type PatientChunk,
@@ -298,6 +299,8 @@ function Conversation({
   const renderer = useRef<VoiceRenderer | null>(null);
   const player = useRef<ReplyPlayer | null>(null);
   const stt = useRef<OpenAIRealtimeStt | null>(null);
+  /** Speech clarity counts for the whole conversation (across pauses). */
+  const speech = useRef({ words: 0, clear: 0 });
   const recorder = useRef<SessionRecorder | null>(null);
   const mic = useRef<MediaStream | null>(null);
   const t0 = useRef(0);
@@ -821,10 +824,15 @@ function Conversation({
           }
           setPartial([...pending.current.text, t].join(' '));
         },
-        onFinal: (t, startedAt) => {
+        onFinal: (t, startedAt, logprobs) => {
           if (phaseRef.current === 'listening' && echoAfterPatient(t)) {
             setPartial(pending.current.text.join(' '));
             return;
+          }
+          if (logprobs?.length && phaseRef.current !== 'patient') {
+            const w = tallyWords(logprobs);
+            speech.current.words += w.words;
+            speech.current.clear += w.clear;
           }
           if (phaseRef.current === 'patient') {
             // His own echo, or "mm-hm" while he talks (listening, not a reply).
@@ -949,6 +957,7 @@ function Conversation({
         sessionId,
         appWaitSec: Math.round(timing.current.totalAppWaitMs / 1000),
         ...(body.stats() ? { bodyStats: body.stats()! } : {}),
+        ...(speech.current.words ? { speechStats: { ...speech.current } } : {}),
       });
     } catch (e) {
       // The transcript is already saved; scoring ends the session if this didn't.

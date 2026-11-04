@@ -6,7 +6,12 @@ export interface SttCallbacks {
   onSpeechStart(): void;
   /** `startedAt`: performance.now() when this piece of speech began, if known. */
   onPartial(text: string, startedAt?: number): void;
-  onFinal(text: string, startedAt?: number): void;
+  /** `logprobs`: the transcriber's confidence in each piece of the text, when sent. */
+  onFinal(
+    text: string,
+    startedAt?: number,
+    logprobs?: { token: string; logprob: number }[],
+  ): void;
   onError(message: string): void;
 }
 
@@ -57,6 +62,7 @@ export class OpenAIRealtimeStt {
       item_id?: string;
       delta?: string;
       transcript?: string;
+      logprobs?: { token: string; logprob: number }[] | null;
       error?: { message?: string };
     };
     try {
@@ -83,7 +89,7 @@ export class OpenAIRealtimeStt {
       const startedAt = this.started.get(id);
       this.started.delete(id);
       const text = (ev.transcript ?? '').trim();
-      if (text) this.cb.onFinal(text, startedAt);
+      if (text) this.cb.onFinal(text, startedAt, ev.logprobs ?? undefined);
     }
   }
 

@@ -29,4 +29,8 @@ describe('speech key sent to the browser', () => {
     expect(() => assertEphemeral('sk-proj-real', 'sk-proj-real')).toThrow();
     expect(() => assertEphemeral('sk-other', 'sk-proj-real')).toThrow();
   });
+  it('asks for word confidence (speech clarity), and can do without it', () => {
+    expect(clientSecretBody().session.include).toEqual(['item.input_audio_transcription.logprobs']);
+    expect(clientSecretBody('semantic', false).session).not.toHaveProperty('include');
+  });
 });

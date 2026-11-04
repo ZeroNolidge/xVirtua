@@ -90,6 +90,8 @@ export const sessionApi = {
       sessionId: string;
       audioExt?: string;
       appWaitSec?: number;
+      /** Speech clarity counts (no words). */
+      speechStats?: { words: number; clear: number };
       /** How often body-language clips played, and why others didn't. */
       bodyStats?: {
         shown: Record<string, number>;

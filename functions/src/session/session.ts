@@ -778,6 +778,14 @@ const endInput = z.object({
       relaxed: z.boolean(),
     })
     .nullish(),
+  /** Speech clarity: words the transcriber heard, and how many clearly (counts only). */
+  speechStats: z
+    .object({
+      words: z.number().int().nonnegative().max(1_000_000),
+      clear: z.number().int().nonnegative().max(1_000_000),
+    })
+    .refine((x) => x.clear <= x.words, 'clear > words')
+    .nullish(),
   audioExt: z.enum(['webm', 'm4a', 'mp4', 'ogg']).nullish(),
   /** Seconds the resident spent waiting on the app; left out of practice time. */
   appWaitSec: z
@@ -795,7 +803,7 @@ export async function endSession(
   audioExists: (path: string) => Promise<boolean>,
 ) {
   const me = requireMember(caller);
-  const { sessionId, audioExt, appWaitSec, bodyStats } = parse(endInput, data);
+  const { sessionId, audioExt, appWaitSec, bodyStats, speechStats } = parse(endInput, data);
   const ref = db.doc(`sessions/${sessionId}`);
   const snap = await ref.get();
   const s = snap.data() as SessionDoc | undefined;
@@ -803,6 +811,7 @@ export async function endSession(
 
   const update: Record<string, unknown> = {};
   if (bodyStats) update.bodyStats = bodyStats;
+  if (speechStats) update.speechStats = speechStats;
   if (s.status === 'live') {
     const durationSec = Math.round((Date.now() - s.startedAt.toMillis()) / 1000);
     Object.assign(update, {

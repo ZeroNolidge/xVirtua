@@ -82,7 +82,11 @@ const TURN_DETECTION = {
   },
 } as const;
 
-export function clientSecretBody(turn: TurnDetection = 'semantic') {
+/**
+ * `confidence`: also send the transcriber's confidence in each word (log
+ * probabilities), for the speech clarity score.
+ */
+export function clientSecretBody(turn: TurnDetection = 'semantic', confidence = true) {
   return {
     // Transcription-only session: this key can't be used for chat, audio
     // generation or any other OpenAI API.
@@ -100,6 +104,7 @@ export function clientSecretBody(turn: TurnDetection = 'semantic') {
           turn_detection: TURN_DETECTION[turn],
         },
       },
+      ...(confidence ? { include: ['item.input_audio_transcription.logprobs'] } : {}),
     },
   };
 }
@@ -108,24 +113,29 @@ export function clientSecretBody(turn: TurnDetection = 'semantic') {
 export async function mintClientSecret(
   apiKey: string,
 ): Promise<{ value: string; expiresAt: number | null; turnDetection: TurnDetection }> {
-  const post = (turn: TurnDetection) =>
+  const post = (turn: TurnDetection, confidence: boolean) =>
     fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(clientSecretBody(turn)),
+      body: JSON.stringify(clientSecretBody(turn, confidence)),
     }).catch((e: unknown) => {
       console.error('OpenAI unreachable', e);
       throw new HttpsError('unavailable', 'Speech service unreachable.');
     });
+  // Best first; if OpenAI rejects a setting, drop the word confidence (only
+  // the clarity score needs it), then semantic turn detection.
+  const tries: [TurnDetection, boolean][] = [
+    ['semantic', true],
+    ['semantic', false],
+    ['silence', false],
+  ];
   let turnDetection: TurnDetection = 'semantic';
-  let res = await post(turnDetection);
-  if (res.status === 400) {
-    console.warn(
-      'semantic turn detection rejected, using silence detection',
-      (await res.text()).slice(0, 300),
-    );
-    turnDetection = 'silence';
-    res = await post(turnDetection);
+  let res!: Response;
+  for (const [i, [turn, confidence]] of tries.entries()) {
+    turnDetection = turn;
+    res = await post(turn, confidence);
+    if (res.status !== 400 || i === tries.length - 1) break;
+    console.warn('speech settings rejected', turn, confidence, (await res.text()).slice(0, 300));
   }
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 500);

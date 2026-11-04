@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
-import type { ResidentFeedback } from '@plainspeak/shared';
+import { speechClarityPct, type ResidentFeedback, type SpeechStats } from '@plainspeak/shared';
 import { db } from '../lib/firebase';
 import { friendlyError, isConnectionError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
@@ -11,7 +11,7 @@ import { Loading } from './StatusScreens';
 import { Transcript, type Bubble } from './Session';
 import { canContinue, type SessionRow } from '../lib/resume';
 
-type Meta = Partial<SessionRow>;
+type Meta = Partial<SessionRow> & { speechStats?: SpeechStats };
 
 type FeedbackState =
   | { state: 'loading' }
@@ -195,6 +195,7 @@ export function SessionDone() {
         </div>
       )}
       {fb.state === 'ok' && <ScoreView feedback={fb.feedback} patientFirstName={first} />}
+      {fb.state === 'ok' && <SpeechClarity stats={meta.speechStats} />}
 
       <button
         className="btn btn-text"
@@ -216,5 +217,40 @@ export function SessionDone() {
         </Link>
       )}
     </section>
+  );
+}
+
+/** How clearly the transcriber caught the resident's words, in plain words. */
+function speechClarityWords(pct: number): string {
+  if (pct >= 95) return 'Very clear';
+  if (pct >= 85) return 'Mostly clear';
+  if (pct >= 70) return 'Sometimes hard to catch';
+  return 'Often hard to catch';
+}
+
+/**
+ * Speech clarity: kept apart from the feedback score, with its caveat (the
+ * microphone, the room and accents affect it, not just how clearly they spoke).
+ */
+function SpeechClarity({ stats }: { stats: SpeechStats | undefined }) {
+  const pct = speechClarityPct(stats);
+  if (pct === null) return null;
+  return (
+    <div className="card">
+      <h2>How clearly you came through</h2>
+      <p>
+        <strong>{speechClarityWords(pct)}</strong>: the transcriber was confident about {pct}% of
+        your words.
+      </p>
+      {pct < 85 && (
+        <p>
+          Try speaking a little slower and louder, facing the microphone, and finishing each word.
+        </p>
+      )}
+      <p className="muted small">
+        Less exact than the other feedback, and not part of your score: a weak microphone, a noisy
+        room or an accent can lower it too.
+      </p>
+    </div>
   );
 }
