@@ -1,0 +1,74 @@
+name: bitHuman trial
+
+# Trial of bitHuman as a lower-delay alternative to Simli: streams a patient
+# voice into a bitHuman avatar the way a live call does, measures how soon it
+# starts talking and whether it keeps up, and commits a video and a report to
+# bithuman-test/ on this branch. Needs the BITHUMAN_API_SECRET secret.
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'bitHuman agent code (ten characters) or showcase name'
+        required: true
+      project_id:
+        description: 'Firebase project ID (for the voice sample)'
+        required: true
+        default: 'xsims-7ea9f'
+      voice:
+        description: 'GPT-Live voice sample to use'
+        required: true
+        default: 'beacon'
+
+permissions:
+  contents: write
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          pip install -q "bithuman[essence-2]" numpy
+      - name: Voice sample
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EXPECTED: ${{ inputs.project_id }}
+          VOICE: ${{ inputs.voice }}
+        run: |
+          set -euo pipefail
+          [[ "$VOICE" =~ ^[a-z]+$ ]] || { echo "::error::bad voice"; exit 1; }
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          PID=$(jq -r .project_id "$RUNNER_TEMP/sa.json")
+          [ "$PID" = "$EXPECTED" ] || { echo "::error::key is for $PID"; exit 1; }
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet
+          gcloud storage cp "gs://$PID.firebasestorage.app/voiceSamples/$VOICE.wav" "$RUNNER_TEMP/voice.wav"
+          rm -f "$RUNNER_TEMP/sa.json"
+          ffmpeg -loglevel error -y -i "$RUNNER_TEMP/voice.wav" -ac 1 -ar 16000 -sample_fmt s16 "$RUNNER_TEMP/voice16k.wav"
+      - name: Fetch the avatar and run the trial
+        env:
+          BITHUMAN_API_SECRET: ${{ secrets.BITHUMAN_API_SECRET }}
+          AGENT: ${{ inputs.agent }}
+        run: |
+          set -euo pipefail
+          [[ "$AGENT" =~ ^[A-Za-z0-9_-]{3,40}$ ]] || { echo "::error::bad agent code"; exit 1; }
+          [ -n "$BITHUMAN_API_SECRET" ] || { echo "::error::add the BITHUMAN_API_SECRET secret first"; exit 1; }
+          python -m bithuman pull "$AGENT"
+          FILE=$(find ~/.cache/bithuman -name '*.imx' -newer "$RUNNER_TEMP/voice16k.wav" | head -1)
+          [ -n "$FILE" ] || FILE=$(find ~/.cache/bithuman -name '*.imx' | head -1)
+          echo "Avatar file: $FILE"
+          python scripts/bithuman/latency_test.py "$FILE" "$RUNNER_TEMP/voice16k.wav" bithuman-test
+          # Also the plain render, for comparison.
+          python -m bithuman render "$FILE" "$RUNNER_TEMP/voice16k.wav" -o bithuman-test/bithuman-ray-render.mp4 || true
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A bithuman-test
+          git diff --cached --quiet && { echo "Nothing new"; exit 0; }
+          git commit -m "bitHuman trial results"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
