@@ -7,6 +7,8 @@
  * Create-only by default: anything already in the database (e.g. scenarios a
  * faculty member has edited or published) is left alone. --force overwrites
  * seed content (scenario status is never changed by --force).
+ * --refresh updates only the built-in scenarios' briefing and patient script
+ * (e.g. a fixed contradiction), keeping their status, voice and other settings.
  */
 import { parseArgs } from 'node:util';
 import { initializeApp } from 'firebase-admin/app';
@@ -19,6 +21,7 @@ const { values } = parseArgs({
     program: { type: 'string', default: 'irmc' },
     prod: { type: 'boolean', default: false },
     force: { type: 'boolean', default: false },
+    refresh: { type: 'boolean', default: false },
   },
 });
 
@@ -38,6 +41,7 @@ initializeApp({ projectId });
 const db = getFirestore();
 const programId = values.program!;
 const force = values.force!;
+const refresh = values.refresh!;
 
 let batch: WriteBatch = db.batch();
 let ops = 0;
@@ -52,9 +56,37 @@ async function queue(fn: (b: WriteBatch) => void) {
 
 let created = 0;
 let skipped = 0;
+let refreshed = 0;
 for (const s of SEED_SCENARIOS) {
   const ref = db.doc(`scenarios/${s.id}`);
   const existing = await ref.get();
+  if (existing.exists && refresh && !force) {
+    // Built-in scenarios only: their script and briefing, nothing else.
+    if (existing.get('seeded') !== true || existing.get('programId') !== programId) {
+      skipped++;
+      continue;
+    }
+    const v = existing.get('currentVersion') ?? '1';
+    const b = s.briefing;
+    await queue((w) =>
+      w.update(ref, {
+        title: b.title,
+        difficulty: b.difficulty,
+        patientName: b.persona.name,
+        patientAge: b.persona.age,
+        reasonForVisit: b.reasonForVisit,
+        updatedAt: FieldValue.serverTimestamp(),
+      }),
+    );
+    await queue((w) =>
+      w.set(ref.collection('versions').doc(v), { ...b, createdAt: FieldValue.serverTimestamp() }),
+    );
+    await queue((w) =>
+      w.set(ref.collection('versions').doc(v).collection('private').doc('script'), s.script),
+    );
+    refreshed++;
+    continue;
+  }
   if (existing.exists && !force) {
     skipped++;
     continue;
@@ -98,5 +130,7 @@ for (const t of SEED_JARGON) {
 }
 if (ops > 0) await batch.commit();
 
-console.log(`✔ Scenarios: ${created} written (as drafts), ${skipped} already existed.`);
+console.log(
+  `✔ Scenarios: ${created} written (as drafts), ${refreshed} refreshed, ${skipped} left as they were.`,
+);
 console.log(`✔ Jargon terms: ${terms} written (${SEED_JARGON.length} in the seed list).`);

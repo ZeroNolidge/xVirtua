@@ -18,7 +18,7 @@ export const SEED_SCENARIOS: ScenarioSeed[] = [
       persona: { name: 'Ray Kowalski', age: 52, pronouns: 'he/him' },
       reasonForVisit: 'Follow-up after two high blood pressure readings at earlier visits.',
       residentTask:
-        'Explain that Ray has high blood pressure, why it matters even though he feels fine, and the plan: a once-daily medicine, cutting back on salt, and checking his pressure at home.',
+        'Explain that Ray has high blood pressure, why it matters even though he feels fine, and the plan: a once-daily medicine, cutting back on salt, and keeping up his home blood pressure checks.',
       residentFacts: [
         'Office BP 152/96 and 148/94 at the last two visits; today 150/94.',
         'Home readings over 1 week average 146/92.',
@@ -47,6 +47,8 @@ export const SEED_SCENARIOS: ScenarioSeed[] = [
         'Father had a stroke at 60 and spent his last years in a nursing home.',
         'Eats a lot of fast food and salty snacks on his route.',
         'Needs to renew his DOT medical card in about 4 months.',
+        'Has a home blood pressure cuff (the clinic asked him to get one). Checked it every morning for the past week and wrote the numbers on a notepad: mostly in the mid-140s over low 90s, e.g. 146/92, 144/90, 149/93.',
+        'Had blood drawn and a heart tracing (EKG) last week; the nurse said those were fine.',
       ],
       speakingStyle: 'Short, plain sentences. Practical. A little gruff but polite.',
       cueScript: [
@@ -145,6 +147,8 @@ export const SEED_SCENARIOS: ScenarioSeed[] = [
         'Drinks 2–3 regular sodas a day and snacks at work.',
         'Is scared of needles.',
         'Has never heard the word "A1c".',
+        'Had blood drawn twice in the last month; the nurse called to say her sugar number was high both times.',
+        'Takes no regular medicines and feels fine.',
       ],
       speakingStyle: 'Simple words. Says "mm-hm" and "okay" a lot. Apologizes often.',
       cueScript: [
@@ -247,6 +251,9 @@ export const SEED_SCENARIOS: ScenarioSeed[] = [
         'Neighbor had leg pain on a statin and stopped it.',
         'Read online that statins can cause memory problems.',
         'Pays for medicines out of a fixed retirement income.',
+        'Quit smoking 10 years ago and is proud of it.',
+        'Has Medicare with a drug plan, but copays add up.',
+        'Had a cholesterol blood test a couple of weeks ago.',
       ],
       speakingStyle: 'Dry humor, direct questions. Says "Now hold on" when skeptical.',
       cueScript: [
@@ -354,6 +361,10 @@ export const SEED_SCENARIOS: ScenarioSeed[] = [
         'Husband is skeptical of mental health medicine.',
         'Sleeps about 5 hours a night.',
         'Has never taken a daily medicine.',
+        'Filled out two questionnaires about worry and mood at her last visit.',
+        'Was referred to counseling last visit; her first appointment is in 3 weeks.',
+        'Has an IUD for birth control.',
+        'Never thinks about hurting herself.',
       ],
       speakingStyle: 'Soft-spoken, trails off, uses "I don’t know" a lot.',
       cueScript: [
@@ -458,6 +469,8 @@ export const SEED_SCENARIOS: ScenarioSeed[] = [
         'Drinks 4–5 beers most nights, more on weekends.',
         'Takes ibuprofen a few times a week for back pain.',
         'New insurance with a high deductible.',
+        'Just started at the sawmill a few months ago.',
+        'Had routine blood work; was called back about the results.',
       ],
       speakingStyle: 'Fast talker when nervous. Jokes to cover worry.',
       cueScript: [
@@ -558,6 +571,9 @@ export const SEED_SCENARIOS: ScenarioSeed[] = [
         'Tried quitting cold turkey 3 times.',
         'Husband has dementia; she has little help.',
         'Gained weight the last time she tried to quit.',
+        'Has smoked for about 40 years, since she was a teenager.',
+        'Did a breathing test (blowing into a tube) at her last visit.',
+        'Longest she ever quit was about 2 weeks.',
       ],
       speakingStyle: 'Blunt and a little sarcastic, but warm underneath.',
       cueScript: [

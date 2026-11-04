@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
 import { finishSentence, parsePatientReply } from './schema.js';
 import { applyCue } from './brain.js';
-import { buildPatientSystemPrompt, buildResidentMessage } from './prompt.js';
+import { buildLivePersona, buildPatientSystemPrompt, buildResidentMessage } from './prompt.js';
 
 const sc = SEED_SCENARIOS[0]!;
 const cue = sc.script.cueScript[0]!;
@@ -63,6 +63,20 @@ describe('prompts', () => {
     expect(m).toContain(`cueId: ${cue.id}`);
     expect(m).toContain(cue.performance.say);
     expect(m.match(/"""/g)?.length).toBe(2);
+  });
+});
+
+describe('the patient knows their chart', () => {
+  it('both voices get the chart facts (no contradicting the briefing)', () => {
+    const ray = SEED_SCENARIOS.find((s) => s.id === 'htn-new-diagnosis')!;
+    for (const p of [
+      buildPatientSystemPrompt(ray.briefing, ray.script),
+      buildLivePersona(ray.briefing, ray.script),
+    ]) {
+      expect(p).toContain('Home readings over 1 week average 146/92.');
+      expect(p).toContain('Never contradict your chart');
+    }
+    expect(ray.script.patientKnows.join(' ')).toMatch(/home blood pressure cuff/);
   });
 });
 

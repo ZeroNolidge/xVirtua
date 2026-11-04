@@ -13,9 +13,10 @@ on:
         required: false
         default: 'firestore,storage,functions,hosting'
       seed_content:
-        description: 'Load seed scenarios (as drafts) and the jargon dictionary. Never overwrites edits.'
-        type: boolean
-        default: false
+        description: 'Seed scenarios: add new ones (as drafts) and the jargon dictionary; or also refresh the built-in scenarios scripts (keeps status and voice)'
+        type: choice
+        options: ['off', 'add new', 'refresh built-in scripts']
+        default: 'off'
       faculty_email:
         description: 'Optional: invite this email as the first faculty member'
         required: false
@@ -199,8 +200,10 @@ jobs:
         run: npx tsx scripts/migrate-feedback.ts
 
       - name: Seed content
-        if: ${{ inputs.seed_content }}
-        run: npx tsx scripts/seed-content.ts --prod
+        if: ${{ inputs.seed_content != 'off' }}
+        env:
+          SEED: ${{ inputs.seed_content }}
+        run: npx tsx scripts/seed-content.ts --prod $([ "$SEED" = 'refresh built-in scripts' ] && echo --refresh)
 
       - name: Invite first faculty member
         if: ${{ inputs.faculty_email != '' }}
