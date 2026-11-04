@@ -5,7 +5,8 @@
 class Pcm16 extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.buf = new Int16Array(1600); // 100 ms
+    // 40 ms pieces: small, so the face (and the voice Simli plays back) starts sooner.
+    this.buf = new Int16Array(640);
     this.i = 0;
   }
   process(inputs) {
