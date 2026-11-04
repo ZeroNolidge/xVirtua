@@ -12,6 +12,7 @@ import {
 import { RETENTION_NOTICE } from '@plainspeak/shared';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
+import { ProgressDashboard } from '../components/ProgressDashboard';
 
 interface Row {
   id: string;
@@ -48,9 +49,7 @@ export function Progress() {
   return (
     <section>
       <h1>Your progress</h1>
-      <div className="card">
-        <p className="muted">XP, streaks and badges arrive in Phase 5.</p>
-      </div>
+      <ProgressDashboard uid={user?.uid} />
       <div className="card">
         <h2>Your history</h2>
         {rows === null ? (

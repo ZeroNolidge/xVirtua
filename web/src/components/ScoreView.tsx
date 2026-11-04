@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import { METRICS, type AreaFeedback, type Moment, type ResidentFeedback } from '@plainspeak/shared';
-import { METRIC_LABEL, trendLine } from './metricLabels';
+import {
+  METRICS,
+  type AreaFeedback,
+  type Metric,
+  type Moment,
+  type ResidentFeedback,
+} from '@plainspeak/shared';
+import { levelsOf, METRIC_ABOUT, METRIC_LABEL, trendLine } from './metricLabels';
+import { SkillShape, type Levels } from './SkillShape';
 
 function YouSaid({ text }: { text: string }) {
   return (
@@ -80,12 +87,33 @@ function Area({ name, a, extra }: { name: string; a: AreaFeedback; extra?: React
 export function ScoreView({
   feedback,
   patientFirstName,
+  previous,
 }: {
   feedback: ResidentFeedback;
   patientFirstName: string;
+  /** Their previous scored conversation's bands, for the dashed outline. */
+  previous?: Levels | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<Metric | null>(null);
   const { areas } = feedback;
+  const extra = (m: Metric) =>
+    m === 'jargon' ? (
+      areas.jargon.explained.length > 0 && (
+        <p className="small ok">
+          Nice: you explained {areas.jargon.explained.map((e) => `“${e.term}”`).join(', ')}.
+        </p>
+      )
+    ) : m === 'cue' && areas.cue.cueResults.length > 0 ? (
+      <ul className="cue-results">
+        {areas.cue.cueResults.map((c, i) => (
+          <li key={i}>
+            <span aria-hidden="true">{c.addressed ? '✅' : '◻️'}</span> {patientFirstName}: {c.cue}
+            {c.quote && <span className="muted small"> — you said “{c.quote}”</span>}
+          </li>
+        ))}
+      </ul>
+    ) : null;
   return (
     <>
       {feedback.overall && feedback.overall.trend !== 'first' && (
@@ -114,6 +142,26 @@ export function ScoreView({
         </div>
       )}
 
+      <div className="card">
+        <h2>Your skills this time</h2>
+        <SkillShape
+          now={levelsOf(areas)}
+          before={previous}
+          nowLabel="This conversation"
+          beforeLabel="Last time"
+          selected={picked}
+          onSelect={setPicked}
+        />
+        {picked ? (
+          <div className="scores" aria-live="polite">
+            <p className="small muted">{METRIC_ABOUT[picked]}</p>
+            <Area name={METRIC_LABEL[picked]} a={areas[picked]} extra={extra(picked)} />
+          </div>
+        ) : (
+          <p className="small muted">Tap an area to see how you did in it.</p>
+        )}
+      </div>
+
       <button className="btn btn-secondary" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         {open ? 'Hide full scores' : 'See full scores'}
       </button>
@@ -121,31 +169,7 @@ export function ScoreView({
       {open && (
         <div className="card scores">
           {METRICS.map((m) => (
-            <Area
-              key={m}
-              name={METRIC_LABEL[m]}
-              a={areas[m]}
-              extra={
-                m === 'jargon' ? (
-                  areas.jargon.explained.length > 0 && (
-                    <p className="small ok">
-                      Nice: you explained{' '}
-                      {areas.jargon.explained.map((e) => `“${e.term}”`).join(', ')}.
-                    </p>
-                  )
-                ) : m === 'cue' && areas.cue.cueResults.length > 0 ? (
-                  <ul className="cue-results">
-                    {areas.cue.cueResults.map((c, i) => (
-                      <li key={i}>
-                        <span aria-hidden="true">{c.addressed ? '✅' : '◻️'}</span>{' '}
-                        {patientFirstName}: {c.cue}
-                        {c.quote && <span className="muted small"> — you said “{c.quote}”</span>}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null
-              }
-            />
+            <Area key={m} name={METRIC_LABEL[m]} a={areas[m]} extra={extra(m)} />
           ))}
         </div>
       )}

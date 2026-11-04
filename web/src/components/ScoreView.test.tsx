@@ -60,7 +60,11 @@ describe('score screen', () => {
     const { container } = render(<ScoreView feedback={fb} patientFirstName="Ray" />);
     expect(screen.getByText('Up from last time')).toBeInTheDocument();
     const headings = screen.getAllByRole('heading').map((h) => h.textContent);
-    expect(headings).toEqual(['What went well', 'Two things to try next time']);
+    expect(headings).toEqual([
+      'What went well',
+      'Two things to try next time',
+      'Your skills this time',
+    ]);
     expect(screen.getAllByText('Try saying this instead')).toHaveLength(2);
     expect(screen.getAllByText('You said:')).toHaveLength(3);
     expect(
@@ -76,6 +80,25 @@ describe('score screen', () => {
       expect(screen.getAllByText(new RegExp(w)).length).toBeGreaterThan(0);
     // The flagged-word list isn't repeated here.
     expect(screen.queryByText(/hypertension →/)).toBeNull();
+    expect(container.textContent).not.toMatch(/\b\d{2,3}\b/);
+  });
+
+  it('the circle graph opens an area when tapped, and shows last time behind it', () => {
+    const { container } = render(
+      <ScoreView
+        feedback={feedback}
+        patientFirstName="Ray"
+        previous={{ jargon: 2, clarity: 2, empathy: 3, cue: 1 }}
+      />,
+    );
+    expect(screen.getAllByText('Last time').length).toBeGreaterThan(0);
+    expect(container.querySelector('.skill-shape .before')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Clear explaining/ }));
+    expect(screen.getByText('“per-area clarity rewrite”')).toBeInTheDocument();
+    expect(screen.getByText(/in a clear order/)).toBeInTheDocument();
+    // Tapping it again closes it.
+    fireEvent.click(screen.getByRole('button', { name: /Clear explaining/ }));
+    expect(screen.queryByText('“per-area clarity rewrite”')).toBeNull();
     expect(container.textContent).not.toMatch(/\b\d{2,3}\b/);
   });
 

@@ -1,12 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+} from 'firebase/firestore';
 import { speechClarityPct, type ResidentFeedback, type SpeechStats } from '@plainspeak/shared';
 import { db } from '../lib/firebase';
 import { friendlyError, isConnectionError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
 import { sessionApi } from '../lib/session';
 import { ScoreView } from '../components/ScoreView';
+import { levelsOf } from '../components/metricLabels';
+import type { Levels } from '../components/SkillShape';
+import { useAuth } from '../lib/auth';
 import { Loading } from './StatusScreens';
 import { Transcript, type Bubble } from './Session';
 import { canContinue, type SessionRow } from '../lib/resume';
@@ -54,6 +67,36 @@ function useConversation(id: string) {
   return { bubbles, meta };
 }
 
+/** Their scored conversation before this one: its bands, for the graph's dashed outline. */
+function usePreviousLevels(id: string, uid: string | undefined) {
+  const [levels, setLevels] = useState<Levels | null>(null);
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    (async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, 'sessions'),
+          where('uid', '==', uid),
+          orderBy('startedAt', 'desc'),
+          limit(20),
+        ),
+      );
+      const rows = snap.docs;
+      const here = rows.findIndex((d) => d.id === id);
+      const prev = rows.slice(here + 1).find((d) => d.data().feedbackBand);
+      if (here < 0 || !prev) return;
+      const f = await getDoc(doc(db, 'sessions', prev.id, 'feedback', 'current'));
+      const areas = (f.data() as ResidentFeedback | undefined)?.areas;
+      if (!cancelled && areas) setLevels(levelsOf(areas));
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, uid]);
+  return levels;
+}
+
 /** Quiet retries when the answer is lost to a dropped signal. */
 const RETRIES = 3;
 const RETRY_WAIT_MS = 3000;
@@ -77,6 +120,8 @@ export function SessionDone() {
   const { id = '' } = useParams();
   const nav = useNavigate();
   const { bubbles, meta } = useConversation(id);
+  const { user } = useAuth();
+  const previous = usePreviousLevels(id, user?.uid);
   const [fb, setFb] = useSavedFeedback(id);
   const [showTranscript, setShowTranscript] = useState(false);
   const asked = useRef(false);
@@ -194,7 +239,9 @@ export function SessionDone() {
           </button>
         </div>
       )}
-      {fb.state === 'ok' && <ScoreView feedback={fb.feedback} patientFirstName={first} />}
+      {fb.state === 'ok' && (
+        <ScoreView feedback={fb.feedback} patientFirstName={first} previous={previous} />
+      )}
       {fb.state === 'ok' && <SpeechClarity stats={meta.speechStats} />}
 
       <button
