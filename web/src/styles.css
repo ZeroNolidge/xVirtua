@@ -1201,3 +1201,27 @@ p {
 .completion.done {
   border-color: var(--primary);
 }
+
+/* App Check debug mode (test browsers only). */
+.appcheck-debug-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+  background: #2b1d00;
+  color: #fff4dd;
+  font-size: 0.8rem;
+}
+.appcheck-debug-bar code {
+  word-break: break-all;
+}
+.appcheck-debug-bar .btn {
+  color: #fff4dd;
+  min-height: 32px;
+}

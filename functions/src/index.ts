@@ -253,8 +253,16 @@ export const tts = onRequest(
   (req, res) => handleTts(req, res, db(), auth(), CARTESIA_API_KEY.value()),
 );
 
-export const reportClientError = callable({}, (req) =>
-  storeClientError(db(), callerOf(req), req.data),
+/**
+ * Crash reports from the app. Not App Check-enforced (only this function),
+ * so a browser that fails App Check can still report it; each report notes
+ * its App Check status, and senders are limited per hour.
+ */
+export const reportClientError = callable({ enforceAppCheck: false }, (req) =>
+  storeClientError(db(), callerOf(req), req.data, {
+    appCheckToken: req.rawRequest.header('X-Firebase-AppCheck') || undefined,
+    ip: (req.rawRequest.header('x-forwarded-for') ?? '').split(',')[0]?.trim() || req.rawRequest.ip,
+  }),
 );
 
 // ----- coaching -----

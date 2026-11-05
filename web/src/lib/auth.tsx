@@ -1,3 +1,4 @@
+import { setupErrorMessage } from './setupError';
 import { reportError } from './errorReport';
 import {
   createContext,
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch((e: unknown) => {
         // Details go to our error log, never on screen.
         reportError('claimInvite', e);
-        setError('We couldn’t finish setting up your account. Please try again.');
+        setError(setupErrorMessage(e));
       })
       .finally(() => {
         claimingFor.current = null;

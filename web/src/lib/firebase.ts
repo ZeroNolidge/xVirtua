@@ -9,6 +9,12 @@ import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { connectStorageEmulator, getStorage } from 'firebase/storage';
 import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
+import { rememberAppCheckDebugToken, setupAppCheckDebug } from './appCheckDebug';
+
+declare global {
+  // Read by the App Check SDK when it starts (debug provider for a test browser).
+  var FIREBASE_APPCHECK_DEBUG_TOKEN: boolean | string | undefined;
+}
 
 const env = import.meta.env;
 export const usingEmulators = env.VITE_USE_EMULATORS === 'true' || !env.VITE_FIREBASE_API_KEY;
@@ -28,6 +34,10 @@ export const app = initializeApp({
  * automatically; our plain HTTP voice endpoint adds it by hand.
  */
 const siteKey = env.VITE_APPCHECK_SITE_KEY;
+// A test browser can use an App Check debug token (?appcheck-debug=1); never with the emulators.
+const debugToken = !usingEmulators && siteKey ? setupAppCheckDebug() : null;
+if (debugToken) self.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken;
+rememberAppCheckDebugToken(debugToken);
 export const appCheck: AppCheck | null =
   !usingEmulators && siteKey
     ? initializeAppCheck(app, {
