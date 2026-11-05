@@ -20,6 +20,7 @@ import { Difficulty } from '../components/Difficulty';
 import { Loading } from './StatusScreens';
 import { prewarmConversation, sessionApi } from '../lib/session';
 import { MODEL_LABELS } from '../lib/models';
+import { useNoMic } from '../lib/micNotice';
 
 export function Briefing() {
   const { id } = useParams();
@@ -34,6 +35,7 @@ export function Briefing() {
   const [startError, setStartError] = useState<string | null>(null);
   const [model, setModel] = useState<PatientModel | ''>('');
   const [voiceMode, setVoiceMode] = useState<VoiceMode | ''>('');
+  const [noMic] = useNoMic();
 
   async function startConversation() {
     if (!id) return;
@@ -147,7 +149,11 @@ export function Briefing() {
       <button className="btn" disabled={starting} onClick={() => void startConversation()}>
         {starting ? 'Getting the room ready…' : 'Start conversation'}
       </button>
-      <p className="muted small center-text">Find a quiet spot. You’ll talk out loud.</p>
+      <p className="muted small center-text">
+        {noMic
+          ? `No microphone, so you’ll type your side and ${b.persona.name.split(' ')[0]}’s replies show as text.`
+          : 'Find a quiet spot. You’ll talk out loud.'}
+      </p>
 
       {isFaculty && <FacultyReview summary={detail.summary} script={detail.script} />}
     </section>

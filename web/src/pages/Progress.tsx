@@ -16,10 +16,10 @@ import { ProgressDashboard } from '../components/ProgressDashboard';
 import { PatientBadge } from '../components/PatientBadge';
 import { usePatientProgress } from '../lib/patientProgress';
 import { useScenarioList } from '../lib/scenarios';
+import { neverStarted, type SessionRow } from '../lib/resume';
 
-interface Row {
+interface Row extends Partial<SessionRow> {
   id: string;
-  scenarioTitle?: string;
   status: 'live' | 'ended';
   startedAt?: Timestamp;
   /** A word like "Solid": residents never see the numbers. */
@@ -39,7 +39,12 @@ function useHistory(uid: string | undefined) {
     );
     return onSnapshot(
       q,
-      (snap) => setRows(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Row, 'id'>) }))),
+      (snap) =>
+        setRows(
+          snap.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Row, 'id'>) }))
+            .filter((r) => !neverStarted(r)),
+        ),
       () => setRows([]),
     );
   }, [uid]);

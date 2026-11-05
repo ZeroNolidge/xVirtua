@@ -596,4 +596,27 @@ describe('GPT-Live conversation', () => {
     expect(screen.getByText(/^Live voice\. Everything your mic picks up/)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/GPT-Live|\(test\)/);
   });
+
+  it('with no mic known before the tap: says they’ll type, with no “mic picks up” line', () => {
+    const before = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+    try {
+      render(
+        <MemoryRouter>
+          <LiveConversation
+            sessionId="s1"
+            persona={{ name: 'Ray Kowalski', age: 58, pronouns: 'he/him' }}
+            opening={opening}
+            onFallback={vi.fn()}
+          />
+        </MemoryRouter>,
+      );
+      expect(
+        screen.getByText(/You’ll type your side, and Ray’s replies show here as text/),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/mic picks up/)).toBeNull();
+    } finally {
+      if (before) Object.defineProperty(navigator, 'mediaDevices', before);
+    }
+  });
 });

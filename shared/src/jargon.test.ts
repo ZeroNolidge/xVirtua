@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  closeJargonMatch,
   createJargonMatcher,
   normalize,
   scoreJargon,
@@ -50,9 +51,9 @@ describe('matcher', () => {
     expect(terms('Your hypertension and lipids need work.')).toEqual(['hypertension', 'lipids']);
     expect(terms('We saw a myocardial infarction on the EKG.')).toEqual([
       'myocardial infarction',
-      'ekg',
+      'EKG',
     ]);
-    expect(terms('Take it PRN, or b.i.d. if needed.')).toEqual(['prn', 'bid']);
+    expect(terms('Take it PRN, or b.i.d. if needed.')).toEqual(['PRN', 'BID']);
     expect(terms('Statins help.')).toEqual(['statin']);
     expect(terms('Your A-fib is back.')).toEqual(['atrial fibrillation']);
   });
@@ -95,7 +96,7 @@ describe('scoreJargon', () => {
       m,
     );
     // hypertension x2 (1 repeat), uncontrolled, prn => 3 unique, 1 repeat
-    expect(r.flagged.map((f) => f.term).sort()).toEqual(['hypertension', 'prn', 'uncontrolled']);
+    expect(r.flagged.map((f) => f.term).sort()).toEqual(['PRN', 'hypertension', 'uncontrolled']);
     expect(r.score).toBe(100 - 24 - 2);
     expect(r.flagged.find((f) => f.term === 'hypertension')?.turns).toEqual([1, 3]);
   });
@@ -123,7 +124,7 @@ describe('searchJargon', () => {
   it('ranks exact and prefix matches first', () => {
     expect(searchJargon(SEED_JARGON, 'hypertension')[0]?.term).toBe('hypertension');
     expect(searchJargon(SEED_JARGON, 'hyperten')[0]?.term).toBe('hypertension');
-    expect(searchJargon(SEED_JARGON, 'a1c')[0]?.term).toBe('hemoglobin a1c');
+    expect(searchJargon(SEED_JARGON, 'a1c')[0]?.term).toBe('hemoglobin A1c');
     expect(searchJargon(SEED_JARGON, 'PRN')[0]?.plain).toContain('as needed');
   });
 
@@ -133,5 +134,47 @@ describe('searchJargon', () => {
 
   it('returns nothing for empty queries', () => {
     expect(searchJargon(SEED_JARGON, '  ')).toEqual([]);
+  });
+});
+
+describe('how terms are written', () => {
+  const termFor = (q: string) => searchJargon(SEED_JARGON, q)[0]?.term;
+  it('shows abbreviations the way clinicians write them, whatever the case typed', () => {
+    expect(termFor('ascvd')).toBe('ASCVD');
+    expect(termFor('BP')).toBe('BP');
+    expect(termFor('bp')).toBe('BP');
+    expect(termFor('prn')).toBe('PRN');
+    expect(termFor('Bid')).toBe('BID');
+    expect(termFor('ldl')).toBe('LDL');
+    expect(termFor('egfr')).toBe('eGFR');
+    expect(termFor('hba1c')).toBe('hemoglobin A1c');
+  });
+  it('no term is left as a lower-case abbreviation', () => {
+    const short = SEED_JARGON.filter(
+      (t) => /^[a-z0-9]{2,5}$/.test(t.term) && !/[aeiouy]/.test(t.term),
+    );
+    expect(short.map((t) => t.term)).toEqual([]);
+  });
+});
+
+describe('risk of heart attack and stroke', () => {
+  it('cardiovascular and cardiac risk name stroke, not just the heart', () => {
+    for (const q of ['cardiovascular risk', 'cardiac risk', 'metabolic syndrome']) {
+      const t = searchJargon(SEED_JARGON, q)[0]!;
+      expect(t.plain.join(' '), q).toMatch(/heart attack and stroke/);
+    }
+    expect(SEED_JARGON.flatMap((t) => t.plain).filter((p) => /\bheart risk\b/.test(p))).toEqual([]);
+  });
+});
+
+describe('closeJargonMatch', () => {
+  it('finds the word a spelling slip meant', () => {
+    expect(closeJargonMatch(SEED_JARGON, 'hypertention')?.term).toBe('hypertension');
+    expect(closeJargonMatch(SEED_JARGON, 'Hypertention')?.term).toBe('hypertension');
+    expect(closeJargonMatch(SEED_JARGON, 'diabetis mellitus')?.term).toBe('diabetes mellitus');
+  });
+  it('leaves short or far-off words to the server', () => {
+    expect(closeJargonMatch(SEED_JARGON, 'abcd')).toBeNull();
+    expect(closeJargonMatch(SEED_JARGON, 'xylophone')).toBeNull();
   });
 });

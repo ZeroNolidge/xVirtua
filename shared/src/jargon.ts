@@ -281,3 +281,45 @@ export function searchJargon(terms: JargonTerm[], query: string, limit = 20): Ja
   scored.sort((a, b) => b.s - a.s || a.t.term.localeCompare(b.t.term));
   return scored.slice(0, limit).map((x) => x.t);
 }
+
+// ---------- spelling slips ----------
+
+/** Edits to turn a into b (insert, delete, swap a letter, or swap two neighbours). */
+function editDistance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        v = Math.min(v, d[i - 2]![j - 2]! + 1);
+      d[i]![j] = v;
+    }
+  return d[a.length]![b.length]!;
+}
+
+/**
+ * The dictionary term a misspelling most likely meant ("hypertention" ->
+ * hypertension), or null when nothing is close or two terms are equally close.
+ * Short words need to be nearer (1 slip under 8 letters, 2 from 8).
+ */
+export function closeJargonMatch(terms: JargonTerm[], query: string): JargonTerm | null {
+  const q = tokenize(query).join(' ');
+  if (q.length < 5) return null;
+  const max = q.length >= 8 ? 2 : 1;
+  let best: JargonTerm | null = null;
+  let bestD = max + 1;
+  let tie = false;
+  for (const t of terms) {
+    for (const f of [t.term, ...t.variants]) {
+      const form = tokenize(f).join(' ');
+      if (Math.abs(form.length - q.length) > max) continue;
+      const dist = editDistance(form, q);
+      if (dist < bestD) [best, bestD, tie] = [t, dist, false];
+      else if (dist === bestD && best && best.id !== t.id) tie = true;
+    }
+  }
+  return best && !tie ? best : null;
+}

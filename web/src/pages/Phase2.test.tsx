@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
@@ -18,6 +18,11 @@ vi.mock('../lib/api', () => ({
   friendlyError: () => 'x',
 }));
 vi.mock('../lib/session', () => ({ sessionApi: {}, prewarmConversation: vi.fn() }));
+const lookupOnServer = vi.fn(async (_term: string) => null);
+vi.mock('../lib/jargon', async (orig) => ({
+  ...(await orig<typeof import('../lib/jargon')>()),
+  lookupOnServer: (t: string) => lookupOnServer(t),
+}));
 vi.mock('../lib/auth', () => ({
   useAuth: () => ({
     claims: { role: role.current, programId: 'irmc' },
@@ -54,6 +59,49 @@ describe('Plain words lookup', () => {
     expect(screen.getByText('“high blood pressure”')).toBeInTheDocument();
   });
 
+  it('shows abbreviations the way clinicians write them', () => {
+    render(<Lookup />);
+    const box = screen.getByPlaceholderText(/type a medical word/i);
+    const cases: [string, string][] = [
+      ['ascvd', 'ASCVD'],
+      ['bp', 'BP'],
+      ['prn', 'PRN'],
+      ['a1c', 'hemoglobin A1c'],
+    ];
+    for (const [typed, shown] of cases) {
+      fireEvent.change(box, { target: { value: typed } });
+      expect(screen.getAllByText(shown)[0]).toBeInTheDocument();
+    }
+    expect(screen.queryByText('ascvd')).toBeNull();
+  });
+
+  it('a misspelled word finds the dictionary entry, without asking the server', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<Lookup />);
+      fireEvent.change(screen.getByPlaceholderText(/type a medical word/i), {
+        target: { value: 'hypertention' },
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.getAllByText('hypertension')[0]).toBeInTheDocument();
+      expect(screen.getByText('“high blood pressure”')).toBeInTheDocument();
+      expect(screen.queryByText('Looking…')).toBeNull();
+      expect(lookupOnServer).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a word with no close match still asks the server', async () => {
+    render(<Lookup />);
+    fireEvent.change(screen.getByPlaceholderText(/type a medical word/i), {
+      target: { value: 'zzqqxx' },
+    });
+    await vi.waitFor(() => expect(lookupOnServer).toHaveBeenCalledWith('zzqqxx'));
+  });
+
   it('offers suggestion chips when empty', () => {
     render(<Lookup />);
     fireEvent.click(screen.getByRole('button', { name: 'PRN' }));
@@ -78,6 +126,25 @@ describe('Briefing', () => {
     expect(screen.getByText(seed.briefing.residentTask)).toBeInTheDocument();
     expect(screen.queryByText(/faculty review/i)).not.toBeInTheDocument();
     expect(screen.queryByText(seed.script.hiddenConcern)).not.toBeInTheDocument();
+  });
+
+  it('with no mic: says they’ll type their side; with a mic: talk out loud', () => {
+    const { unmount } = renderBriefing();
+    expect(
+      screen.getByText(/you’ll type your side and .+’s replies show as text/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/You’ll talk out loud/)).toBeNull();
+    unmount();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn() },
+    });
+    try {
+      renderBriefing();
+      expect(screen.getByText(/You’ll talk out loud/)).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+    }
   });
 
   it('shows faculty the review panel with hidden concern, cues and publish', () => {

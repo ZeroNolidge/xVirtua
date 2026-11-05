@@ -101,7 +101,7 @@ refractory|hard to treat||general|
 primary prevention|preventing a first heart attack or stroke||general|
 secondary prevention|preventing it from happening again||general|
 risk stratification|figuring out your risk||general|
-cardiovascular risk|heart risk|cardiac risk|general|x
+cardiovascular risk|risk of heart attack and stroke|cardiac risk|general|x
 shared decision-making|deciding together|shared decision making|general|
 pharmacologic|with medicine|pharmacological|general|
 nonpharmacologic|without medicine|non-pharmacologic,nonpharmacological|general|
@@ -116,42 +116,42 @@ radiograph|x-ray|radiographs|test|
 biopsy|small tissue sample|biopsies|test|x
 lipid panel|cholesterol test|lipid profile,fasting lipid panel|test|
 lipids|cholesterol and fats in the blood|lipid|test|x
-ldl|bad cholesterol|low-density lipoprotein,ldl cholesterol,ldl-c|test|x
-hdl|good cholesterol|high-density lipoprotein,hdl cholesterol|test|x
+LDL|bad cholesterol|low-density lipoprotein,ldl cholesterol,ldl-c|test|x
+HDL|good cholesterol|high-density lipoprotein,hdl cholesterol|test|x
 triglycerides|a type of fat in the blood|triglyceride|test|x
-hemoglobin a1c|3-month blood sugar test|a1c,hba1c,glycated hemoglobin,glycosylated hemoglobin|test|x
+hemoglobin A1c|3-month blood sugar test|a1c,hba1c,glycated hemoglobin,glycosylated hemoglobin|test|x
 fasting plasma glucose|fasting blood sugar|fasting glucose,fpg|test|
 glucose|blood sugar|blood glucose|test|x
 fingerstick|finger-prick sugar check|finger stick|test|
 glucometer|blood sugar meter|glucose meter|test|
-cgm|sugar sensor;a sensor that checks your sugar all day|continuous glucose monitor|test|x
+CGM|sugar sensor;a sensor that checks your sugar all day|continuous glucose monitor|test|x
 oral glucose tolerance test|sugar drink test|ogtt|test|
-cbc|blood count|complete blood count|test|
+CBC|blood count|complete blood count|test|
 hemoglobin|red blood cell level||test|x
 hematocrit|red blood cell level||test|
 white blood cell count|infection-fighting cells|wbc|test|
-cmp|routine blood chemistry test|comprehensive metabolic panel,bmp,basic metabolic panel|test|
+CMP|routine blood chemistry test|comprehensive metabolic panel,bmp,basic metabolic panel|test|
 creatinine|kidney function test||test|x
-egfr|kidney filtering number|gfr,estimated glomerular filtration rate,glomerular filtration rate|test|x
-bun|kidney blood test|blood urea nitrogen|test|
+eGFR|kidney filtering number|gfr,estimated glomerular filtration rate,glomerular filtration rate|test|x
+BUN|kidney blood test|blood urea nitrogen|test|
 urinalysis|urine test|ua|test|
 microalbumin|protein in the urine test|urine microalbumin,uacr|test|
 liver function tests|liver tests|lfts,lft,liver panel|test|
 transaminases|liver tests|transaminitis|test|
-alt|liver enzyme|alanine aminotransferase|test|x
-ast|liver enzyme|aspartate aminotransferase|test|x
+ALT|liver enzyme|alanine aminotransferase|test|x
+AST|liver enzyme|aspartate aminotransferase|test|x
 liver enzymes|liver tests||test|x
-tsh|thyroid test|thyroid stimulating hormone|test|x
-inr|clotting test|pt/inr|test|x
+TSH|thyroid test|thyroid stimulating hormone|test|x
+INR|clotting test|pt/inr|test|x
 creatine kinase|muscle enzyme test|ck,cpk|test|
-ekg|heart tracing|ecg,electrocardiogram|test|x
+EKG|heart tracing|ecg,electrocardiogram|test|x
 echocardiogram|heart ultrasound|echo|test|
 stress test|treadmill heart test||test|x
-ct scan|detailed x-ray scan|ct,cat scan,computed tomography|test|x
-mri|detailed scan using magnets|magnetic resonance imaging|test|x
+CT scan|detailed x-ray scan|ct,cat scan,computed tomography|test|x
+MRI|detailed scan using magnets|magnetic resonance imaging|test|x
 spirometry|breathing test|pulmonary function test,pulmonary function tests,pfts|test|
 pulse oximetry|oxygen level check|pulse ox,o2 sat,spo2,oxygen saturation|test|
-mmhg|the units for blood pressure|millimeters of mercury|test|
+mmHg|the units for blood pressure|millimeters of mercury|test|
 systolic|top number||test|
 diastolic|bottom number||test|
 vital signs|your blood pressure, pulse and temperature|vitals|test|x
@@ -169,9 +169,9 @@ hyperglycemia|high blood sugar|hyperglycemic|condition|
 hypoglycemia|low blood sugar|hypoglycemic,hypo,hypos|condition|
 prediabetes|blood sugar higher than normal, but not diabetes yet|pre-diabetes,prediabetic|condition|x
 insulin resistance|your body doesn't respond well to insulin|insulin resistant|condition|x
-metabolic syndrome|a group of problems that raise heart risk||condition|x
+metabolic syndrome|a group of problems that raise your risk of heart attack and stroke||condition|x
 obesity|a weight that's unhealthy for your body|obese,morbid obesity,morbidly obese|condition|x
-bmi|a number based on your height and weight|body mass index|condition|x
+BMI|a number based on your height and weight|body mass index|condition|x
 myocardial infarction|heart attack|mi,myocardial infarctions,stemi,nstemi|condition|
 coronary artery disease|clogged heart arteries|cad,coronary heart disease,chd|condition|
 atherosclerosis|plaque buildup in the arteries;hardening of the arteries|atherosclerotic|condition|
@@ -181,7 +181,7 @@ angina|chest pain from the heart||condition|x
 cerebrovascular accident|stroke|cva|condition|
 transient ischemic attack|mini-stroke|tia|condition|
 cardiovascular disease|heart and blood vessel disease|cvd,cardiovascular|condition|
-ascvd|heart disease and stroke from clogged arteries|atherosclerotic cardiovascular disease|condition|
+ASCVD|heart disease and stroke from clogged arteries|atherosclerotic cardiovascular disease|condition|
 congestive heart failure|heart isn't pumping as well as it should|chf,hfref,hfpef|condition|
 arrhythmia|irregular heartbeat|arrhythmias,dysrhythmia|condition|
 atrial fibrillation|irregular heartbeat|afib,a-fib,a fib|condition|x
@@ -204,9 +204,9 @@ hepatic steatosis|fatty liver|steatosis,nafld,masld,fatty liver disease,nash,mas
 hepatitis|liver inflammation||condition|x
 cirrhosis|scarring of the liver||condition|x
 gastrointestinal|stomach and intestines|gi|condition|
-gerd|acid reflux;heartburn|gastroesophageal reflux disease,gastroesophageal reflux|condition|
+GERD|acid reflux;heartburn|gastroesophageal reflux disease,gastroesophageal reflux|condition|
 dyspepsia|indigestion||condition|
-copd|lung disease that makes it hard to breathe|chronic obstructive pulmonary disease|condition|x
+COPD|lung disease that makes it hard to breathe|chronic obstructive pulmonary disease|condition|x
 emphysema|lung damage that makes it hard to breathe||condition|x
 pulmonary|lung||condition|
 respiratory|breathing||condition|
@@ -287,24 +287,24 @@ glomerular|kidney filter||body|
 statin|cholesterol medicine|statins,hmg-coa reductase inhibitor|med|x
 antihypertensive|blood pressure medicine|antihypertensives|med|
 diuretic|water pill|diuretics,thiazide,thiazides|med|
-ace inhibitor|blood pressure pill that also protects the kidneys|ace inhibitors,acei,ace-i|med|x
-arb|blood pressure pill|arbs,angiotensin receptor blocker,angiotensin receptor blockers|med|x
+ACE inhibitor|blood pressure pill that also protects the kidneys|ace inhibitors,acei,ace-i|med|x
+ARB|blood pressure pill|arbs,angiotensin receptor blocker,angiotensin receptor blockers|med|x
 beta blocker|medicine that slows the heart and lowers blood pressure|beta blockers,beta-blocker,beta-blockers|med|x
 calcium channel blocker|blood pressure pill|calcium channel blockers,ccb|med|x
 oral hypoglycemic|diabetes pill|oral hypoglycemics,hypoglycemic agent,oral agent|med|
-glp-1 agonist|weekly diabetes and weight shot|glp-1,glp1,glp-1 receptor agonist,glp-1 ra,glp-1s|med|x
-sglt2 inhibitor|diabetes pill that removes sugar through the urine|sglt2,sglt-2 inhibitor,sglt2 inhibitors|med|x
+GLP-1 agonist|weekly diabetes and weight shot|glp-1,glp1,glp-1 receptor agonist,glp-1 ra,glp-1s|med|x
+SGLT2 inhibitor|diabetes pill that removes sugar through the urine|sglt2,sglt-2 inhibitor,sglt2 inhibitors|med|x
 sulfonylurea|diabetes pill that makes your body release insulin|sulfonylureas|med|x
 basal insulin|long-acting insulin||med|x
 bolus|mealtime dose|bolus insulin|med|
 anticoagulant|blood thinner|anticoagulants,anticoagulation|med|
 antiplatelet|medicine that keeps blood from clotting too easily|antiplatelets|med|
-nsaid|anti-inflammatory pain reliever like ibuprofen|nsaids,non-steroidal anti-inflammatory,nonsteroidal anti-inflammatory|med|x
+NSAID|anti-inflammatory pain reliever like ibuprofen|nsaids,non-steroidal anti-inflammatory,nonsteroidal anti-inflammatory|med|x
 analgesic|pain reliever|analgesics,analgesia|med|
 antipyretic|fever reducer|antipyretics|med|
 antiemetic|anti-nausea medicine|antiemetics|med|
 anxiolytic|anxiety medicine|anxiolytics|med|
-ssri|a type of antidepressant|ssris,selective serotonin reuptake inhibitor|med|x
+SSRI|a type of antidepressant|ssris,selective serotonin reuptake inhibitor|med|x
 corticosteroid|steroid|corticosteroids|med|
 nicotine replacement therapy|nicotine patch, gum or lozenge|nrt|med|x
 over-the-counter|without a prescription|otc,over the counter|med|
@@ -317,19 +317,19 @@ side effect profile|possible side effects||med|
 tolerability|how well you handle it|tolerate,tolerated,tolerating|med|x
 half-life|how long it stays in your body|half life|med|
 dosage|amount||med|
-po|by mouth|per os|med|
+PO|by mouth|per os|med|
 intravenous|through a vein|iv|med|
 intramuscular|a shot in the muscle||med|
 subcutaneous|under the skin|subq,sub-q,subcut|med|
 topical|on the skin||med|
 sublingual|under the tongue||med|
-bid|twice a day|b.i.d.|med|
-tid|three times a day|t.i.d.|med|
-qid|four times a day|q.i.d.|med|
-qd|once a day|q.d.|med|
-qhs|at bedtime|q.h.s.|med|
-prn|as needed|p.r.n.|med|
-stat|right away||med|
+BID|twice a day|b.i.d.|med|
+TID|three times a day|t.i.d.|med|
+QID|four times a day|q.i.d.|med|
+QD|once a day|q.d.|med|
+QHS|at bedtime|q.h.s.|med|
+PRN|as needed|p.r.n.|med|
+STAT|right away||med|
 taper|lower the dose slowly|tapering,tapered|med|x
 titrate|adjust the dose slowly|titration,titrating,up-titrate,uptitrate|med|
 maintenance dose|regular dose||med|
@@ -339,10 +339,10 @@ hepatotoxicity|liver damage|hepatotoxic|med|
 nephrotoxic|harmful to the kidneys|nephrotoxicity|med|
 hypersensitivity|allergic reaction|hypersensitivity reaction|med|
 anaphylaxis|severe allergic reaction|anaphylactic|med|
-gi upset|upset stomach|gi side effects|med|
+GI upset|upset stomach|gi side effects|med|
 dietary modification|changes to what you eat|dietary modifications,dietary changes|treatment|
 sodium restriction|cutting back on salt|sodium intake,low-sodium diet,low sodium diet|treatment|x
-dash diet|an eating plan that lowers blood pressure|dash|treatment|x
+DASH diet|an eating plan that lowers blood pressure|dash|treatment|x
 carbohydrates|carbs, like bread, rice and sweets|carbohydrate,carbohydrate intake|treatment|x
 saturated fat|the kind of fat in butter and red meat|saturated fats|treatment|x
 caloric intake|how much you eat|calorie intake|treatment|
@@ -365,14 +365,14 @@ revascularization|restoring blood flow||treatment|
 dialysis|a machine that cleans your blood when the kidneys can't||treatment|x
 self-monitoring|checking at home|smbg,self-monitoring of blood glucose|treatment|
 behavioral therapy|counseling to change habits|cognitive behavioral therapy,cbt|treatment|x
-hx|history|pmh,past medical history|abbrev|
-fhx|family history|fh|abbrev|
-sx|symptoms||abbrev|
-dx|diagnosis||abbrev|
-rx|prescription|rxs|abbrev|
-f/u|follow-up|fu|abbrev|
-cp|chest pain||abbrev|
-n/v|nausea and vomiting||abbrev|
-bm|bowel movement|bms|abbrev|
-bp|blood pressure|bps|abbrev|
+Hx|history|pmh,past medical history|abbrev|
+FHx|family history|fh|abbrev|
+Sx|symptoms||abbrev|
+Dx|diagnosis||abbrev|
+Rx|prescription|rxs|abbrev|
+F/U|follow-up|fu|abbrev|
+CP|chest pain||abbrev|
+N/V|nausea and vomiting||abbrev|
+BM|bowel movement|bms|abbrev|
+BP|blood pressure|bps|abbrev|
 `;

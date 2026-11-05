@@ -6,6 +6,18 @@ import { db, functions } from './firebase';
 
 let cache: JargonTerm[] | null = null;
 
+const SEED_BY_ID = new Map(SEED_JARGON.map((t) => [t.id, t]));
+
+/**
+ * A built-in entry copied into the database: show the app's current wording
+ * (e.g. "BP", not an older "bp"), so wording fixes don't wait for a reseed.
+ */
+export function withSeedWording(id: string, data: unknown): JargonTerm {
+  const t = data as JargonTerm & { seeded?: boolean };
+  const seed = t.seeded ? SEED_BY_ID.get(id) : undefined;
+  return seed ? { ...t, term: seed.term, plain: seed.plain } : t;
+}
+
 /**
  * The dictionary for lookup. Starts with the bundled seed list so search is
  * instant (and works offline), then swaps in the program's live list.
@@ -22,7 +34,8 @@ export function useJargonTerms(programId: string | undefined): JargonTerm[] {
     ])
       .then(([global, local]) => {
         const byId = new Map<string, JargonTerm>();
-        for (const d of [...global.docs, ...local.docs]) byId.set(d.id, d.data() as JargonTerm);
+        for (const d of [...global.docs, ...local.docs])
+          byId.set(d.id, withSeedWording(d.id, d.data()));
         if (byId.size === 0) return; // not seeded yet: keep the bundled list
         cache = [...byId.values()];
         if (!cancelled) setTerms(cache);
