@@ -12,7 +12,7 @@ if (snap.empty) console.log('No client error reports.');
 for (const d of snap.docs) {
   const e = d.data();
   console.log(
-    `--- ${e.createdAt?.toDate?.().toISOString()} ${e.kind} ${e.path ?? ''} uid=${e.uid ?? '-'}`,
+    `--- ${e.createdAt?.toDate?.().toISOString()} ${e.kind} ${e.path ?? ''} uid=${e.uid ?? '-'} appCheck=${e.appCheck ?? '-'}`,
   );
   console.log(e.message);
   if (e.stack)

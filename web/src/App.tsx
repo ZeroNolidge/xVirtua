@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { TabBar } from './components/TabBar';
 import { UpdateBanner } from './components/UpdateBanner';
+import { AppCheckDebugBar } from './components/AppCheckDebugBar';
 import { useAuth } from './lib/auth';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
@@ -33,6 +34,7 @@ export function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="*" element={<Gate />} />
       </Routes>
+      <AppCheckDebugBar />
     </div>
   );
 }
