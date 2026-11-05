@@ -137,11 +137,7 @@ export class HeadMatcher {
     img.src = url;
     await img.decode();
     const g = this.gray(img);
-    if (g)
-      this.refs.set(
-        url,
-        SCALES.map((s) => scaleAbout(g, s)),
-      );
+    if (g) this.refs.set(url, SCALES.map((s) => scaleAbout(g, s)));
   }
 
   /**

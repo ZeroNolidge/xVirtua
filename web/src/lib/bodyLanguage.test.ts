@@ -145,10 +145,7 @@ describe('body language clips', () => {
       moods: { ...manifest.moods, upset: { poster: 'upset.jpg', clips: { look_away: 'u.mp4' } } },
     };
     const lb = new BodyLanguage(ladder, '/avatars/linda', el);
-    await lb.load((async () => ({
-      ok: true,
-      blob: async () => new Blob(['x']),
-    })) as unknown as typeof fetch);
+    await lb.load((async () => ({ ok: true, blob: async () => new Blob(['x']) })) as unknown as typeof fetch);
     const moods: string[] = [];
     lb.onMood = (m) => {
       moods.push(m);
