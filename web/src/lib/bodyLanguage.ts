@@ -1,10 +1,4 @@
-import {
-  characterSlug,
-  MOODS,
-  stepToward,
-  type Mood,
-  type NonverbalCue,
-} from '@plainspeak/shared';
+import { characterSlug, MOODS, stepToward, type Mood, type NonverbalCue } from '@plainspeak/shared';
 import { GRID, HeadMatcher } from './headMatch';
 import { cueForWords, type CueRules } from './cueWords';
 

@@ -18,11 +18,7 @@ const AT_EASE: [RegExp, NonverbalCue][] = [
   [/\b(okay|ok|alright|all right|makes sense|sounds good|got it|sure|yeah)\b/i, 'nod'],
 ];
 
-export function cueForWords(
-  text: string,
-  mood: Mood,
-  own: CueRules = [],
-): NonverbalCue | null {
+export function cueForWords(text: string, mood: Mood, own: CueRules = []): NonverbalCue | null {
   for (const [pattern, cue] of own) {
     try {
       if (new RegExp(pattern, 'i').test(text)) return cue;

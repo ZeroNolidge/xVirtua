@@ -25,3 +25,8 @@ export function canContinue(s: SessionRow, now = Date.now()): boolean {
   const last = (s.lastActivityAt ?? s.startedAt).toMillis();
   return now - last <= SESSION_LIMITS.idleMinutes * 60000;
 }
+
+/** Open, the resident never spoke, and too late to carry on: nothing to look back at. */
+export function neverStarted(s: Partial<SessionRow>, now = Date.now()): boolean {
+  return s.status === 'live' && (s.turnCount ?? 0) <= 1 && !canContinue(s as SessionRow, now);
+}

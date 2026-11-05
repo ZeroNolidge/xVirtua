@@ -176,7 +176,23 @@ export function SessionDone() {
   const practiceSec = Math.max(0, (meta.durationSec ?? 0) - (meta.appWaitSec ?? 0));
   const mins = practiceSec ? Math.max(1, Math.round(practiceSec / 60)) : null;
 
-  // Nothing was said: no praise, just an easy way back in.
+  // Nothing was said yet: still open, so carry on; otherwise an easy way back in.
+  if (residentTurns === 0 && resumable) {
+    return (
+      <section>
+        <h1>{first} is waiting for you</h1>
+        <div className="card">
+          <p>This conversation is still open. Pick it up where {first} left off.</p>
+          <button className="btn" onClick={() => nav(`/session/${id}`, { replace: true })}>
+            Continue the conversation
+          </button>
+          <Link to="/" className="btn btn-text">
+            Back to patients
+          </Link>
+        </div>
+      </section>
+    );
+  }
   if (residentTurns === 0) {
     return (
       <section>

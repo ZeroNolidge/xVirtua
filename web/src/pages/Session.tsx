@@ -12,7 +12,7 @@ import {
   type PatientChunk,
   type VoiceMode,
 } from '@plainspeak/shared';
-import { afterMicOpened, micIndicator, NO_MIC_NOTICE } from '../lib/micNotice';
+import { afterMicOpened, micIndicator, NO_MIC_NOTICE, useNoMic } from '../lib/micNotice';
 import { db } from '../lib/firebase';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
@@ -294,19 +294,7 @@ export function Conversation({
   const [draft, setDraft] = useState('');
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   /** We already know there's no mic (none here, refused before, or live voice found none). */
-  const [noMic, setNoMic] = useState(
-    () => initialNotice === NO_MIC_NOTICE || !navigator.mediaDevices?.getUserMedia,
-  );
-  useEffect(() => {
-    let live = true;
-    navigator.permissions
-      ?.query({ name: 'microphone' as PermissionName })
-      .then((s) => live && s.state === 'denied' && setNoMic(true))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, []);
+  const [noMic, setNoMic] = useNoMic(initialNotice === NO_MIC_NOTICE);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   /** The mic and speech service are off until "Continue". */

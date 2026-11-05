@@ -73,8 +73,7 @@ export function useAvatar(sessionId: string) {
     /** His next face, connected out of sight and waiting to take over. */
     nextVideo: () => avatar.current?.nextVideo ?? null,
     /** Connects his face for another mood in the background (the current one keeps going). */
-    prepare: (mood: Mood) =>
-      avatar.current?.prepareFace(tokenFor(mood)) ?? Promise.resolve(false),
+    prepare: (mood: Mood) => avatar.current?.prepareFace(tokenFor(mood)) ?? Promise.resolve(false),
     /** Swaps to the prepared face at once (no gap; the voice never moves). False: none ready. */
     commit: () => avatar.current?.commitFace() ?? false,
     /** Switches to the face for another mood the slow way (hang up, then start again). */

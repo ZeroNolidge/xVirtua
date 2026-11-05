@@ -5,7 +5,7 @@ import { reportError } from '../lib/errorReport';
 import { sessionApi, streamTurn, type TurnInput, type Utterance } from '../lib/session';
 import { LiveVoiceCall, toneNote } from '../lib/liveVoice';
 import { ECHO_WINDOW_MS, isEcho, LiveReply, MIC_EVIDENCE_MS } from '../lib/liveReply';
-import { NO_MIC_NOTICE } from '../lib/micNotice';
+import { NO_MIC_NOTICE, useNoMic } from '../lib/micNotice';
 import { SessionRecorder } from '../lib/recorder';
 import { PlainWordSearch } from '../components/PlainWordSearch';
 import { UploadRetry } from '../components/UploadRetry';
@@ -104,6 +104,7 @@ export function LiveConversation({
   startedAtMs,
 }: LiveConversationProps) {
   const first = persona.name.split(' ')[0];
+  const [noMic] = useNoMic();
   const upload = useRecordingUpload(sessionId);
   const [phase, setPhase] = useState<Phase>('ready');
   const [bubbles, setBubblesState] = useState<Bubble[]>(resumeFrom ?? []);
@@ -927,17 +928,34 @@ export function LiveConversation({
 
       {phase === 'ready' && (
         <div className="card">
-          <p>
-            Talk naturally, like you’re in the room. {first} listens while talking, so you can
-            pause, carry on, or cut in. When you’re done, tap <strong>End</strong> to get feedback.
-          </p>
-          <p className="muted small">
-            Live voice. Everything your mic picks up, including the room around you, goes to OpenAI,
-            which also speaks as {first}.
-          </p>
-          <p className="muted small">
-            We’ll record this practice so you can review it and get feedback (kept up to 3 years).
-          </p>
+          {noMic ? (
+            <>
+              <p>
+                You’ll type your side, and {first}’s replies show here as text. When you’re done,
+                tap <strong>End</strong> to get feedback.
+              </p>
+              <p className="muted small">
+                We’ll save this conversation so you can review it and get feedback (kept up to 3
+                years).
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                Talk naturally, like you’re in the room. {first} listens while talking, so you can
+                pause, carry on, or cut in. When you’re done, tap <strong>End</strong> to get
+                feedback.
+              </p>
+              <p className="muted small">
+                Live voice. Everything your mic picks up, including the room around you, goes to
+                OpenAI, which also speaks as {first}.
+              </p>
+              <p className="muted small">
+                We’ll record this practice so you can review it and get feedback (kept up to 3
+                years).
+              </p>
+            </>
+          )}
           <button className="btn" onClick={() => void begin()}>
             {resumeFrom ? 'Continue the conversation' : 'Start talking'}
           </button>

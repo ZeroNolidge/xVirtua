@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { searchJargon } from '@plainspeak/shared';
+import { closeJargonMatch, searchJargon } from '@plainspeak/shared';
 import { useAuth } from '../lib/auth';
 import { lookupOnServer, useJargonTerms, type ServerAnswer } from '../lib/jargon';
 
@@ -20,9 +20,15 @@ export function PlainWordSearch({ autoFocus = false }: { autoFocus?: boolean }) 
   const terms = useJargonTerms(claims?.programId);
   const [q, setQ] = useState('');
   // The built-in dictionary answers instantly, on every keystroke.
-  const results = useMemo(() => searchJargon(terms, q, 15), [terms, q]);
+  const found = useMemo(() => searchJargon(terms, q, 15), [terms, q]);
+  // A spelling slip ("hypertention"): the dictionary entry it most likely meant.
+  const close = useMemo(
+    () => (found.length ? null : closeJargonMatch(terms, q)),
+    [terms, q, found.length],
+  );
+  const results = close ? [close] : found;
   const term = q.trim();
-  // Only when it has nothing do we ask the server (after a short pause in typing).
+  // Only when it has nothing, not even close, do we ask the server (after a short pause in typing).
   const needServer = term.length >= 3 && results.length === 0;
   const [server, setServer] = useState<{
     term: string;
@@ -111,6 +117,11 @@ export function PlainWordSearch({ autoFocus = false }: { autoFocus?: boolean }) 
         </ul>
       )}
 
+      {close && (
+        <p className="muted small" role="status">
+          Showing <strong>{close.term}</strong>
+        </p>
+      )}
       <ul className="results">
         {results.map((t) => (
           <li key={t.id} className="result">

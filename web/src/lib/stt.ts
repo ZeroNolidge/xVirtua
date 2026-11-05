@@ -7,11 +7,7 @@ export interface SttCallbacks {
   /** `startedAt`: performance.now() when this piece of speech began, if known. */
   onPartial(text: string, startedAt?: number): void;
   /** `logprobs`: the transcriber's confidence in each piece of the text, when sent. */
-  onFinal(
-    text: string,
-    startedAt?: number,
-    logprobs?: { token: string; logprob: number }[],
-  ): void;
+  onFinal(text: string, startedAt?: number, logprobs?: { token: string; logprob: number }[]): void;
   onError(message: string): void;
 }
 

@@ -137,7 +137,9 @@ export function ProgressDashboard({ uid }: { uid: string | undefined }) {
   const then = k ? average(scored.slice(0, k)) : null;
   const now = scored.length ? average(scored.slice(-Math.max(k, 1))) : null;
 
-  if (all === null) return <p className="muted">Loading…</p>;
+  // Wait for every scored conversation's areas too, or it flashes "no feedback".
+  const areasPending = (all ?? []).some((s) => s.feedbackBand && !areas[s.id]);
+  if (all === null || areasPending) return <p className="muted">Loading…</p>;
 
   return (
     <>
