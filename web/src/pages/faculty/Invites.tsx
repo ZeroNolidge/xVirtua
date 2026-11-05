@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { collection, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
 import { sendSignInLinkToEmail } from 'firebase/auth';
-import type { Role } from '@plainspeak/shared';
+import { cleanPreferredName, PREFERRED_NAME_MAX, type Role } from '@plainspeak/shared';
 import { auth, db } from '../../lib/firebase';
 import { api, friendlyError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -21,6 +21,7 @@ export function Invites() {
   const [rows, setRows] = useState<InviteRow[]>([]);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('resident');
+  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
@@ -39,11 +40,13 @@ export function Invites() {
     setBusy(true);
     setMsg(null);
     try {
-      const { data } = await api.createInvite({ email, role });
+      const n = cleanPreferredName(name);
+      const { data } = await api.createInvite({ email, role, ...(n ? { name: n } : {}) });
       // Firebase emails them a sign-in link. The invite is what lets them in.
       await sendSignInLinkToEmail(auth, data.email, signInLinkSettings());
       setMsg({ kind: 'ok', text: `Invite sent to ${data.email}.` });
       setEmail('');
+      setName('');
     } catch (err) {
       setMsg({ kind: 'error', text: friendlyError(err) });
     } finally {
@@ -66,6 +69,15 @@ export function Invites() {
         <label className="field">
           <span>Email</span>
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Name (optional, they can change it)</span>
+          <input
+            type="text"
+            maxLength={PREFERRED_NAME_MAX}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
         </label>
         <label className="field">
           <span>Role</span>

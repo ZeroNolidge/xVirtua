@@ -5,6 +5,7 @@ import { reportError } from '../lib/errorReport';
 import { sessionApi, streamTurn, type TurnInput, type Utterance } from '../lib/session';
 import { LiveVoiceCall, toneNote } from '../lib/liveVoice';
 import { ECHO_WINDOW_MS, isEcho, LiveReply, MIC_EVIDENCE_MS } from '../lib/liveReply';
+import { NO_MIC_NOTICE } from '../lib/micNotice';
 import { SessionRecorder } from '../lib/recorder';
 import { PlainWordSearch } from '../components/PlainWordSearch';
 import { UploadRetry } from '../components/UploadRetry';
@@ -709,7 +710,7 @@ export function LiveConversation({
         if (!mine()) return;
         reportError('live.call', new Error(m));
         if (!started.current)
-          fallBack('GPT-Live couldn’t connect, so this uses the standard voice.');
+          fallBack('The live voice couldn’t connect, so this uses the standard voice.');
         else setNotice(m);
       },
       onLost: () => {
@@ -739,7 +740,7 @@ export function LiveConversation({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch {
-      return fallBack('No microphone access, so you can type your side for now.');
+      return fallBack(NO_MIC_NOTICE);
     }
     // They left (or ended) while we waited for the mic: never leave it on.
     if (!mine()) {
@@ -754,7 +755,7 @@ export function LiveConversation({
     }
     const tooSlow = () => {
       if (!started.current && mine())
-        fallBack('GPT-Live didn’t answer in time, so this uses the standard voice.');
+        fallBack('The live voice didn’t answer in time, so this uses the standard voice.');
     };
     // Our server can take a while to wake up, so it gets its own, longer limit.
     window.setTimeout(tooSlow, SERVER_TIMEOUT_MS);
@@ -774,7 +775,7 @@ export function LiveConversation({
         'live.start',
         details ? new Error(`${(e as Error).message} ${JSON.stringify(details)}`) : e,
       );
-      fallBack('GPT-Live isn’t available right now, so this uses the standard voice.');
+      fallBack('The live voice isn’t available right now, so this uses the standard voice.');
     }
   }
 
@@ -931,8 +932,8 @@ export function LiveConversation({
             pause, carry on, or cut in. When you’re done, tap <strong>End</strong> to get feedback.
           </p>
           <p className="muted small">
-            GPT-Live voice (test). Everything your mic picks up, including the room around you, goes
-            to OpenAI, which also speaks as {first}.
+            Live voice. Everything your mic picks up, including the room around you, goes to OpenAI,
+            which also speaks as {first}.
           </p>
           <p className="muted small">
             We’ll record this practice so you can review it and get feedback (kept up to 3 years).

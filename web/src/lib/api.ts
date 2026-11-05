@@ -6,11 +6,13 @@ type ClaimResult = { status: 'ok'; role: Role; programId: string } | { status: '
 
 export const api = {
   claimInvite: httpsCallable<void, ClaimResult>(functions, 'claimInvite'),
-  acceptConsent: httpsCallable<{ version: number }, void>(functions, 'acceptConsent'),
-  createInvite: httpsCallable<{ email: string; role: Role }, { email: string; role: Role }>(
-    functions,
-    'createInvite',
-  ),
+  acceptConsent: httpsCallable<{ version: number; name: string }, void>(functions, 'acceptConsent'),
+  /** Someone who signed up before we asked for a name chooses it. */
+  setDisplayName: httpsCallable<{ name: string }, void>(functions, 'setDisplayName'),
+  createInvite: httpsCallable<
+    { email: string; role: Role; name?: string },
+    { email: string; role: Role }
+  >(functions, 'createInvite'),
   revokeInvite: httpsCallable<{ email: string }, void>(functions, 'revokeInvite'),
   setScenarioStatus: httpsCallable<
     { scenarioId: string; status: ScenarioStatus },

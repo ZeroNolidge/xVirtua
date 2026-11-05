@@ -8,6 +8,7 @@ import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { FinishSignIn } from './pages/FinishSignIn';
 import { Consent } from './pages/Consent';
+import { ChooseName } from './pages/ChooseName';
 import { Privacy } from './pages/Privacy';
 import { Loading, NotInvited, SettingUp } from './pages/StatusScreens';
 import { applyWaitingUpdate } from './lib/pwa';
@@ -52,6 +53,8 @@ function Gate() {
       return <SettingUp />;
     case 'needsConsent':
       return <Consent />;
+    case 'needsName':
+      return <ChooseName />;
     case 'ready':
       return <SignedInApp />;
   }

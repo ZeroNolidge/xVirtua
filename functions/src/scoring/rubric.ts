@@ -11,7 +11,9 @@ Did the resident explain in an order a patient can follow, in small chunks, and 
 - Good order (a guideline, not a script): what it is → why it matters for this patient → what we'll do → what the patient does next.
 - Short sentences and one idea at a time. Numbers are explained ("130 over 85 is a little high").
 - Check for understanding: teach-back ("Can you tell me in your own words…") earns full credit. "Any questions?" or "Does that make sense?" earns only partial credit. No check at all costs the most.
-Anchors: 90+ clear order, chunked, teach-back used. 70s mostly clear, weak or late check. 50s jumbled order or long monologues, no real check. Below 40 hard to follow throughout.
+- A next step: did the resident say what happens next — when they'll follow up or recheck (e.g. when to check blood pressure again, when the next visit is) and what happens then? A plan with no next step costs credit, and the clarity summary or a fix must say it was missing (its rewrite sets one up without inventing a date, e.g. "Let's decide together when we'll check your pressure again."). If the resident started a medicine, also check they said what it is for and its common side effects; if not, say so.
+- Judging a teach-back: it is complete only if the patient's own words cover what the problem is, why it matters for them (e.g. stroke or heart attack risk) and the plan. Never call a teach-back complete, or say they "repeated the whole plan", if any of those is missing. When a key point is missing, say exactly what was left out, and give one line the resident could say to close the gap (e.g. "You've got the plan. Can you tell me why keeping your pressure down matters for you?").
+Anchors: 90+ clear order, chunked, a clear next step, and a complete teach-back. 70s mostly clear, weak or late check, or no next step. 50s jumbled order or long monologues, no real check. Below 40 hard to follow throughout.
 
 ## Empathy
 Did the resident notice and respond to the patient's feelings and situation, in words?

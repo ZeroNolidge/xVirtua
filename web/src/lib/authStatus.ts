@@ -6,6 +6,7 @@ export type AuthStatus =
   | 'claiming' // signed in, waiting for the server to apply the invite
   | 'notInvited'
   | 'needsConsent'
+  | 'needsName' // signed up before the app asked for a name: asked once
   | 'ready';
 
 export interface AuthInputs {
@@ -25,6 +26,7 @@ export function resolveAuthStatus(i: AuthInputs): AuthStatus {
   if (i.userDoc === undefined) return 'loading';
   if (i.userDoc === null) return 'claiming';
   if (i.userDoc.consent?.version !== CONSENT_VERSION) return 'needsConsent';
+  if (i.userDoc.nameChosen !== true) return 'needsName';
   return 'ready';
 }
 

@@ -115,6 +115,9 @@ export const claimInvite = callable({}, (req) => invites.claimInvite(db(), auth(
 export const acceptConsent = callable({}, (req) =>
   invites.acceptConsent(db(), callerOf(req), req.data),
 );
+export const setDisplayName = callable({}, (req) =>
+  invites.setDisplayName(db(), callerOf(req), req.data),
+);
 
 // ----- content -----
 export const setScenarioStatus = callable({}, (req) =>

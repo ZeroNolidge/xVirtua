@@ -12,6 +12,7 @@ import {
   type PatientChunk,
   type VoiceMode,
 } from '@plainspeak/shared';
+import { afterMicOpened, micIndicator, NO_MIC_NOTICE } from '../lib/micNotice';
 import { db } from '../lib/firebase';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
@@ -881,12 +882,13 @@ function Conversation({
       // They left while we waited for the mic: never leave it on.
       if (gone.current) return stream.getTracks().forEach((t) => t.stop());
       mic.current = stream;
+      setNotice(afterMicOpened);
       recorder.current = new SessionRecorder(stream);
       void recorder.current.start();
       micMeter.current = new MicMeter(stream);
     } catch {
       setTyped(true);
-      setNotice('No microphone access, so you can type your side for now.');
+      setNotice(NO_MIC_NOTICE);
     }
 
     if (mic.current) await startVoice(mic.current);
@@ -924,12 +926,13 @@ function Conversation({
       });
       if (gone.current) return stream.getTracks().forEach((t) => t.stop());
       mic.current = stream;
+      setNotice(afterMicOpened);
       recorder.current?.resume(stream);
       micMeter.current = new MicMeter(stream);
       await startVoice(stream);
     } catch {
       setTyped(true);
-      setNotice('No microphone access, so you can type your side for now.');
+      setNotice(NO_MIC_NOTICE);
     } finally {
       setResumingVoice(false);
       setPaused(null);
@@ -1133,9 +1136,9 @@ function Conversation({
             <button className="btn btn-secondary btn-inline" onClick={() => setLookupOpen(true)}>
               Plain words
             </button>
-            {!typed && (
+            {micIndicator(typed, notice, phase === 'listening') && (
               <span className={`mic-state ${phase === 'listening' ? 'on' : ''}`} aria-hidden="true">
-                {phase === 'listening' ? '● Mic on' : '○ Mic ready'}
+                {micIndicator(typed, notice, phase === 'listening')}
               </span>
             )}
             {!typed && (

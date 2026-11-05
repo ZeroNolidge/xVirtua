@@ -87,6 +87,10 @@ export interface UserDoc {
   displayName: string;
   email: string;
   consent: { version: number; acceptedAt: string } | null;
+  /** They chose the name we greet them by (asked once; before, it was the email's first part). */
+  nameChosen?: boolean;
+  /** A name faculty gave on the invite, offered when they choose theirs. */
+  suggestedName?: string | null;
   createdAt: string;
 }
 

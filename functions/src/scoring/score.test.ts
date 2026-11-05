@@ -3,6 +3,7 @@ import { createJargonMatcher, scoreJargon, SEED_JARGON } from '@plainspeak/share
 import {
   assembleScore,
   buildScoringPrompt,
+  jargonMetric,
   locateQuote,
   runScoring,
   steamrollHints,
@@ -347,5 +348,52 @@ describe('interruptions in the scoring transcript', () => {
     );
     expect(p.user).not.toContain('end up the same');
     expect(p.system).toMatch(/Talking over the patient/);
+  });
+});
+
+describe('unexplained jargon: the count matches what the resident sees', () => {
+  const m = createJargonMatcher(SEED_JARGON);
+  const say = (text: string) =>
+    jargonMetric(scoreJargon([{ idx: 1, text }], m), [{ idx: 1, speaker: 'resident', text }], null);
+
+  it('names every flagged word: up to 3 as examples, the rest in the summary', () => {
+    const r = say(
+      'Your hypertension and dyslipidemia raise the risk of a myocardial infarction, so we start an antihypertensive and check your renal function.',
+    );
+    const n = r.flagged.length;
+    expect(n).toBeGreaterThan(3);
+    expect(r.summary).toMatch(new RegExp(`^${n} medical words went unexplained: the 3 below`));
+    expect(r.evidence).toHaveLength(3);
+    const shown = [r.summary, ...r.evidence.map((e) => e.quote)].join(' ').toLowerCase();
+    for (const f of r.flagged) expect(shown).toContain(f.term.toLowerCase());
+  });
+
+  it('three or fewer: just the count, all shown below', () => {
+    const r = say('Your hypertension needs treatment.');
+    expect(r.summary).toBe('1 medical word went unexplained.');
+    expect(r.evidence).toHaveLength(1);
+  });
+});
+
+describe('clear explaining: next step and complete teach-back', () => {
+  it('the scoring prompt checks for a next step and what a teach-back left out', () => {
+    const { system } = buildScoringPrompt({
+      scenario: {
+        title: 'New HTN',
+        residentTask: 'Explain',
+        learningObjectives: [],
+        patientName: 'Ray',
+      },
+      cues: [],
+      turns,
+      jargon: scoreJargon([], createJargonMatcher(SEED_JARGON)),
+    });
+    expect(system).toMatch(/A next step: did the resident say what happens next/);
+    expect(system).toMatch(/what it is for and its common side effects/);
+    expect(system).toMatch(
+      /complete only if the patient's own words cover what the problem is, why it matters/,
+    );
+    expect(system).toMatch(/Never call a teach-back complete/);
+    expect(system).toMatch(/give one line the resident could say to close the gap/);
   });
 });
