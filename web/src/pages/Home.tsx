@@ -11,11 +11,12 @@ export function Home() {
   const rows = useScenarioList(claims);
   const progress = usePatientProgress(user?.uid);
   const isFaculty = claims?.role === 'faculty';
-  const firstName = userDoc?.displayName?.split(/[\s.]/)[0];
+  // Their preferred name exactly as they typed it (they chose it; never shortened).
+  const name = userDoc?.displayName?.trim();
 
   return (
     <section>
-      <h1>Ready to practice{firstName ? `, ${firstName}` : ''}?</h1>
+      <h1>Ready to practice{name ? `, ${name}` : ''}?</h1>
       <p className="muted">Pick a patient. Each conversation takes about 5–8 minutes.</p>
 
       {rows === null && <Loading label="Loading patients…" />}

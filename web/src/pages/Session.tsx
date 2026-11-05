@@ -170,6 +170,8 @@ export function Session() {
           persona={persona}
           startedAtMs={startedAtMs}
           initialNotice={standard.notice}
+          // No mic was the reason: the resident already tapped Start, so go straight to typing.
+          startNow={standard.notice === NO_MIC_NOTICE}
           {...(standard.bubbles
             ? { resumeFrom: standard.bubbles }
             : fresh
@@ -264,15 +266,18 @@ interface ConversationProps {
   initialNotice?: string;
   /** Date.now() when the conversation started (for the time limit). */
   startedAtMs?: number;
+  /** The tap that starts it already happened (live voice fell back): start at once. */
+  startNow?: boolean;
 }
 
-function Conversation({
+export function Conversation({
   sessionId,
   persona,
   opening,
   resumeFrom,
   initialNotice,
   startedAtMs,
+  startNow,
 }: ConversationProps) {
   const upload = useRecordingUpload(sessionId);
   const first = persona.name.split(' ')[0];
@@ -288,6 +293,20 @@ function Conversation({
   const [typed, setTyped] = useState(false);
   const [draft, setDraft] = useState('');
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
+  /** We already know there's no mic (none here, refused before, or live voice found none). */
+  const [noMic, setNoMic] = useState(
+    () => initialNotice === NO_MIC_NOTICE || !navigator.mediaDevices?.getUserMedia,
+  );
+  useEffect(() => {
+    let live = true;
+    navigator.permissions
+      ?.query({ name: 'microphone' as PermissionName })
+      .then((s) => live && s.state === 'denied' && setNoMic(true))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   /** The mic and speech service are off until "Continue". */
@@ -875,21 +894,29 @@ function Conversation({
     await renderer.current.mount(); // inside the tap: unlocks audio on iOS
     t0.current = performance.now();
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-      // They left while we waited for the mic: never leave it on.
-      if (gone.current) return stream.getTracks().forEach((t) => t.stop());
-      mic.current = stream;
-      setNotice(afterMicOpened);
-      recorder.current = new SessionRecorder(stream);
-      void recorder.current.start();
-      micMeter.current = new MicMeter(stream);
-    } catch {
+    // No mic (known already, or refused now): straight to typing, on this same tap.
+    const typeInstead = () => {
       setTyped(true);
+      setNoMic(true);
       setNotice(NO_MIC_NOTICE);
-    }
+    };
+    if (noMic && !navigator.mediaDevices?.getUserMedia) typeInstead();
+    else
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+        // They left while we waited for the mic: never leave it on.
+        if (gone.current) return stream.getTracks().forEach((t) => t.stop());
+        mic.current = stream;
+        setNoMic(false);
+        setNotice(afterMicOpened);
+        recorder.current = new SessionRecorder(stream);
+        void recorder.current.start();
+        micMeter.current = new MicMeter(stream);
+      } catch {
+        typeInstead();
+      }
 
     if (mic.current) await startVoice(mic.current);
     // Wait for the face (it times out by itself) so the opening line has it.
@@ -902,6 +929,15 @@ function Conversation({
     if (opening) await speakStored(opening);
     else startListening();
   }
+
+  // Live voice fell back on the tap that started this: carry straight on.
+  const startedNow = useRef(false);
+  useEffect(() => {
+    if (!startNow || startedNow.current) return;
+    startedNow.current = true;
+    void begin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startNow]);
 
   /** Nobody's using it (app hidden, or quiet): turn the mic and speech service off. */
   function pause(why: PauseReason) {
@@ -1055,6 +1091,11 @@ function Conversation({
               Picking up with {first}. Everything so far is saved. Tap below and carry on where you
               left off.
             </p>
+          ) : noMic ? (
+            <p>
+              You’ll type your side, and {first}’s replies show here as text. When you’re done, tap{' '}
+              <strong>End</strong> to get feedback.
+            </p>
           ) : (
             <p>
               Talk naturally, like you’re in the room. {first} will answer out loud. When you’re
@@ -1062,7 +1103,9 @@ function Conversation({
             </p>
           )}
           <p className="muted small">
-            We’ll record this practice so you can review it and get feedback (kept up to 3 years).
+            {noMic
+              ? 'We’ll save this conversation so you can review it and get feedback (kept up to 3 years).'
+              : 'We’ll record this practice so you can review it and get feedback (kept up to 3 years).'}
           </p>
           <button className="btn" onClick={() => void begin()}>
             {resumeFrom ? 'Continue the conversation' : 'Start talking'}
