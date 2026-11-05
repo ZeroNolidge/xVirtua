@@ -959,7 +959,11 @@ export function LiveConversation({
             </>
           )}
           <button className="btn" onClick={() => void begin()}>
-            {resumeFrom ? 'Continue the conversation' : 'Start talking'}
+            {resumeFrom
+              ? 'Continue the conversation'
+              : noMic
+                ? 'Start the conversation'
+                : 'Start talking'}
           </button>
         </div>
       )}

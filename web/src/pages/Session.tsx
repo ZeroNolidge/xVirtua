@@ -1107,7 +1107,11 @@ export function Conversation({
               : 'We’ll record this practice so you can review it and get feedback (kept up to 3 years).'}
           </p>
           <button className="btn" onClick={() => void begin()}>
-            {resumeFrom ? 'Continue the conversation' : 'Start talking'}
+            {resumeFrom
+              ? 'Continue the conversation'
+              : noMic
+                ? 'Start the conversation'
+                : 'Start talking'}
           </button>
         </div>
       ) : null}

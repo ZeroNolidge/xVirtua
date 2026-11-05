@@ -594,6 +594,7 @@ describe('GPT-Live conversation', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText(/^Live voice\. Everything your mic picks up/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start talking' })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/GPT-Live|\(test\)/);
   });
 
@@ -615,6 +616,8 @@ describe('GPT-Live conversation', () => {
         screen.getByText(/You’ll type your side, and Ray’s replies show here as text/),
       ).toBeInTheDocument();
       expect(screen.queryByText(/mic picks up/)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Start the conversation' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Start talking' })).toBeNull();
     } finally {
       if (before) Object.defineProperty(navigator, 'mediaDevices', before);
     }

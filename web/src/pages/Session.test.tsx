@@ -110,7 +110,7 @@ describe('conversation screen', () => {
   it('survives a typed reply and leaving the screen (Safari scrollIntoView)', async () => {
     const { unmount } = renderSession();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /start talking/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Start the conversation' }));
     });
     expect(await screen.findByText(opening.text)).toBeInTheDocument();
 
@@ -136,7 +136,7 @@ describe('conversation screen', () => {
     hold = new Promise<void>((r) => (release = r));
     const { unmount } = renderSession();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /start talking/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Start the conversation' }));
     });
     const box = await screen.findByRole('textbox', { name: /your reply/i });
     await act(async () => {
@@ -165,7 +165,7 @@ describe('conversation screen', () => {
   it('without a mic: the alert shows and "Mic ready" doesn\u2019t', async () => {
     renderSession();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /start talking/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Start the conversation' }));
     });
     expect(
       await screen.findByText('No microphone access, so you can type your side for now.'),
@@ -180,10 +180,10 @@ describe('conversation screen', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/will answer out loud/)).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /start talking/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Start the conversation' }));
     });
     expect(await screen.findByRole('textbox', { name: /your reply/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start talking/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start the conversation' })).toBeNull();
     unmount();
   });
 
@@ -200,8 +200,32 @@ describe('conversation screen', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByRole('textbox', { name: /your reply/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start talking/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start the conversation' })).toBeNull();
     expect(screen.getByText(NO_MIC_NOTICE)).toBeInTheDocument();
     unmount();
+  });
+
+  it('button label: “Start the conversation” with no mic, “Start talking” with one', async () => {
+    const first = renderSession();
+    expect(screen.getByRole('button', { name: 'Start the conversation' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start talking' })).toBeNull();
+    first.unmount();
+    // An earlier no-mic test left “the mic failed last time” behind.
+    localStorage.clear();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn(),
+        enumerateDevices: async () => [{ kind: 'audioinput' }],
+      },
+    });
+    try {
+      const { unmount } = renderSession();
+      await act(async () => {});
+      expect(screen.getByRole('button', { name: 'Start talking' })).toBeInTheDocument();
+      unmount();
+    } finally {
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+    }
   });
 });

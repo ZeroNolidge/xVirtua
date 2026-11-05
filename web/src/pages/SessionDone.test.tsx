@@ -9,6 +9,7 @@ vi.mock('../lib/errorReport', () => ({ reportError: vi.fn() }));
 
 const ts = (ms: number) => ({ toMillis: () => ms, toDate: () => new Date(ms) });
 let meta: Record<string, unknown> = {};
+let noTurns = false;
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(),
   doc: vi.fn(),
@@ -19,7 +20,9 @@ vi.mock('firebase/firestore', () => ({
   getDoc: async () => ({ data: () => meta }),
   // Only Ray's opening line: the resident never spoke.
   getDocs: async () => ({
-    docs: [{ id: 't0', data: () => ({ idx: 0, speaker: 'patient', text: 'Hi, doc.' }) }],
+    docs: noTurns
+      ? []
+      : [{ id: 't0', data: () => ({ idx: 0, speaker: 'patient', text: 'Hi, doc.' }) }],
   }),
   onSnapshot: (_r: unknown, next: (s: unknown) => void) => {
     next({ exists: () => false });
@@ -51,6 +54,7 @@ const base = {
 describe('a conversation the resident never spoke in', () => {
   beforeEach(() => {
     meta = {};
+    noTurns = false;
   });
 
   it('still open: offers to continue it', async () => {
@@ -59,8 +63,29 @@ describe('a conversation the resident never spoke in', () => {
     renderDone();
     const go = await screen.findByRole('button', { name: 'Continue the conversation' });
     expect(screen.queryByText(/didn’t get going/)).toBeNull();
+    expect(
+      screen.getByText('This conversation is still open. Pick it up where Ray left off.'),
+    ).toBeInTheDocument();
     go.click();
     expect(await screen.findByText('conversation screen')).toBeInTheDocument();
+  });
+
+  it('still open and Ray hasn’t spoken yet: no “where Ray left off”', async () => {
+    const now = Date.now();
+    meta = {
+      ...base,
+      turnCount: 0,
+      status: 'live',
+      startedAt: ts(now - 60e3),
+      lastActivityAt: ts(now - 60e3),
+    };
+    noTurns = true;
+    renderDone();
+    expect(
+      await screen.findByText('This conversation is still open. Start it whenever you’re ready.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/left off/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Continue the conversation' })).toBeInTheDocument();
   });
 
   it('too late to continue: Try again', async () => {
