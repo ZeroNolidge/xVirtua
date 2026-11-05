@@ -38,8 +38,8 @@ export function Privacy() {
           <li>Anthropic (Claude) plays the patient and writes your feedback.</li>
           <li>Cartesia creates the patient’s voice in the standard mode.</li>
           <li>
-            If your program turns on the video avatar (test), Simli animates the patient’s face.
-            Only the patient’s voice is sent to Simli, never yours.
+            If your program turns on the video avatar, Simli animates the patient’s face. Only the
+            patient’s voice is sent to Simli, never yours.
           </li>
         </ul>
         <p className="small muted">These services don’t use our data to train their AI models.</p>

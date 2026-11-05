@@ -130,7 +130,7 @@ export class StageRecorder {
     g.addColorStop(0, '#000');
     g.addColorStop(0.6, '#000');
     g.addColorStop(1, 'rgba(0,0,0,0)');
-    // An oval: draw a unit circle stretched to the oval's size, about its centre.
+    // An oval: draw a unit circle stretched to the oval's size, about its center.
     ctx.translate(0, 0.1 * n);
     ctx.scale(0.4 * n, 0.62 * n);
     return g;

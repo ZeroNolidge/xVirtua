@@ -2,7 +2,12 @@ import type { Auth } from 'firebase-admin/auth';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { z } from 'zod';
-import { CONSENT_VERSION, type Role, type UserClaims } from '@plainspeak/shared';
+import {
+  cleanPreferredName,
+  CONSENT_VERSION,
+  type Role,
+  type UserClaims,
+} from '@plainspeak/shared';
 import { parse, requireFaculty, type Caller } from '../lib/callable.js';
 
 export type { Caller } from '../lib/callable.js';
@@ -16,6 +21,15 @@ const emailSchema = z
   .pipe(z.email())
   .refine((e) => e.length <= 254);
 const roleSchema = z.enum(['resident', 'faculty']);
+/** What the app calls someone (required where they choose it). */
+const nameSchema = z.string().transform((v, ctx) => {
+  const n = cleanPreferredName(v);
+  if (!n) {
+    ctx.addIssue({ code: 'custom', message: 'Please enter a name of up to 40 characters.' });
+    return z.NEVER;
+  }
+  return n;
+});
 
 /** Faculty invites a resident or another faculty member to their program. */
 export async function createInvite(
@@ -25,7 +39,10 @@ export async function createInvite(
   data: unknown,
 ): Promise<{ email: string; role: Role }> {
   const fac = requireFaculty(caller);
-  const { email, role } = parse(z.object({ email: emailSchema, role: roleSchema }), data);
+  const { email, role, name } = parse(
+    z.object({ email: emailSchema, role: roleSchema, name: nameSchema.optional() }),
+    data,
+  );
 
   // Don't silently move someone who already belongs to a program.
   const existing = await auth.getUserByEmail(email).catch(() => null);
@@ -38,6 +55,7 @@ export async function createInvite(
     role,
     programId: fac.programId,
     invitedBy: fac.uid,
+    ...(name ? { name } : {}),
     status: 'pending',
     createdAt: FieldValue.serverTimestamp(),
   });
@@ -109,7 +127,10 @@ export async function claimInvite(
       email,
       role,
       programId,
-      displayName: email.split('@')[0] ?? email,
+      // Until they choose one (consent screen), the invite's name or the email's first part.
+      displayName: (invite.get('name') as string | undefined) ?? email.split('@')[0] ?? email,
+      suggestedName: (invite.get('name') as string | undefined) ?? null,
+      nameChosen: false,
       consent: null,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -146,11 +167,27 @@ export async function acceptConsent(
   if (typeof caller.claims.programId !== 'string') {
     throw new HttpsError('permission-denied', 'Your account is not set up yet.');
   }
-  const { version } = parse(z.object({ version: z.number().int() }), data);
+  const { version, name } = parse(z.object({ version: z.number().int(), name: nameSchema }), data);
   if (version !== CONSENT_VERSION) {
     throw new HttpsError('failed-precondition', 'Please reload to see the latest consent form.');
   }
   await db.doc(`users/${caller.uid}`).update({
     consent: { version, acceptedAt: new Date().toISOString() },
+    displayName: name,
+    nameChosen: true,
   });
+}
+
+/** Someone who signed up before we asked for a name chooses it (asked once). */
+export async function setDisplayName(
+  db: Firestore,
+  caller: Caller | null,
+  data: unknown,
+): Promise<void> {
+  if (!caller) throw new HttpsError('unauthenticated', 'Please sign in.');
+  if (typeof caller.claims.programId !== 'string') {
+    throw new HttpsError('permission-denied', 'Your account is not set up yet.');
+  }
+  const { name } = parse(z.object({ name: nameSchema }), data);
+  await db.doc(`users/${caller.uid}`).update({ displayName: name, nameChosen: true });
 }

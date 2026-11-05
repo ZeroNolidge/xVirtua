@@ -7,7 +7,7 @@ export const CONSENT_VERSION = 3;
 // v2: rewrites may only change how something is said, never add clinical,
 // legal or licensing facts.
 // v3: judges talking over the patient (two-way voice).
-export const RUBRIC_VERSION = '2026-11-v4';
+export const RUBRIC_VERSION = '2026-11-v5';
 
 /** D4: equal weights across the four metrics. */
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
@@ -51,3 +51,17 @@ export const DAILY_LIMITS = {
   avatarSessions: 40,
 } as const;
 export type DailyLimitKind = keyof typeof DAILY_LIMITS;
+
+/** Longest preferred name (what the app calls the user). */
+export const PREFERRED_NAME_MAX = 40;
+
+/** A tidy preferred name: trimmed, spaces collapsed, no control characters; null if unusable. */
+export function cleanPreferredName(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const name = raw
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return name && name.length <= PREFERRED_NAME_MAX ? name : null;
+}

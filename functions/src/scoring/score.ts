@@ -324,6 +324,20 @@ export function validateQuotes(c: ClaudeScore, turns: Turn[], patientFirstName =
 
 // ---------- assemble ----------
 
+/** Unexplained words shown as examples (each with a plainer word); any others are named in the summary. */
+export const SHOWN_JARGON = 3;
+
+/** ": the 3 below, and “x”" or ": the 3 below, plus “x” and “y”" (nothing when all are shown). */
+function alsoLine(rest: JargonResult['flagged']): string {
+  if (!rest.length) return '';
+  const names = rest.map((f) => `“${f.surfaces[0] ?? f.term}”`);
+  const list =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `: the ${SHOWN_JARGON} below, ${names.length === 1 ? 'and' : 'plus'} ${list}`;
+}
+
 export function jargonMetric(
   j: JargonResult,
   turns: Turn[],
@@ -334,11 +348,11 @@ export function jargonMetric(
     ? j.explained.length
       ? 'No unexplained jargon, and you explained the medical words you used.'
       : 'No jargon flagged. Nice plain language.'
-    : `${j.flagged.length} medical ${j.flagged.length === 1 ? 'word' : 'words'} went unexplained.`;
+    : `${j.flagged.length} medical ${j.flagged.length === 1 ? 'word' : 'words'} went unexplained${alsoLine(j.flagged.slice(SHOWN_JARGON))}.`;
   return {
     score: j.score,
     summary,
-    evidence: j.flagged.slice(0, 3).map((f) => ({
+    evidence: j.flagged.slice(0, SHOWN_JARGON).map((f) => ({
       turnIdx: f.turns[0]!,
       quote: f.surfaces[0] ?? f.term,
       note: `Try “${f.plain[0] ?? 'a plain word'}” instead${f.uses > 1 ? ` (used ${f.uses} times)` : ''}.`,

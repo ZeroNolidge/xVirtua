@@ -581,4 +581,19 @@ describe('GPT-Live conversation', () => {
     expect(onFallback.mock.calls[0]![0]).toMatch(/standard voice/);
     expect(onFallback.mock.calls[0]![1]).toBeNull();
   });
+
+  it('shows residents no model or test labels', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <LiveConversation
+          sessionId="s1"
+          persona={{ name: 'Ray Kowalski', age: 58, pronouns: 'he/him' }}
+          opening={opening}
+          onFallback={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/^Live voice\. Everything your mic picks up/)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/GPT-Live|\(test\)/);
+  });
 });

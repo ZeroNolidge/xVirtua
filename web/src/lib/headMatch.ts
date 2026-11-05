@@ -4,10 +4,10 @@
  * the head is and how big it is (Simli's faces lean in while talking and take
  * a few seconds to settle back) — so a clip can wait for a still moment, or
  * be lined up with the live face while it fades in.
- * Works on small greyscale copies, so it costs a few milliseconds.
+ * Works on small grayscale copies, so it costs a few milliseconds.
  */
 
-/** Size of the greyscale copies. */
+/** Size of the grayscale copies. */
 export const GRID = 96;
 /** Largest shift searched, in grid pixels (about 6% of the picture). */
 const MAX_SHIFT = 6;
@@ -42,7 +42,7 @@ export function scaleAbout(ref: Float32Array, s: number): Float32Array {
   return out;
 }
 
-/** A little finer than a whole step: fit a curve through the best one and its neighbours. */
+/** A little finer than a whole step: fit a curve through the best one and its neighbors. */
 const fine = (a: number, b: number, c: number) => {
   const d = a - 2 * b + c;
   return d > 0 ? Math.max(-0.5, Math.min(0.5, (a - c) / (2 * d))) : 0;
@@ -115,7 +115,7 @@ export class HeadMatcher {
     this.ctx = c?.getContext('2d', { willReadFrequently: true }) ?? null;
   }
 
-  private grey(src: CanvasImageSource): Float32Array | null {
+  private gray(src: CanvasImageSource): Float32Array | null {
     const ctx = this.ctx;
     if (!ctx) return null;
     try {
@@ -136,7 +136,7 @@ export class HeadMatcher {
     const img = new Image();
     img.src = url;
     await img.decode();
-    const g = this.grey(img);
+    const g = this.gray(img);
     if (g) this.refs.set(url, SCALES.map((s) => scaleAbout(g, s)));
   }
 
@@ -148,7 +148,7 @@ export class HeadMatcher {
   offset(live: HTMLVideoElement | null | undefined, refUrl: string | null) {
     const zoomed = refUrl ? this.refs.get(refUrl) : undefined;
     if (!zoomed || !live || live.readyState < 2 || !live.videoWidth) return null;
-    const g = this.grey(live);
+    const g = this.gray(live);
     if (!g) return null;
     const f = bestFit(zoomed, g);
     return { x: f.x / GRID, y: f.y / GRID, scale: f.scale };

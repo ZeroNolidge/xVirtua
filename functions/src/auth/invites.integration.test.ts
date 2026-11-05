@@ -3,7 +3,14 @@ import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { CONSENT_VERSION } from '@plainspeak/shared';
-import { acceptConsent, claimInvite, createInvite, revokeInvite, type Caller } from './invites.js';
+import {
+  acceptConsent,
+  claimInvite,
+  createInvite,
+  revokeInvite,
+  setDisplayName,
+  type Caller,
+} from './invites.js';
 
 const PROJECT_ID = 'demo-plainspeak';
 let app: App;
@@ -175,19 +182,68 @@ describe('revokeInvite', () => {
 });
 
 describe('acceptConsent', () => {
-  it('records the current consent version', async () => {
+  it('records the current consent version and their chosen name', async () => {
     await db.doc('users/res1').set({ programId: 'irmc', role: 'resident', consent: null });
-    await acceptConsent(db, resident, { version: CONSENT_VERSION });
-    expect((await db.doc('users/res1').get()).get('consent.version')).toBe(CONSENT_VERSION);
+    await acceptConsent(db, resident, { version: CONSENT_VERSION, name: '  Sam   Lee ' });
+    const u = (await db.doc('users/res1').get()).data()!;
+    expect(u.consent.version).toBe(CONSENT_VERSION);
+    expect(u).toMatchObject({ displayName: 'Sam Lee', nameChosen: true });
+  });
+
+  it('needs a name of up to 40 characters', async () => {
+    await db.doc('users/res1').set({ programId: 'irmc', role: 'resident', consent: null });
+    for (const name of [undefined, '', '   ', 'x'.repeat(41)])
+      await expect(
+        acceptConsent(db, resident, { version: CONSENT_VERSION, name }),
+      ).rejects.toMatchObject({ code: 'invalid-argument' });
   });
 
   it('rejects stale versions and unclaimed users', async () => {
     await db.doc('users/res1').set({ programId: 'irmc', role: 'resident', consent: null });
     await expect(
-      acceptConsent(db, resident, { version: CONSENT_VERSION - 1 }),
+      acceptConsent(db, resident, { version: CONSENT_VERSION - 1, name: 'Sam' }),
     ).rejects.toMatchObject({ code: 'failed-precondition' });
     await expect(
-      acceptConsent(db, { uid: 'z', claims: {} }, { version: CONSENT_VERSION }),
+      acceptConsent(db, { uid: 'z', claims: {} }, { version: CONSENT_VERSION, name: 'Sam' }),
     ).rejects.toMatchObject({ code: 'permission-denied' });
+  });
+});
+
+describe('preferred names', () => {
+  it('a name on the invite is offered, and the email prefix is never treated as chosen', async () => {
+    await createInvite(db, auth, faculty, {
+      email: 'named@irmc.org',
+      role: 'resident',
+      name: 'Dr. Jordan',
+    });
+    const caller = await newAuthUser('named@irmc.org');
+    await claimInvite(db, auth, caller);
+    expect((await db.doc(`users/${caller.uid}`).get()).data()).toMatchObject({
+      displayName: 'Dr. Jordan',
+      suggestedName: 'Dr. Jordan',
+      nameChosen: false,
+    });
+    await createInvite(db, auth, faculty, { email: 'plain@irmc.org', role: 'resident' });
+    const other = await newAuthUser('plain@irmc.org');
+    await claimInvite(db, auth, other);
+    expect((await db.doc(`users/${other.uid}`).get()).data()).toMatchObject({
+      suggestedName: null,
+      nameChosen: false,
+    });
+  });
+
+  it('someone who signed up earlier chooses their name once', async () => {
+    await db.doc('users/res1').set({ programId: 'irmc', role: 'resident', displayName: 'res1' });
+    await setDisplayName(db, resident, { name: 'Alex' });
+    expect((await db.doc('users/res1').get()).data()).toMatchObject({
+      displayName: 'Alex',
+      nameChosen: true,
+    });
+    await expect(setDisplayName(db, resident, { name: '' })).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    await expect(setDisplayName(db, null, { name: 'Alex' })).rejects.toMatchObject({
+      code: 'unauthenticated',
+    });
   });
 });

@@ -13,8 +13,8 @@
   --gutter: 16px;
   --tap: 48px;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  /* Charts: "now" and "before" (checked for colour-blind separation; "before"
-     is also dashed, so colour is never the only cue). */
+  /* Charts: "now" and "before" (checked for color-blind separation; "before"
+     is also dashed, so color is never the only cue). */
   --series-now: #187a50;
   --series-before: #c27a1e;
   --grid: #e3e0d6;
@@ -1202,7 +1202,18 @@ p {
   border-color: var(--primary);
 }
 
-/* App Check debug mode (test browsers only). */
+/* App Check debug mode (test browsers only). The bar's height is --debug-bar-h
+   on <body>: the page and everything fixed to the bottom sit above the bar. */
+body.appcheck-debug {
+  padding-bottom: var(--debug-bar-h, 0px);
+}
+body.appcheck-debug .tabbar,
+body.appcheck-debug .session-controls {
+  bottom: var(--debug-bar-h, 0px);
+}
+body.appcheck-debug .sheet-backdrop {
+  bottom: var(--debug-bar-h, 0px);
+}
 .appcheck-debug-bar {
   position: fixed;
   left: 0;

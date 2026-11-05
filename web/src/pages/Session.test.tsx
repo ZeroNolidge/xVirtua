@@ -160,4 +160,15 @@ describe('conversation screen', () => {
     expect(screen.queryByText(/sends when ray finishes/i)).toBeNull();
     unmount();
   });
+
+  it('without a mic: the alert shows and "Mic ready" doesn\u2019t', async () => {
+    renderSession();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /start talking/i }));
+    });
+    expect(
+      await screen.findByText('No microphone access, so you can type your side for now.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Mic ready/)).toBeNull();
+  });
 });

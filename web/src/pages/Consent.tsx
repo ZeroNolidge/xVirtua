@@ -1,15 +1,21 @@
 import { useState } from 'react';
-import { CONSENT_VERSION, RETENTION_NOTICE } from '@plainspeak/shared';
+import { cleanPreferredName, CONSENT_VERSION, RETENTION_NOTICE } from '@plainspeak/shared';
 import { api, friendlyError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { NameField } from '../components/NameField';
 
 /**
  * Shown at first sign-in, and again whenever CONSENT_VERSION is bumped.
  * If this text changes, bump CONSENT_VERSION in shared/src/constants.ts.
  */
 export function Consent() {
-  const { claims, signOut } = useAuth();
+  const { claims, signOut, userDoc } = useAuth();
   const [agreed, setAgreed] = useState(false);
+  // Faculty may have given a name on the invite; never the email's first part.
+  const [name, setName] = useState(
+    userDoc?.nameChosen ? userDoc.displayName : (userDoc?.suggestedName ?? ''),
+  );
+  const clean = cleanPreferredName(name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +23,8 @@ export function Consent() {
     setBusy(true);
     setError(null);
     try {
-      await api.acceptConsent({ version: CONSENT_VERSION });
+      if (!clean) return setBusy(false);
+      await api.acceptConsent({ version: CONSENT_VERSION, name: clean });
     } catch (e) {
       setError(friendlyError(e));
       setBusy(false);
@@ -68,6 +75,7 @@ export function Consent() {
             </li>
           )}
         </ul>
+        <NameField value={name} onChange={setName} />
         <label className="check">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
           <span>I understand and agree.</span>
@@ -77,7 +85,7 @@ export function Consent() {
             {error}
           </p>
         )}
-        <button className="btn" disabled={!agreed || busy} onClick={accept}>
+        <button className="btn" disabled={!agreed || !clean || busy} onClick={accept}>
           {busy ? 'Saving…' : 'Let’s go'}
         </button>
         <button className="btn btn-text" onClick={() => void signOut()}>

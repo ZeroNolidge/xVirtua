@@ -134,7 +134,7 @@ export function SkillShape({
           </button>
         ))}
       </div>
-      <p className="small muted center-text">Centre: Just starting · Edge: Strong</p>
+      <p className="small muted center-text">Center: Just starting · Edge: Strong</p>
       <details className="small">
         <summary>As a list</summary>
         <table className="small">

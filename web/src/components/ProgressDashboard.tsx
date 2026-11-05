@@ -179,7 +179,7 @@ export function ProgressDashboard({ uid }: { uid: string | undefined }) {
           </div>
           <div className="stat">
             <span className="num">{minutes}</span>
-            <span className="lbl">minutes practised</span>
+            <span className="lbl">minutes practiced</span>
           </div>
           <div className="stat">
             <span className="num">{scored.length}</span>
