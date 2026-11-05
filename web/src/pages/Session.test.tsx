@@ -70,7 +70,8 @@ vi.mock('../lib/voiceRenderer', async (orig) => {
   return { ...m, VoiceRenderer: InstantRenderer };
 });
 
-const { Session } = await import('./Session');
+const { Session, Conversation } = await import('./Session');
+const { NO_MIC_NOTICE } = await import('../lib/micNotice');
 
 beforeAll(() => {
   // Safari returns a value from scrollIntoView. An effect that returns it
@@ -170,5 +171,37 @@ describe('conversation screen', () => {
       await screen.findByText('No microphone access, so you can type your side for now.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Mic ready/)).toBeNull();
+  });
+
+  it('no mic known before the tap: the card says they’ll type, and one tap opens the text box', async () => {
+    const { unmount } = renderSession();
+    expect(
+      screen.getByText(/You’ll type your side, and Ray’s replies show here as text/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/will answer out loud/)).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /start talking/i }));
+    });
+    expect(await screen.findByRole('textbox', { name: /your reply/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start talking/i })).toBeNull();
+    unmount();
+  });
+
+  it('live voice fell back for no mic: types straight away, no second tap', async () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <Conversation
+          sessionId="s1"
+          persona={{ name: 'Ray Kowalski', age: 58, pronouns: 'he/him' }}
+          opening={{ ...opening, nonverbal: [] }}
+          initialNotice={NO_MIC_NOTICE}
+          startNow
+        />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('textbox', { name: /your reply/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start talking/i })).toBeNull();
+    expect(screen.getByText(NO_MIC_NOTICE)).toBeInTheDocument();
+    unmount();
   });
 });
