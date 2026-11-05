@@ -147,6 +147,39 @@ describe('Briefing', () => {
     }
   });
 
+  it('a computer with getUserMedia but no mic listed: says they’ll type', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn(), enumerateDevices: async () => [{ kind: 'audiooutput' }] },
+    });
+    try {
+      renderBriefing();
+      expect(
+        await screen.findByText(/you’ll type your side and .+’s replies show as text/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/You’ll talk out loud/)).toBeNull();
+    } finally {
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+    }
+  });
+
+  it('the mic failed last time: says they’ll type', () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn(), enumerateDevices: async () => [{ kind: 'audioinput' }] },
+    });
+    localStorage.setItem('ps.noMic', '1');
+    try {
+      renderBriefing();
+      expect(
+        screen.getByText(/you’ll type your side and .+’s replies show as text/i),
+      ).toBeInTheDocument();
+    } finally {
+      localStorage.clear();
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+    }
+  });
+
   it('shows faculty the review panel with hidden concern, cues and publish', () => {
     role.current = 'faculty';
     renderBriefing();

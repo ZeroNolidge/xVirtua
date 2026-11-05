@@ -12,7 +12,14 @@ import {
   type PatientChunk,
   type VoiceMode,
 } from '@plainspeak/shared';
-import { afterMicOpened, micIndicator, NO_MIC_NOTICE, useNoMic } from '../lib/micNotice';
+import {
+  afterMicOpened,
+  micIndicator,
+  NO_MIC_NOTICE,
+  rememberMicFailed,
+  rememberMicOpened,
+  useNoMic,
+} from '../lib/micNotice';
 import { db } from '../lib/firebase';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
@@ -884,6 +891,7 @@ export function Conversation({
 
     // No mic (known already, or refused now): straight to typing, on this same tap.
     const typeInstead = () => {
+      rememberMicFailed();
       setTyped(true);
       setNoMic(true);
       setNotice(NO_MIC_NOTICE);
@@ -897,6 +905,7 @@ export function Conversation({
         // They left while we waited for the mic: never leave it on.
         if (gone.current) return stream.getTracks().forEach((t) => t.stop());
         mic.current = stream;
+        rememberMicOpened();
         setNoMic(false);
         setNotice(afterMicOpened);
         recorder.current = new SessionRecorder(stream);
@@ -950,11 +959,13 @@ export function Conversation({
       });
       if (gone.current) return stream.getTracks().forEach((t) => t.stop());
       mic.current = stream;
+      rememberMicOpened();
       setNotice(afterMicOpened);
       recorder.current?.resume(stream);
       micMeter.current = new MicMeter(stream);
       await startVoice(stream);
     } catch {
+      rememberMicFailed();
       setTyped(true);
       setNotice(NO_MIC_NOTICE);
     } finally {

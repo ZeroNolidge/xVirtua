@@ -5,7 +5,7 @@ import { reportError } from '../lib/errorReport';
 import { sessionApi, streamTurn, type TurnInput, type Utterance } from '../lib/session';
 import { LiveVoiceCall, toneNote } from '../lib/liveVoice';
 import { ECHO_WINDOW_MS, isEcho, LiveReply, MIC_EVIDENCE_MS } from '../lib/liveReply';
-import { NO_MIC_NOTICE, useNoMic } from '../lib/micNotice';
+import { NO_MIC_NOTICE, rememberMicFailed, rememberMicOpened, useNoMic } from '../lib/micNotice';
 import { SessionRecorder } from '../lib/recorder';
 import { PlainWordSearch } from '../components/PlainWordSearch';
 import { UploadRetry } from '../components/UploadRetry';
@@ -741,6 +741,7 @@ export function LiveConversation({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch {
+      rememberMicFailed();
       return fallBack(NO_MIC_NOTICE);
     }
     // They left (or ended) while we waited for the mic: never leave it on.
@@ -749,6 +750,7 @@ export function LiveConversation({
       return;
     }
     mic.current = stream;
+    rememberMicOpened();
     if (recorder.current) recorder.current.resume(stream);
     else {
       recorder.current = new SessionRecorder(stream);

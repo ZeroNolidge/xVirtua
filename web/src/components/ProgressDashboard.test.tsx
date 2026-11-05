@@ -6,8 +6,24 @@ vi.mock('../lib/firebase', () => ({ db: {} }));
 
 const ts = (ms: number) => ({ toMillis: () => ms, toDate: () => new Date(ms) });
 const sessions = [
-  { id: 'a', status: 'ended', startedAt: ts(Date.now() - 2e8), feedbackBand: 'Solid' },
-  { id: 'b', status: 'ended', startedAt: ts(Date.now() - 1e8), feedbackBand: 'Strong' },
+  {
+    id: 'a',
+    status: 'ended',
+    startedAt: ts(Date.now() - 2e8),
+    feedbackBand: 'Solid',
+    turnCount: 9,
+    durationSec: 300,
+  },
+  {
+    id: 'b',
+    status: 'ended',
+    startedAt: ts(Date.now() - 1e8),
+    feedbackBand: 'Strong',
+    turnCount: 2,
+    durationSec: 240,
+  },
+  // Ray spoke, the resident never did, and the server has since ended it.
+  { id: 'c', status: 'ended', startedAt: ts(Date.now() - 5e7), turnCount: 1, durationSec: 600 },
 ];
 /** Releases the per-session feedback reads (held until the test says so). */
 let release!: () => void;
@@ -53,5 +69,16 @@ describe('ProgressDashboard', () => {
     expect(await screen.findByText('with feedback')).toBeInTheDocument();
     expect(screen.getAllByText('2')[0]).toBeInTheDocument();
     expect(screen.queryByText(/No feedback in this range/)).toBeNull();
+  });
+
+  it('leaves out a conversation the resident never spoke in (not counted, no minutes)', async () => {
+    render(
+      <MemoryRouter>
+        <ProgressDashboard uid="u1" />
+      </MemoryRouter>,
+    );
+    const convs = await screen.findByText('conversations');
+    expect(convs.previousSibling?.textContent).toBe('2');
+    expect(screen.getByText('minutes practiced').previousSibling?.textContent).toBe('9');
   });
 });
