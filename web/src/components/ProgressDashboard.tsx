@@ -22,6 +22,7 @@ import {
 import { db } from '../lib/firebase';
 import { bandLevel, levelsOf, METRIC_ABOUT, METRIC_LABEL } from './metricLabels';
 import { SkillShape, type Levels } from './SkillShape';
+import { neverStarted } from '../lib/resume';
 
 interface Session {
   id: string;
@@ -32,6 +33,7 @@ interface Session {
   appWaitSec?: number;
   feedbackBand?: string | null;
   speechStats?: SpeechStats;
+  turnCount?: number;
 }
 interface Scored extends Session {
   at: Date;
@@ -111,8 +113,10 @@ export function ProgressDashboard({ uid }: { uid: string | undefined }) {
     return 0;
   }, [range, from, today]);
 
+  // Ones the resident never spoke in don't count as practice.
   const inRange = (all ?? []).filter(
-    (s) => s.status === 'ended' && (s.startedAt?.toMillis() ?? 0) >= since,
+    (s) =>
+      s.status === 'ended' && !neverStarted(s, today) && (s.startedAt?.toMillis() ?? 0) >= since,
   );
   const scored: Scored[] = inRange
     .filter((s) => s.feedbackBand && s.startedAt && areas[s.id])

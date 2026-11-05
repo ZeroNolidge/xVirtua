@@ -26,7 +26,11 @@ export function canContinue(s: SessionRow, now = Date.now()): boolean {
   return now - last <= SESSION_LIMITS.idleMinutes * 60000;
 }
 
-/** Open, the resident never spoke, and too late to carry on: nothing to look back at. */
+/**
+ * The resident never spoke (only the patient's opening line), and it can't be
+ * picked up any more (ended, or too late): nothing to look back at or count.
+ */
 export function neverStarted(s: Partial<SessionRow>, now = Date.now()): boolean {
-  return s.status === 'live' && (s.turnCount ?? 0) <= 1 && !canContinue(s as SessionRow, now);
+  if ((s.turnCount ?? 0) > 1) return false;
+  return !(s.status === 'live' && canContinue(s as SessionRow, now));
 }
