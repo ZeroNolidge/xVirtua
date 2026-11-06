@@ -102,6 +102,22 @@ vi.mock('../lib/liveVoice', async (orig) => {
   };
 });
 
+// The video face: when set, it's still connecting until the test resolves it.
+let faceHold: Promise<null> | null = null;
+vi.mock('../lib/useAvatar', async (orig) => {
+  const m = await orig<typeof import('../lib/useAvatar')>();
+  return {
+    ...m,
+    useAvatar: (id: string) => {
+      const real = m.useAvatar(id);
+      return {
+        ...real,
+        start: (mood?: Parameters<typeof real.start>[0]) => faceHold ?? real.start(mood),
+      };
+    },
+  };
+});
+
 const calls: TurnInput[] = [];
 vi.mock('../lib/session', () => ({
   sessionApi: {
@@ -254,6 +270,22 @@ describe('GPT-Live conversation', () => {
       ]),
     );
     expect(screen.queryByText(/Will I lose my license/)).toBeNull();
+  });
+
+  it('holds Ray’s first words until his video face is up, so voice and face start together', async () => {
+    let faceUp!: () => void;
+    faceHold = new Promise<null>((r) => (faceUp = () => r(null)));
+    try {
+      await start();
+      await act(async () => cb.onStarted());
+      // Connected, but the face is still coming: nothing said yet, and he's "getting ready".
+      expect(said).toEqual([]);
+      expect(screen.getByText('Ray is getting ready…')).toBeInTheDocument();
+      await act(async () => faceUp());
+      expect(said[0]).toEqual([null, 'So, my blood pressure is high?']);
+    } finally {
+      faceHold = null;
+    }
   });
 
   it('waits for the resident’s last words before asking Claude', async () => {

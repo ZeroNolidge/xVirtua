@@ -671,19 +671,24 @@ export function LiveConversation({
           window.setTimeout(() => !ended.current && reportCensus('first 30s'), 30_000);
         if (opening && !openingSent.current) {
           openingSent.current = true;
-          const r = new LiveReply(0, null);
-          r.planned = opening.text;
-          r.nonverbal = opening.nonverbal;
-          reply.current = r;
-          delegationOf.current = null;
-          c.say(null, toneNote(opening.delivery) + opening.text);
-          c.nudge();
-          r.sentAt = performance.now();
           setThinking(true);
           setOpeningWait(true);
-          window.setTimeout(() => {
-            if (!r.firstAudibleAt) setSlowStart(true);
-          }, SLOW_START_MS);
+          // Hold his first words until his face is up (or has failed), so the
+          // voice and the face start together, never the voice alone first.
+          void facing.then(() => {
+            if (!mine()) return;
+            const r = new LiveReply(0, null);
+            r.planned = opening.text;
+            r.nonverbal = opening.nonverbal;
+            reply.current = r;
+            delegationOf.current = null;
+            c.say(null, toneNote(opening.delivery) + opening.text);
+            c.nudge();
+            r.sentAt = performance.now();
+            window.setTimeout(() => {
+              if (!r.firstAudibleAt) setSlowStart(true);
+            }, SLOW_START_MS);
+          });
         } else if (bubblesRef.current.length) {
           const recent = bubblesRef.current
             .slice(-8)
