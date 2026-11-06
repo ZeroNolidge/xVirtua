@@ -182,7 +182,11 @@ export function SessionDone() {
       <section>
         <h1>{first} is waiting for you</h1>
         <div className="card">
-          <p>This conversation is still open. Pick it up where {first} left off.</p>
+          <p>
+            {meta.turnCount === 0
+              ? 'This conversation is still open. Start it whenever you’re ready.'
+              : `This conversation is still open. Pick it up where ${first} left off.`}
+          </p>
           <button className="btn" onClick={() => nav(`/session/${id}`, { replace: true })}>
             Continue the conversation
           </button>
