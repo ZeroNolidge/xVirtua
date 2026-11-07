@@ -1,23 +1,24 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from './auth';
 import { reportError } from './errorReport';
 import { uploadRecording, type RecordingJob } from './recording';
+import { freshPage } from './freshPage';
 
 /**
- * Saves the recording after a conversation ends, then opens the feedback.
+ * Saves the recording after a conversation ends, then opens the feedback
+ * (as a fresh page load).
  * If the upload fails (e.g. the connection dropped), `failed` is set so the
  * screen can offer "Try again" or "Skip, see my feedback".
  */
 export function useRecordingUpload(sessionId: string) {
-  const nav = useNavigate();
   const { claims, user } = useAuth();
   const job = useRef<RecordingJob | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   /** 0–1 while the recording uploads; null before it starts. */
   const [progress, setProgress] = useState<number | null>(null);
-  const done = () => nav(`/session/${sessionId}/done`, { replace: true });
+  // A fresh page load, so nothing from this conversation's audio carries over.
+  const done = () => freshPage.open(`/session/${sessionId}/done`);
 
   async function attempt() {
     if (!job.current) return done();

@@ -867,6 +867,8 @@ export function LiveConversation({
       ended.current = true;
       call.current?.hangUp();
       mic.current?.getTracks().forEach((t) => t.stop());
+      // Left without ending: close the recorder's audio too.
+      void recorder.current?.stop().catch(() => undefined);
     },
     [],
   );
