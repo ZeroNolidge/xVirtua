@@ -50,6 +50,23 @@ jobs:
           gcloud logging read 'resource.labels.service_name="avatarsession" AND severity>=ERROR AND NOT httpRequest:*' \
             --project "$PROJECT_ID" --freshness=1d --limit=4 \
             --format='value(timestamp,textPayload,jsonPayload.message)' || true
+      - name: Ask Simli for a session (Ray, with and without his room)
+        continue-on-error: true
+        env:
+          SIMLI_API_KEY: ${{ secrets.SIMLI_API_KEY }}
+        run: |
+          node -e '
+            const key = process.env.SIMLI_API_KEY;
+            if (!key) { console.log("SIMLI_API_KEY secret is empty"); process.exit(0); }
+            const base = { faceId: "04342b6e-bd80-4125-a926-761c68025194", handleSilence: false, maxSessionLength: 60, maxIdleTime: 30 };
+            (async () => {
+              for (const [label, body] of [["with room", { ...base, background_id: "aace53d2-49b5-48ba-b556-9df798e07c49" }], ["no room", base]]) {
+                const r = await fetch("https://api.simli.ai/compose/token", { method: "POST", headers: { "Content-Type": "application/json", "x-simli-api-key": key }, body: JSON.stringify(body) });
+                const t = (await r.text()).replace(/"session_token"\s*:\s*"[^"]*"/g, "\"session_token\":\"(hidden)\"");
+                console.log(label, r.status, t.slice(0, 400));
+              }
+            })();
+          '
       - name: Recent requests (last 6h)
         continue-on-error: true
         run: |
