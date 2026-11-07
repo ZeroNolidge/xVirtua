@@ -177,8 +177,8 @@ export function Session() {
           persona={persona}
           startedAtMs={startedAtMs}
           initialNotice={standard.notice}
-          // No mic was the reason: the resident already tapped Start, so go straight to typing.
-          startNow={standard.notice === NO_MIC_NOTICE}
+          // The resident already tapped Start (live voice fell back): carry straight on.
+          startNow
           {...(standard.bubbles
             ? { resumeFrom: standard.bubbles }
             : fresh
@@ -933,6 +933,8 @@ export function Conversation({
     if (!startNow || startedNow.current) return;
     startedNow.current = true;
     void begin();
+    // begin() clears old notices; the reason for the fallback must stay up.
+    setNotice(initialNotice ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startNow]);
 
