@@ -762,8 +762,17 @@ export function LiveConversation({
       void recorder.current.start();
     }
     const tooSlow = () => {
-      if (!started.current && mine())
-        fallBack('The live voice didn’t answer in time, so this uses the standard voice.');
+      if (started.current || !mine()) return;
+      // Nothing else records a start that never came: say what state the call was in.
+      reportError(
+        'live.timeout',
+        new Error(
+          `GPT-Live never started: ${c.describe?.() ?? ''}; events ${JSON.stringify(census.current.counts)}; ${
+            faceInstance()?.describe() ?? 'no avatar'
+          }`,
+        ),
+      );
+      fallBack('The live voice didn’t answer in time, so this uses the standard voice.');
     };
     // Our server can take a while to wake up, so it gets its own, longer limit.
     window.setTimeout(tooSlow, SERVER_TIMEOUT_MS);

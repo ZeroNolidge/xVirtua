@@ -614,6 +614,26 @@ describe('GPT-Live conversation', () => {
     expect(onFallback.mock.calls[0]![1]).toBeNull();
   });
 
+  it('GPT-Live never says it started: reports the call state, then falls back', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const onFallback = await start();
+      const { reportError } = await import('../lib/errorReport');
+      vi.mocked(reportError).mockClear();
+      await act(async () => {
+        vi.advanceTimersByTime(12_500);
+      });
+      expect(onFallback).toHaveBeenCalledTimes(1);
+      expect(onFallback.mock.calls[0]![0]).toMatch(/didn’t answer in time/);
+      const kinds = vi.mocked(reportError).mock.calls.map((c) => c[0]);
+      expect(kinds).toContain('live.timeout');
+      const report = vi.mocked(reportError).mock.calls.find((c) => c[0] === 'live.timeout')!;
+      expect(String((report[1] as Error).message)).toMatch(/GPT-Live never started/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows residents no model or test labels', () => {
     const { container } = render(
       <MemoryRouter>
