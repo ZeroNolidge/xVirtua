@@ -1021,6 +1021,8 @@ export function Conversation({
       renderer.current?.dispose();
       mic.current?.getTracks().forEach((t) => t.stop());
       micMeter.current?.stop();
+      // Left without ending: close the recorder's audio too.
+      void recorder.current?.stop().catch(() => undefined);
     };
   }, []);
 
