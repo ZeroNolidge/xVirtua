@@ -58,10 +58,12 @@ jobs:
           node -e '
             const key = process.env.SIMLI_API_KEY;
             if (!key) { console.log("SIMLI_API_KEY secret is empty"); process.exit(0); }
+            const trimmed = key.trim();
+            console.log("key length", key.length, "trimmed length", trimmed.length, "spaces or line breaks around it:", key !== trimmed);
             const base = { faceId: "04342b6e-bd80-4125-a926-761c68025194", handleSilence: false, maxSessionLength: 60, maxIdleTime: 30 };
             (async () => {
-              for (const [label, body] of [["with room", { ...base, background_id: "aace53d2-49b5-48ba-b556-9df798e07c49" }], ["no room", base]]) {
-                const r = await fetch("https://api.simli.ai/compose/token", { method: "POST", headers: { "Content-Type": "application/json", "x-simli-api-key": key }, body: JSON.stringify(body) });
+              for (const [label, body, k] of [["with room", { ...base, background_id: "aace53d2-49b5-48ba-b556-9df798e07c49" }, key], ["no room", base, key], ["no room, key trimmed", base, trimmed]]) {
+                const r = await fetch("https://api.simli.ai/compose/token", { method: "POST", headers: { "Content-Type": "application/json", "x-simli-api-key": k }, body: JSON.stringify(body) }).catch((e) => ({ status: "error " + e.message, text: async () => "" }));
                 const t = (await r.text()).replace(/"session_token"\s*:\s*"[^"]*"/g, "\"session_token\":\"(hidden)\"");
                 console.log(label, r.status, t.slice(0, 400));
               }
