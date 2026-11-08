@@ -175,7 +175,32 @@ export class PatientAvatar {
       return false;
     }
     this.pending = client;
+    this.idle(client);
     return true;
+  }
+
+  private idleTimer: ReturnType<typeof setInterval> | undefined;
+
+  /**
+   * Keeps his next face moving while it waits out of sight. Simli only draws
+   * new frames while it gets sound (handleSilence is off), so a waiting face
+   * froze on an old frame and showed it for about a second after the swap,
+   * then jumped (seen in a face check: 1-2% bigger). It gets silence until it
+   * takes over; then the voice feed's own stream (silence between lines) does.
+   */
+  private idle(client: SimliClient | null) {
+    clearInterval(this.idleTimer);
+    this.idleTimer = undefined;
+    if (!client) return;
+    const chunk = new Uint8Array(3200); // 0.1 s of 16 kHz 16-bit silence
+    this.idleTimer = setInterval(() => {
+      if (this.pending !== client) return this.idle(null);
+      try {
+        client.sendAudioData(chunk);
+      } catch {
+        // Closing.
+      }
+    }, 100);
   }
 
   /**
@@ -189,6 +214,7 @@ export class PatientAvatar {
     const old = this.client;
     if (!next || !spare || !old) return false;
     this.pending = null;
+    this.idle(null);
     const muted = this.audio.muted;
     this.spare = { video: this.video, audio: this.audio };
     this.video = spare.video;
@@ -203,6 +229,7 @@ export class PatientAvatar {
   }
 
   private dropPending() {
+    this.idle(null);
     hangUp(this.pending);
     this.pending = null;
   }

@@ -81,9 +81,14 @@ export interface BodyStats {
   relaxed: boolean;
 }
 
-/** Where to put a clip so it meets the live head (nothing if it's close enough). */
-function place(o: { x: number; y: number; scale: number } | null) {
-  return o && (Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT || Math.abs(o.scale - 1) > MIN_ZOOM)
+/**
+ * Where to put a clip so it meets the live head (nothing if it's close
+ * enough). `exact`: always, however small (a mood change, which shows only
+ * the patient, so moving it never slides the wall).
+ */
+function place(o: { x: number; y: number; scale: number } | null, exact = false) {
+  return o &&
+    (exact || Math.hypot(o.x, o.y) * 100 > MIN_SHIFT_PCT || Math.abs(o.scale - 1) > MIN_ZOOM)
     ? `translate(${(o.x * 100).toFixed(2)}%, ${(o.y * 100).toFixed(2)}%) scale(${o.scale.toFixed(4)})`
     : 'none';
 }
@@ -197,15 +202,16 @@ export class BodyLanguage {
     // Fading in: if his live head is noticeably off his resting spot, the clip
     // starts there and stays there (no glide back, which also slid the wall).
     el.style.transition = 'none';
-    el.style.transform = place(o);
+    const moodChange = el.classList.contains('mood-change');
+    el.style.transform = place(o, moodChange);
     void el.offsetWidth; // apply that position before fading in
     el.style.transition = '';
     el.classList.add('on');
     // His live head keeps settling (he leans in while talking and eases back
     // for a few seconds): the clip follows it, so they still match when it
     // fades out. Only the patient comes from the clip (the soft oval), so the
-    // wall never moves. A mood change can't: it shows the whole room.
-    if (!el.classList.contains('whole')) {
+    // wall never moves. A mood change glides instead (below).
+    if (!moodChange) {
       let at = o;
       this.follow = setInterval(() => {
         const now = this.heads.offset(this.live(), rest);
@@ -222,11 +228,12 @@ export class BodyLanguage {
         el.style.transform = `translate(${(at.x * 100).toFixed(2)}%, ${(at.y * 100).toFixed(2)}%) scale(${at.scale.toFixed(4)})`;
       }, FOLLOW_MS);
     }
-    // A mood change shows the whole room. Simli's live picture can sit a
-    // little off its own still (the whole picture, wall too), so the blend
-    // glides from where the old face is to where the new face is, and the
-    // swap at its end doesn't jump.
-    if (el.classList.contains('whole')) {
+    // A mood change starts where his old live head is and glides to where his
+    // new live face's head is (connected out of sight, and kept moving), so
+    // neither end jumps. Every face shares one room now, so like the other
+    // clips only the patient comes from it (the soft oval): the wall stays
+    // the live picture and never zooms or slides.
+    if (moodChange) {
       const end = this.heads.offset(this.nextLive(), this.poster);
       this.onEvent?.({
         type: 'glide',
@@ -236,19 +243,16 @@ export class BodyLanguage {
       });
       const secs = Number.isFinite(el.duration) ? el.duration : 2;
       el.style.transition = `opacity ${FADE_MS / 1000}s ease, transform ${secs}s ease-in-out`;
-      el.style.transform = place(end);
+      el.style.transform = place(end, true);
     }
   }
 
-  /**
-   * `whole`: a mood change. It plays full-frame, since it blends one live
-   * face's room into the other's; expression clips show only the patient.
-   */
-  private start(file: string, whole = false): Promise<number> | null {
+  /** `moodChange`: the clip from one mood's face to the next (it glides between them). */
+  private start(file: string, moodChange = false): Promise<number> | null {
     const url = this.urls.get(file);
     if (!url) return null;
     const el = this.el;
-    el.classList.toggle('whole', whole);
+    el.classList.toggle('mood-change', moodChange);
     const rest = this.poster; // the clip's first frame (his mood may change meanwhile)
     el.src = url;
     el.currentTime = 0;

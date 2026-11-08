@@ -144,6 +144,25 @@ describe('video avatar', () => {
     expect(video.style.opacity).toBe('0');
   });
 
+  it('his next face gets silence while it waits, so it takes over on a fresh frame', async () => {
+    vi.useFakeTimers();
+    try {
+      const a = new PatientAvatar(els().video, els().audio, els());
+      await a.connect(async () => 'tok-guarded');
+      expect(await a.prepareFace(async () => 'tok-at-ease')).toBe(true);
+      vi.advanceTimersByTime(350);
+      // Only the waiting face (client 2) got silence, about every 0.1 s.
+      expect(sentTo.filter((c) => c === 2).length).toBe(3);
+      expect(sent.every((d) => d.every((b) => b === 0))).toBe(true);
+      expect(a.commitFace()).toBe(true);
+      const before = sent.length;
+      vi.advanceTimersByTime(500);
+      expect(sent.length).toBe(before); // the voice feed takes over now
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('if his other face can’t connect, the current one stays', async () => {
     const { video, audio } = els();
     const a = new PatientAvatar(video, audio, els());

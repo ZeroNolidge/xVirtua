@@ -64,9 +64,12 @@ that it opened the mouth (8 of 8 tries, even with an edited end frame). Instead:
    they line up the room and the patient separately, so the wall doesn't
    double up halfway.
 
-In the app, the blend glides from where the old live face sits to where the
-new one sits (it's connected out of sight first), since Simli's live picture
-can sit about 1% off its own download.
+In the app, the blend starts where the old live head is and glides to where
+the new live face's head is (that face is connected out of sight first, and
+gets silence while it waits so it keeps moving: Simli draws no new frames
+without sound, and a frozen face jumped when it took over). Since every face
+shares one room, only the patient comes from the blend (the same soft oval as
+the other clips): the wall stays the live picture and never zooms or slides.
 
 ## 2. The clips
 
