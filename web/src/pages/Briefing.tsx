@@ -21,6 +21,7 @@ import { Loading } from './StatusScreens';
 import { prewarmConversation, sessionApi } from '../lib/session';
 import { MODEL_LABELS } from '../lib/models';
 import { useNoMic } from '../lib/micNotice';
+import { connectionLine, useConnectionCheck } from '../lib/connectionCheck';
 
 export function Briefing() {
   const { id } = useParams();
@@ -36,6 +37,8 @@ export function Briefing() {
   const [model, setModel] = useState<PatientModel | ''>('');
   const [voiceMode, setVoiceMode] = useState<VoiceMode | ''>('');
   const [noMic] = useNoMic();
+  // A quick look at the connection, so a slow one doesn't come as a surprise.
+  const connection = useConnectionCheck();
 
   async function startConversation() {
     if (!id) return;
@@ -149,6 +152,14 @@ export function Briefing() {
       <button className="btn" disabled={starting} onClick={() => void startConversation()}>
         {starting ? 'Getting the room ready…' : 'Start conversation'}
       </button>
+      {connection && (
+        <p
+          className={connection.verdict === 'slow' ? 'notice' : 'muted small center-text'}
+          role={connection.verdict === 'slow' ? 'status' : undefined}
+        >
+          {connectionLine(connection)}
+        </p>
+      )}
       <p className="muted small center-text">
         {noMic
           ? `No microphone, so you’ll type your side and ${b.persona.name.split(' ')[0]}’s replies show as text.`
