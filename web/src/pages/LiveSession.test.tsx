@@ -37,6 +37,7 @@ vi.mock('../lib/recorder', () => ({
 // Fake GPT-Live call: the test drives its events.
 let cb: LiveCallbacks;
 let audible = false;
+let meterOn = true;
 let micLoudMs = 0;
 let micLoudAt = -1e9;
 let lastSound = -1e9;
@@ -69,6 +70,9 @@ vi.mock('../lib/liveVoice', async (orig) => {
       }
       patientAudible() {
         return audible;
+      }
+      meterRunning() {
+        return meterOn;
       }
       truncate() {
         return false;
@@ -199,6 +203,8 @@ const saved = () =>
   (
     sessionApi.saveHeard as unknown as { mock: { calls: [Record<string, unknown>][] } }
   ).mock.calls.map((c) => c[0]);
+/** A little past the app's no-sound limit (3.5 s). */
+const NO_SOUND_WAIT = 3800;
 const sleep = (ms: number) => act(async () => new Promise((r) => setTimeout(r, ms)));
 
 beforeEach(() => {
@@ -208,6 +214,7 @@ beforeEach(() => {
   muted.length = 0;
   ducked.length = 0;
   audible = false;
+  meterOn = true;
   failConnect = false;
   micLoudMs = 0;
   micLoudAt = -1e9;
@@ -632,6 +639,17 @@ describe('GPT-Live conversation', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('a paused volume meter is no proof of silence: no “Can’t hear Ray?” then', async () => {
+    meterOn = false;
+    await start();
+    await act(async () => cb.onStarted());
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(NO_SOUND_WAIT);
+    expect(screen.queryByText(/Can’t hear Ray/)).toBeNull();
+    const { reportError } = await import('../lib/errorReport');
+    expect(vi.mocked(reportError).mock.calls.map((c) => c[0])).not.toContain('live.noSound');
   });
 
   it('shows residents no model or test labels', () => {

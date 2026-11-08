@@ -173,6 +173,9 @@ export class LiveVoiceCall {
       const levels = new Uint8Array(new ArrayBuffer(a.fftSize));
       const tick = () => {
         if (this.stopped) return;
+        // Phones suspend the context when the sound moves (e.g. to Bluetooth): wake it.
+        if (this.ctx && this.ctx.state === 'suspended')
+          void this.ctx.resume().catch(() => undefined);
         a.getByteTimeDomainData(levels);
         let peak = 0;
         for (const v of levels) peak = Math.max(peak, Math.abs(v - 128));
@@ -183,6 +186,11 @@ export class LiveVoiceCall {
     } catch {
       // No meter: we fall back to the transcript alone.
     }
+  }
+
+  /** Whether the loudness meter is measuring (a suspended context reads silence). */
+  meterRunning(): boolean {
+    return this.ctx?.state === 'running';
   }
 
   /** How long the resident has been audibly talking without a break (0 if not). */
