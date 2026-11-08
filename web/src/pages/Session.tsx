@@ -56,6 +56,8 @@ import { useCaptions } from '../lib/useCaptions';
 import { useAvatar } from '../lib/useAvatar';
 import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
+import { BluetoothNote } from '../components/BluetoothNote';
+import { openMic } from '../lib/micChoice';
 import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
 
 type Phase = 'ready' | 'connecting' | 'patient' | 'listening' | 'thinking' | 'ending';
@@ -899,9 +901,7 @@ export function Conversation({
     if (noMic && !navigator.mediaDevices?.getUserMedia) typeInstead();
     else
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        });
+        const stream = await openMic();
         // They left while we waited for the mic: never leave it on.
         if (gone.current) return stream.getTracks().forEach((t) => t.stop());
         mic.current = stream;
@@ -956,9 +956,7 @@ export function Conversation({
     void startFace(body.mood() ?? undefined);
     setResumingVoice(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      const stream = await openMic();
       if (gone.current) return stream.getTracks().forEach((t) => t.stop());
       mic.current = stream;
       rememberMicOpened();
@@ -1110,6 +1108,7 @@ export function Conversation({
               ? 'We’ll save this conversation so you can review it and get feedback (kept up to 3 years).'
               : 'We’ll record this practice so you can review it and get feedback (kept up to 3 years).'}
           </p>
+          {!noMic && <BluetoothNote first={first} />}
           <button className="btn" onClick={() => void begin()}>
             {resumeFrom
               ? 'Continue the conversation'

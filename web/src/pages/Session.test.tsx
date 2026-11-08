@@ -228,4 +228,31 @@ describe('conversation screen', () => {
       Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
     }
   });
+
+  it('with a Bluetooth headset: explains the sound, and offers to talk into the phone', async () => {
+    localStorage.clear();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn(),
+        enumerateDevices: async () => [
+          { kind: 'audioinput', label: 'Speakerphone', deviceId: 'p1' },
+          { kind: 'audioinput', label: 'Bluetooth headset', deviceId: 'b1' },
+        ],
+      },
+    });
+    try {
+      const { unmount } = renderSession();
+      expect(
+        await screen.findByText(/Bluetooth headset: its microphone makes Ray’s voice/),
+      ).toBeInTheDocument();
+      const box = screen.getByRole('checkbox', { name: /Talk into the phone instead/ });
+      fireEvent.click(box);
+      expect(localStorage.getItem('ps.phoneMic')).toBe('1');
+      unmount();
+    } finally {
+      localStorage.clear();
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+    }
+  });
 });

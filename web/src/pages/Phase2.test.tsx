@@ -30,6 +30,12 @@ vi.mock('../lib/auth', () => ({
   }),
 }));
 
+let connection: import('../lib/connectionCheck').ConnectionReport | null = null;
+vi.mock('../lib/connectionCheck', async (orig) => ({
+  ...(await orig<typeof import('../lib/connectionCheck')>()),
+  useConnectionCheck: () => connection,
+}));
+
 const seed = SEED_SCENARIOS[0]!;
 vi.mock('../lib/scenarios', () => ({
   useScenario: (_id: string, isFaculty: boolean) => ({
@@ -47,6 +53,7 @@ const { Briefing } = await import('./Briefing');
 
 beforeEach(() => {
   role.current = 'resident';
+  connection = null;
 });
 
 describe('Plain words lookup', () => {
@@ -178,6 +185,35 @@ describe('Briefing', () => {
       localStorage.clear();
       Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
     }
+  });
+
+  it('says when the connection is slow, and that it looks good otherwise', () => {
+    connection = {
+      rttMs: 620,
+      downMbps: 0.8,
+      effectiveType: '3g',
+      saveData: false,
+      verdict: 'slow',
+      reasons: ['about 0.8 Mbps', 'a 620 ms delay', 'a 3G signal'],
+    };
+    const { unmount } = renderBriefing();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your connection is slow right now (about 0.8 Mbps, a 620 ms delay, a 3G signal). Ray’s voice and video may stutter. Wi‑Fi usually helps.',
+    );
+    // Never blocks: the start button is still there.
+    expect(screen.getByRole('button', { name: /start conversation/i })).toBeEnabled();
+    unmount();
+    connection = {
+      rttMs: 80,
+      downMbps: 12,
+      effectiveType: '4g',
+      saveData: false,
+      verdict: 'good',
+      reasons: [],
+    };
+    renderBriefing();
+    expect(screen.getByText('Your connection looks good.')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('shows faculty the review panel with hidden concern, cues and publish', () => {
