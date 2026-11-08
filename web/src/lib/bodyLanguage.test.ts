@@ -108,7 +108,8 @@ describe('body language clips', () => {
   it('a mood change glides to where his new face sits, over the whole clip', async () => {
     b.relax();
     await new Promise((r) => setTimeout(r, 5));
-    expect(el.classList.contains('whole')).toBe(true);
+    // Marked as a mood change; it keeps the soft oval (the wall stays live).
+    expect(el.classList.contains('mood-change')).toBe(true);
     expect(el.style.transition).toContain('transform 4s');
     el.finish();
     b.reveal();
