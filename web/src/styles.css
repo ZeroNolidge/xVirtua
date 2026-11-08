@@ -1231,3 +1231,10 @@ body.appcheck-debug .sheet-backdrop {
   color: #fff4dd;
   min-height: 32px;
 }
+
+.bluetooth-note {
+  margin: 8px 0 12px;
+}
+.bluetooth-note .check {
+  margin-top: 6px;
+}

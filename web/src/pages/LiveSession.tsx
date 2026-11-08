@@ -24,6 +24,8 @@ import { useCaptions } from '../lib/useCaptions';
 import { useAvatar } from '../lib/useAvatar';
 import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
+import { BluetoothNote } from '../components/BluetoothNote';
+import { openMic } from '../lib/micChoice';
 import { Transcript, type Bubble } from './Session';
 import { nonverbalLine } from '../lib/voiceRenderer';
 
@@ -742,9 +744,7 @@ export function LiveConversation({
 
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      stream = await openMic();
     } catch {
       rememberMicFailed();
       return fallBack(NO_MIC_NOTICE);
@@ -972,6 +972,7 @@ export function LiveConversation({
                 We’ll record this practice so you can review it and get feedback (kept up to 3
                 years).
               </p>
+              <BluetoothNote first={first} />
             </>
           )}
           <button className="btn" onClick={() => void begin()}>
