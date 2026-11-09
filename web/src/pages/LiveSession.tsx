@@ -395,11 +395,13 @@ export function LiveConversation({
       }
       // He's talking (his words are arriving) but no sound reaches this phone:
       // usually the sound went to a Bluetooth device, or the volume is off.
+      // Only when the meter is measuring: a suspended one hears nothing either way.
       if (
         r &&
         r.firstAudibleAt === null &&
         r.firstPieceAt !== null &&
-        now - r.firstPieceAt > NO_SOUND_MS
+        now - r.firstPieceAt > NO_SOUND_MS &&
+        (c.meterRunning?.() ?? true)
       ) {
         setThinking(false);
         setOpeningWait(false);

@@ -89,8 +89,10 @@ async function mintSimliToken(
       // We stream the patient's voice, silence included.
       handleSilence: false,
       maxSessionLength,
-      // Paused or left open: Simli hangs up (and stops billing) by itself.
-      maxIdleTime: 120,
+      // Simli counts time the face isn't *speaking* as idle (not time with no
+      // data), so this must outlast the resident's longest stretch of talking,
+      // or his face drops mid-visit. Left open, Simli still hangs up by itself.
+      maxIdleTime: 600,
       ...(background && FACE_ID.test(background) ? { background_id: background } : {}),
     }),
   }).catch((e: unknown) => {
