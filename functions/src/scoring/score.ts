@@ -96,6 +96,9 @@ export const claudeScoreSchema = z.object({
   }),
   highlight: momentZ,
   fixes: z.array(momentZ),
+  accuracyFlags: z
+    .array(z.object({ turnIdx: z.number().int(), quote: z.string(), why: z.string() }))
+    .optional(),
 });
 export type ClaudeScore = z.infer<typeof claudeScoreSchema>;
 
@@ -165,6 +168,8 @@ export interface PromptInput {
     residentTask: string;
     learningObjectives: string[];
     patientName: string;
+    /** What the resident knows going in (the facts medical accuracy is judged against). */
+    residentFacts?: string[];
   };
   cues: CueScriptEntry[];
   /** The patient's key moments (cue ids): listed even when they never fired. */
@@ -232,6 +237,8 @@ ${unfiredKeys.map((c) => `- ${c.id}: ${c.cue}. Expected response: ${c.expectedRe
 ${p.scenario.title}. The resident's task: ${p.scenario.residentTask}
 Learning objectives:
 ${p.scenario.learningObjectives.map((o) => `- ${o}`).join('\n')}
+What the resident knows (judge medical accuracy against these and standard guidance):
+${(p.scenario.residentFacts ?? []).map((f) => `- ${f}`).join('\n') || '- (none given)'}
 
 # ${firstName}'s script: cues that fired (what ${firstName} MIGHT say; this is NOT the transcript)
 These describe the scenario's plan. Never quote them and never treat them as words anyone said. Only the Transcript below is what was said.
@@ -339,6 +346,18 @@ export function validateQuotes(c: ClaudeScore, turns: Turn[], patientFirstName =
       .slice(0, 2)
       .map((f, i) => check(f, `fixes[${i}]`))
       .filter((f) => f !== null),
+    // A flag must quote the resident's real words; the note must not quote anyone else.
+    accuracyFlags: (c.accuracyFlags ?? [])
+      .map((f, i) => {
+        const at = findQuote(f.quote, f.turnIdx, turns, 'resident');
+        if (at === null) {
+          bad.push(`accuracyFlags[${i}]: "${f.quote}"`);
+          return null;
+        }
+        if (!noteOk(f.why, `accuracyFlags[${i}].why`)) return null;
+        return { turnIdx: at.idx, quote: at.quote, why: f.why };
+      })
+      .filter((f): f is NonNullable<typeof f> => f !== null),
   };
   const h = check(c.highlight, 'highlight');
   // An unchecked highlight is dropped later (assembleScore re-checks it).
@@ -464,6 +483,7 @@ export function assembleScore(args: {
     metrics,
     highlight,
     fixes,
+    ...(c.accuracyFlags?.length ? { accuracyFlags: c.accuracyFlags } : {}),
     understandingCheck: bestUnderstandingCheck(turns),
     needsReview: args.needsReview,
     model: args.model,
@@ -667,6 +687,7 @@ export async function scoreSession(
         residentTask: sc.briefing.residentTask,
         learningObjectives: sc.briefing.learningObjectives,
         patientName: sc.briefing.persona.name,
+        residentFacts: sc.briefing.residentFacts,
       },
       cues: sc.script.cueScript,
       keyCueIds: sc.script.keyCueIds ?? KEY_MOMENTS[s.scenarioId] ?? [],

@@ -40,6 +40,9 @@ Anchors: 90+ every cue caught and explored. 70s most cues caught, one missed or 
 - A rewrite changes HOW the resident said something, never WHAT is medically or legally true. Use only facts the resident already said in the conversation. Never add new clinical facts (diagnoses, drug names, doses, test values, risks, timelines), legal facts, or licensing / driving / work-permit claims. If a better answer would need a fact the resident didn't give, rewrite toward asking, acknowledging, or checking understanding instead (e.g. "Let's look at what that means for your job together").
 - Coaching tone: never "wrong", "bad" or "fail". Notes are one short sentence each.
 
+## Medical accuracy (not scored)
+Separately from the four areas, list clear medical errors the resident told the patient: statements that would mislead the patient about their care, judged against the scenario's "What the resident knows" facts and standard primary-care guidance. Examples: telling a patient they can stop a long-term medicine once their numbers look normal; telling a patient they must stop working or driving when the facts and guidance say otherwise; a wrong dose, test or risk. Keep the bar high: style, hedging, simplifications for plain language and reasonable clinical judgment are NOT errors. When unsure, leave it out. Each flag quotes the resident's exact words (turn number) and says in one or two plain sentences what's wrong and what's true. Empty when there are none.
+
 ## Highlight and fixes
 - highlight: the single best moment in the conversation, from any metric.
 - fixes: exactly 2 when possible, most important first, from TWO DIFFERENT metrics (never the same metric twice; jargon counts as a metric). Each has a rewrite; the first one is shown as "Try saying this instead".`;
@@ -95,7 +98,15 @@ const metric = (extra: Record<string, unknown> = {}, extraRequired: string[] = [
 export const SCORE_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['jargonTryThisInstead', 'clarity', 'empathy', 'cue', 'highlight', 'fixes'],
+  required: [
+    'jargonTryThisInstead',
+    'clarity',
+    'empathy',
+    'cue',
+    'highlight',
+    'fixes',
+    'accuracyFlags',
+  ],
   properties: {
     jargonTryThisInstead: {
       type: ['object', 'null'],
@@ -162,5 +173,19 @@ export const SCORE_JSON_SCHEMA = {
     ),
     highlight: moment(false),
     fixes: { type: 'array', items: moment(true), description: 'At most 2.' },
+    accuracyFlags: {
+      type: 'array',
+      description: 'Clear medical errors only; empty when there are none.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['turnIdx', 'quote', 'why'],
+        properties: {
+          turnIdx: { type: 'integer' },
+          quote: { type: 'string' },
+          why: { type: 'string' },
+        },
+      },
+    },
   },
 } as const;

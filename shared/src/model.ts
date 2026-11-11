@@ -239,6 +239,8 @@ export interface ScoreDoc {
   needsReview: boolean;
   /** Rewrites that added facts the resident didn't say (hidden from the resident). */
   rewriteFlags?: { where: string; rewrite: string; reasons: string[] }[];
+  /** Clear medical errors that would mislead the patient (not scored). */
+  accuracyFlags?: AccuracyFlag[];
   /** Overall score of the resident's previous scored conversation, for the trend. */
   previousOverall?: number | null;
   model: string;
@@ -297,6 +299,14 @@ export function pronounWords(pronouns: string | undefined): {
   return { they: 'they', them: 'them', their: 'their', themself: 'themself' };
 }
 
+/** Something the resident told the patient that is medically wrong (not scored). */
+export interface AccuracyFlag {
+  turnIdx: number;
+  quote: string;
+  /** One or two plain sentences: what's wrong and what's true. */
+  why: string;
+}
+
 /** One area of feedback as the resident sees it: no numbers. */
 export interface AreaFeedback {
   band: Band;
@@ -334,5 +344,7 @@ export interface ResidentFeedback {
   };
   /** Progress with this patient: completed or mastered, or what's still needed. */
   completion?: import('./completion.js').CompletionResult;
+  /** "Check the medicine": clear medical errors, not scored. Residents see at most 2. */
+  accuracyFlags?: AccuracyFlag[];
   createdAt: string;
 }

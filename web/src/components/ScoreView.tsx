@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import {
+  type AccuracyFlag,
   type AreaFeedback,
-  METRICS,
   type Metric,
+  METRICS,
   type Moment,
   type PatientStatus,
-  type ResidentFeedback,
   pronounWords,
+  type ResidentFeedback,
 } from '@plainspeak/shared';
 import { levelsOf, METRIC_ABOUT, METRIC_LABEL, trendLine } from './metricLabels';
 import { SkillShape, type Levels } from './SkillShape';
@@ -86,6 +87,29 @@ function Area({ name, a, extra }: { name: string; a: AreaFeedback; extra?: React
  * Residents see words and trends, never numbers. The overall word is the
  * page heading (SessionDone).
  */
+/** Residents see this many medical-accuracy notes; faculty see them all. */
+export const SHOWN_ACCURACY_FLAGS = 2;
+
+/** Clear medical errors the resident told the patient (not scored). */
+function CheckTheMedicine({ flags, all }: { flags: AccuracyFlag[]; all: boolean }) {
+  const shown = all ? flags : flags.slice(0, SHOWN_ACCURACY_FLAGS);
+  if (!shown.length) return null;
+  return (
+    <div className="card accuracy" role="note">
+      <h2>Check the medicine</h2>
+      <p className="small muted">Not part of your score. Worth a look before the next patient.</p>
+      <ul className="tight">
+        {shown.map((f, i) => (
+          <li key={i}>
+            <blockquote className="quote">“{f.quote}”</blockquote>
+            <div className="small">{f.why}</div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Completing the patient: a celebration, or what's still needed. */
 function CompletionCard({
   c,
@@ -153,6 +177,7 @@ export function ScoreView({
   patientFirstName,
   pronouns,
   patientStatus,
+  allAccuracyFlags,
   previous,
 }: {
   feedback: ResidentFeedback;
@@ -163,6 +188,8 @@ export function ScoreView({
   pronouns?: string;
   /** Their best with this patient so far (userProgress), if known. */
   patientStatus?: PatientStatus | null;
+  /** Faculty: every medical-accuracy note, not just the first two. */
+  allAccuracyFlags?: boolean;
 }) {
   const pw = pronounWords(pronouns);
   const [open, setOpen] = useState(false);
@@ -197,6 +224,10 @@ export function ScoreView({
         <p className="overall-word" aria-label="Compared with last time">
           {trendLine(feedback.overall.trend)}
         </p>
+      )}
+
+      {feedback.accuracyFlags && (
+        <CheckTheMedicine flags={feedback.accuracyFlags} all={allAccuracyFlags === true} />
       )}
 
       {feedback.completion && (
