@@ -214,4 +214,40 @@ describe('score screen', () => {
     fireEvent.click(screen.getByRole('button', { name: /Picking up on cues/ }));
     expect(screen.getAllByText(/he brought it up himself/).length).toBeGreaterThan(0);
   });
+
+  it('“Check the medicine”: at most two notes for residents, all for faculty, none when empty', () => {
+    const flags = [
+      {
+        turnIdx: 3,
+        quote: 'you can usually stop it',
+        why: 'Blood pressure medicine is usually for life.',
+      },
+      {
+        turnIdx: 5,
+        quote: 'stop driving the truck',
+        why: 'With these readings he can keep driving.',
+      },
+      { turnIdx: 7, quote: 'third thing', why: 'Third note.' },
+    ];
+    const { rerender } = render(
+      <ScoreView feedback={{ ...feedback, accuracyFlags: flags }} patientFirstName="Ray" />,
+    );
+    expect(screen.getByText('Check the medicine')).toBeInTheDocument();
+    expect(screen.getByText('“you can usually stop it”')).toBeInTheDocument();
+    expect(screen.getByText('“stop driving the truck”')).toBeInTheDocument();
+    expect(screen.queryByText('“third thing”')).toBeNull();
+    // Above the scores, and without a score or band of its own.
+    const card = screen.getByRole('note');
+    expect(card.textContent).not.toMatch(/Strong|Solid|Getting there|Just starting/);
+    rerender(
+      <ScoreView
+        feedback={{ ...feedback, accuracyFlags: flags }}
+        patientFirstName="Ray"
+        allAccuracyFlags
+      />,
+    );
+    expect(screen.getByText('“third thing”')).toBeInTheDocument();
+    rerender(<ScoreView feedback={{ ...feedback, accuracyFlags: [] }} patientFirstName="Ray" />);
+    expect(screen.queryByText('Check the medicine')).toBeNull();
+  });
 });

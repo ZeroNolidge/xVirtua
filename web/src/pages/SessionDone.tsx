@@ -121,7 +121,7 @@ export function SessionDone() {
   const { id = '' } = useParams();
   const nav = useNavigate();
   const { bubbles, meta } = useConversation(id);
-  const { user } = useAuth();
+  const { user, claims } = useAuth();
   const previous = usePreviousLevels(id, user?.uid);
   const progress = usePatientProgress(user?.uid);
   const [fb, setFb] = useSavedFeedback(id);
@@ -263,6 +263,7 @@ export function SessionDone() {
           patientFirstName={first}
           pronouns={meta.persona?.pronouns}
           patientStatus={meta.scenarioId ? progress?.[meta.scenarioId]?.status : null}
+          allAccuracyFlags={claims?.role === 'faculty'}
           previous={previous}
         />
       )}

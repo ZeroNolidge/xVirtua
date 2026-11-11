@@ -11,7 +11,7 @@ import {
   type ClaudeScore,
   type Turn,
 } from './score.js';
-import { distinctFixes, withContext } from './feedback.js';
+import { distinctFixes, toResidentFeedback, withContext } from './feedback.js';
 import { rewriteProblems } from './rewriteCheck.js';
 
 const turns: Turn[] = [
@@ -485,5 +485,112 @@ describe('a key worry the patient raised himself', () => {
       raisedByPatient: true,
       addressed: false,
     });
+  });
+});
+
+describe('medical accuracy notes (not scored)', () => {
+  const scenario = {
+    title: 'New high blood pressure',
+    residentTask: 'Explain the diagnosis and the plan.',
+    learningObjectives: [],
+    patientName: 'Ray Kowalski',
+    residentFacts: [
+      'BP 150/94 today and 152/96 last month.',
+      'He drives a truck and needs a DOT medical card; treated blood pressure usually keeps it.',
+    ],
+  };
+  // Nov 10: two things that are wrong.
+  const nov10: Turn[] = [
+    { idx: 0, speaker: 'patient', text: 'So my pressure is high?', askedQuestion: true },
+    { idx: 1, speaker: 'resident', text: 'Yes. We will start lisinopril 10 mg daily.' },
+    { idx: 2, speaker: 'patient', text: 'For how long?', askedQuestion: true },
+    {
+      idx: 3,
+      speaker: 'resident',
+      text: 'Once your numbers are normal for a couple months you can usually stop it.',
+    },
+    {
+      idx: 4,
+      speaker: 'patient',
+      text: "What about my DOT card? That's my whole job.",
+      askedQuestion: true,
+    },
+    {
+      idx: 5,
+      speaker: 'resident',
+      text: "You should stop driving the truck until your pressure is under control, it's not safe for DOT.",
+    },
+  ];
+  const flagsFor = (turns: Turn[], accuracyFlags: ClaudeScore['accuracyFlags']) => {
+    const v = validateQuotes({ ...good, accuracyFlags }, turns);
+    const doc = assembleScore({
+      claude: v.score,
+      jargon: { score: 100, flagged: [], explained: [] },
+      turns,
+      cues: [],
+      weights: { jargon: 0.25, clarity: 0.25, empathy: 0.25, cue: 0.25 },
+      needsReview: false,
+      model: 'm',
+      promptHash: 'h',
+    });
+    return { bad: v.bad, doc, feedback: toResidentFeedback({ ...doc, createdAt: 'now' }, null) };
+  };
+
+  it('the prompt gives the scorer the resident facts and asks only for clear errors', () => {
+    const { system, user } = buildScoringPrompt({
+      scenario,
+      cues: [],
+      turns: nov10,
+      jargon: { score: 100, flagged: [], explained: [] },
+    });
+    expect(user).toMatch(/What the resident knows/);
+    expect(user).toMatch(/DOT medical card/);
+    expect(system).toMatch(/## Medical accuracy \(not scored\)/);
+    expect(system).toMatch(/Keep the bar high/);
+  });
+
+  it('Nov 10: both errors come through to the resident, quoted in the resident’s words', () => {
+    const { bad, doc, feedback } = flagsFor(nov10, [
+      {
+        turnIdx: 3,
+        quote: 'you can usually stop it',
+        why: 'Blood pressure medicine is usually long-term; stopping it lets the pressure climb back.',
+      },
+      {
+        turnIdx: 5,
+        quote: 'stop driving the truck until your pressure is under control',
+        why: 'With readings like 150/94 he can keep driving; treated blood pressure helps him keep the DOT card.',
+      },
+    ]);
+    expect(bad.filter((b) => b.startsWith('accuracyFlags'))).toEqual([]);
+    expect(doc.accuracyFlags?.map((f) => f.turnIdx)).toEqual([3, 5]);
+    expect(feedback.accuracyFlags).toHaveLength(2);
+    expect(feedback.accuracyFlags?.[0]?.quote).toMatch(/you can usually stop it/);
+  });
+
+  it('a flag that quotes words the resident never said is dropped and reported', () => {
+    const { bad, doc } = flagsFor(nov10, [
+      {
+        turnIdx: 3,
+        quote: 'take it with grapefruit juice',
+        why: 'Grapefruit matters for some drugs.',
+      },
+    ]);
+    expect(doc.accuracyFlags).toBeUndefined();
+    expect(bad.some((b) => b.startsWith('accuracyFlags[0]'))).toBe(true);
+  });
+
+  it('Nov 5 (Strong): nothing flagged, nothing shown', () => {
+    const nov5: Turn[] = [
+      { idx: 0, speaker: 'patient', text: 'So my pressure is high?', askedQuestion: true },
+      {
+        idx: 1,
+        speaker: 'resident',
+        text: 'Yes, a bit high. Most people take a pill long term, and treated blood pressure usually helps you keep your DOT card.',
+      },
+    ];
+    const { doc, feedback } = flagsFor(nov5, []);
+    expect(doc.accuracyFlags).toBeUndefined();
+    expect(feedback.accuracyFlags).toBeUndefined();
   });
 });
