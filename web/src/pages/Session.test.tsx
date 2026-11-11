@@ -162,15 +162,41 @@ describe('conversation screen', () => {
     unmount();
   });
 
-  it('without a mic: the alert shows and "Mic ready" doesn\u2019t', async () => {
+  it('no mic known before the tap: no alert (the card already said so), no "Mic ready", "Type your reply…"', async () => {
     renderSession();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Start the conversation' }));
     });
+    expect(await screen.findByPlaceholderText('Type your reply…')).toBeInTheDocument();
     expect(
-      await screen.findByText('No microphone access, so you can type your side for now.'),
-    ).toBeInTheDocument();
+      screen.queryByText('No microphone access, so you can type your side for now.'),
+    ).toBeNull();
     expect(screen.queryByText(/Mic ready/)).toBeNull();
+  });
+
+  it('the mic fails at the tap: the alert shows', async () => {
+    localStorage.clear();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: () => Promise.reject(new Error('NotAllowedError')),
+        enumerateDevices: async () => [{ kind: 'audioinput', label: '', deviceId: 'x' }],
+      },
+    });
+    try {
+      renderSession();
+      await act(async () => {});
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Start talking' }));
+      });
+      expect(
+        await screen.findByText('No microphone access, so you can type your side for now.'),
+      ).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Type your reply…')).toBeInTheDocument();
+    } finally {
+      localStorage.clear();
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+    }
   });
 
   it('no mic known before the tap: the card says they’ll type, and one tap opens the text box', async () => {
@@ -244,7 +270,7 @@ describe('conversation screen', () => {
     try {
       const { unmount } = renderSession();
       expect(
-        await screen.findByText(/Bluetooth headset: its microphone makes Ray’s voice/),
+        await screen.findByText(/Bluetooth headset: its microphone can make Ray’s voice/),
       ).toBeInTheDocument();
       const box = screen.getByRole('checkbox', { name: /Talk into the phone instead/ });
       fireEvent.click(box);

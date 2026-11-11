@@ -28,6 +28,7 @@ Scripted cues are moments where the patient signals something (confusion, worry,
 - Talking over the patient: only lines marked "cut off" mean the resident spoke while the patient was still talking. Count it against cue responsiveness when it cut off a question, a worry or an emotional moment and the resident carried on with their own agenda. A brief, responsive overlap (e.g. "I'm sorry—" when the patient is upset, or answering the question they were asking) is natural and fine. Lines marked "brief overlap" or "app timing" are never the resident's fault: don't mention them.
 - At most ONE note about talking over the patient in the whole report (one fix or one evidence item, not both). When you give it, name the worry or question that was cut off (e.g. "Ray was starting to tell you about his dad's stroke") and make the rewrite a way back, e.g. "Sorry, I jumped in. You were saying about your dad?"
 - Timing: response timing shown in the transcript already excludes any time the resident spent waiting on the app (the patient "thinking" or the voice loading). Never count that waiting as the resident's silence or delay, and don't penalize a thoughtful pause.
+- Key moments that did not fire: the prompt may list a key worry the script never got to voice. If the patient raised that worry THEMSELVES in the Transcript (in their own words), add a cue result for it with raisedByPatient true, patientTurnIdx the patient turn where they raised it, patientQuote their exact words from that turn, and addressed by whether the resident's next turn responded to it. A worry the patient raised and the resident passed over counts against this score like a missed cue. If the patient never raised it, do not add a result for it.
 Anchors: 90+ every cue caught and explored. 70s most cues caught, one missed or brushed off. 50s half missed or a clear steamroll. Below 40 most cues ignored.
 
 ## Evidence rules (strict)
@@ -38,6 +39,9 @@ Anchors: 90+ every cue caught and explored. 70s most cues caught, one missed or 
 - Every "rewrite" is one or two sentences the resident could say instead, in plain, warm language at about a 6th-grade reading level. When no understanding check was done, the top rewrite should model teach-back.
 - A rewrite changes HOW the resident said something, never WHAT is medically or legally true. Use only facts the resident already said in the conversation. Never add new clinical facts (diagnoses, drug names, doses, test values, risks, timelines), legal facts, or licensing / driving / work-permit claims. If a better answer would need a fact the resident didn't give, rewrite toward asking, acknowledging, or checking understanding instead (e.g. "Let's look at what that means for your job together").
 - Coaching tone: never "wrong", "bad" or "fail". Notes are one short sentence each.
+
+## Medical accuracy (not scored)
+Separately from the four areas, list clear medical errors the resident told the patient: statements that would mislead the patient about their care, judged against the scenario's "What the resident knows" facts and standard primary-care guidance. Examples: telling a patient they can stop a long-term medicine once their numbers look normal; telling a patient they must stop working or driving when the facts and guidance say otherwise; a wrong dose, test or risk. Keep the bar high: style, hedging, simplifications for plain language and reasonable clinical judgment are NOT errors. When unsure, leave it out. Each flag quotes the resident's exact words (turn number) and says in one or two plain sentences what's wrong and what's true. Empty when there are none.
 
 ## Highlight and fixes
 - highlight: the single best moment in the conversation, from any metric.
@@ -94,7 +98,15 @@ const metric = (extra: Record<string, unknown> = {}, extraRequired: string[] = [
 export const SCORE_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['jargonTryThisInstead', 'clarity', 'empathy', 'cue', 'highlight', 'fixes'],
+  required: [
+    'jargonTryThisInstead',
+    'clarity',
+    'empathy',
+    'cue',
+    'highlight',
+    'fixes',
+    'accuracyFlags',
+  ],
   properties: {
     jargonTryThisInstead: {
       type: ['object', 'null'],
@@ -117,13 +129,30 @@ export const SCORE_JSON_SCHEMA = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['cueId', 'patientTurnIdx', 'addressed', 'residentTurnIdx', 'quote'],
+            required: [
+              'cueId',
+              'patientTurnIdx',
+              'addressed',
+              'residentTurnIdx',
+              'quote',
+              'raisedByPatient',
+              'patientQuote',
+            ],
             properties: {
               cueId: { type: 'string' },
               patientTurnIdx: { type: 'integer' },
               addressed: { type: 'boolean' },
               residentTurnIdx: { type: ['integer', 'null'] },
               quote: { type: ['string', 'null'] },
+              raisedByPatient: {
+                type: 'boolean',
+                description:
+                  'True when the scripted cue never fired but the patient raised that worry in their own words.',
+              },
+              patientQuote: {
+                type: ['string', 'null'],
+                description: "The patient's exact words raising it (only when raisedByPatient).",
+              },
             },
           },
         },
@@ -144,5 +173,19 @@ export const SCORE_JSON_SCHEMA = {
     ),
     highlight: moment(false),
     fixes: { type: 'array', items: moment(true), description: 'At most 2.' },
+    accuracyFlags: {
+      type: 'array',
+      description: 'Clear medical errors only; empty when there are none.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['turnIdx', 'quote', 'why'],
+        properties: {
+          turnIdx: { type: 'integer' },
+          quote: { type: 'string' },
+          why: { type: 'string' },
+        },
+      },
+    },
   },
 } as const;

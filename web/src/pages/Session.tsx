@@ -892,11 +892,13 @@ export function Conversation({
     t0.current = performance.now();
 
     // No mic (known already, or refused now): straight to typing, on this same tap.
+    // The alert is for a mic that fails now; one known missing was already explained.
+    const knownMissing = noMic;
     const typeInstead = () => {
       rememberMicFailed();
       setTyped(true);
       setNoMic(true);
-      setNotice(NO_MIC_NOTICE);
+      if (!knownMissing) setNotice(NO_MIC_NOTICE);
     };
     if (noMic && !navigator.mediaDevices?.getUserMedia) typeInstead();
     else
@@ -1163,7 +1165,7 @@ export function Conversation({
             <form className="typed" onSubmit={submitTyped}>
               <input
                 aria-label="Your reply"
-                placeholder="Type instead…"
+                placeholder={noMic ? 'Type your reply…' : 'Type instead…'}
                 value={draft}
                 onChange={(e) => {
                   if (timing.current.typingStartAt === null && phaseRef.current === 'listening')

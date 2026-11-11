@@ -178,3 +178,32 @@ describe('closeJargonMatch', () => {
     expect(closeJargonMatch(SEED_JARGON, 'xylophone')).toBeNull();
   });
 });
+
+describe('what the resident typed is quoted as typed', () => {
+  const m = createJargonMatcher(SEED_JARGON);
+  it('keeps the casing and dots of abbreviations', () => {
+    const hits = m.find('Your BP is up and the BMP and CKD results are back; take it b.i.d.');
+    expect(hits.map((h) => h.surface)).toEqual(['BP', 'BMP', 'CKD', 'b.i.d']);
+    expect(hits.map((h) => h.term)).toEqual(['BP', 'BMP', 'chronic kidney disease', 'BID']);
+  });
+  it('keeps hyphens and phrases as written', () => {
+    const hits = m.find('We worry about End-organ damage and your Essential Hypertension.');
+    expect(hits.map((h) => h.surface)).toEqual(['End-organ damage', 'Essential Hypertension']);
+  });
+});
+
+describe('dictionary entries from the Nov 10 test', () => {
+  const m = createJargonMatcher(SEED_JARGON);
+  const found = (text: string) => m.find(text).map((h) => h.term);
+  it('flags LVH, end-organ damage and essential hypertension', () => {
+    expect(found('The pictures showed LVH.')).toEqual(['LVH']);
+    expect(SEED_JARGON.find((t) => t.term === 'LVH')?.plain).toEqual(['thick heart muscle']);
+    expect(found('High pressure causes end organ damage over time.')).toEqual(['end-organ damage']);
+    expect(found('This is essential hypertension.')).toEqual(['essential hypertension']);
+  });
+  it('BMP is its own test, not a kind of CMP', () => {
+    expect(searchJargon(SEED_JARGON, 'bmp')[0]?.term).toBe('BMP');
+    expect(searchJargon(SEED_JARGON, 'cmp')[0]?.term).toBe('CMP');
+    expect(found('We will check a BMP.')).toEqual(['BMP']);
+  });
+});

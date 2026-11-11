@@ -36,7 +36,7 @@ describe('connection check', () => {
     const { now, doFetch } = fakeNet(60, 2500); // 256 KB in 2.56 s ≈ 0.8 Mbps
     const r = await checkConnection(doFetch, now);
     expect(r?.verdict).toBe('slow');
-    expect(connectionLine(r)).toMatch(/slow right now \(about 0\.8 Mbps\)\. Ray’s voice and video/);
+    expect(connectionLine(r)).toMatch(/slow right now \(about 0\.8 Mbps\)\. The patient’s voice and video/);
   });
 
   it('a long delay: slow, even when the download is quick', async () => {
@@ -66,5 +66,13 @@ describe('connection check', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('names the patient, and in typed mode talks about slow replies, not voice and video', async () => {
+    const { now, doFetch } = fakeNet(60, 2500);
+    const r = await checkConnection(doFetch, now);
+    expect(connectionLine(r, { first: 'Linda' })).toMatch(/Linda’s voice and video may stutter/);
+    expect(connectionLine(r, { first: 'Linda', typed: true })).toMatch(/Replies may be slow\./);
+    expect(connectionLine(r, { first: 'Linda', typed: true })).not.toMatch(/voice|video/);
   });
 });

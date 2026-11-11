@@ -16,6 +16,7 @@ import { ProgressDashboard } from '../components/ProgressDashboard';
 import { PatientBadge } from '../components/PatientBadge';
 import { usePatientProgress } from '../lib/patientProgress';
 import { useScenarioList } from '../lib/scenarios';
+import { useProgramName } from '../lib/program';
 import { neverStarted, type SessionRow } from '../lib/resume';
 
 interface Row extends Partial<SessionRow> {
@@ -54,6 +55,7 @@ function useHistory(uid: string | undefined) {
 export function Progress() {
   const { userDoc, claims, signOut, user } = useAuth();
   const rows = useHistory(user?.uid);
+  const programName = useProgramName(claims?.programId);
   return (
     <section>
       <h1>Your progress</h1>
@@ -91,7 +93,7 @@ export function Progress() {
           {userDoc?.email}
           <br />
           <span className="muted">
-            {claims?.role === 'faculty' ? 'Faculty' : 'Resident'} · {claims?.programId}
+            {claims?.role === 'faculty' ? 'Faculty' : 'Resident'} · {programName}
           </span>
         </p>
         <button className="btn btn-secondary" onClick={() => void signOut()}>

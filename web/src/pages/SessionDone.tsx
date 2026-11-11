@@ -20,6 +20,7 @@ import { ScoreView } from '../components/ScoreView';
 import { levelsOf } from '../components/metricLabels';
 import type { Levels } from '../components/SkillShape';
 import { useAuth } from '../lib/auth';
+import { usePatientProgress } from '../lib/patientProgress';
 import { Loading } from './StatusScreens';
 import { Transcript, type Bubble } from './Session';
 import { canContinue, type SessionRow } from '../lib/resume';
@@ -120,8 +121,9 @@ export function SessionDone() {
   const { id = '' } = useParams();
   const nav = useNavigate();
   const { bubbles, meta } = useConversation(id);
-  const { user } = useAuth();
+  const { user, claims } = useAuth();
   const previous = usePreviousLevels(id, user?.uid);
+  const progress = usePatientProgress(user?.uid);
   const [fb, setFb] = useSavedFeedback(id);
   const [showTranscript, setShowTranscript] = useState(false);
   const asked = useRef(false);
@@ -256,7 +258,14 @@ export function SessionDone() {
         </div>
       )}
       {fb.state === 'ok' && (
-        <ScoreView feedback={fb.feedback} patientFirstName={first} previous={previous} />
+        <ScoreView
+          feedback={fb.feedback}
+          patientFirstName={first}
+          pronouns={meta.persona?.pronouns}
+          patientStatus={meta.scenarioId ? progress?.[meta.scenarioId]?.status : null}
+          allAccuracyFlags={claims?.role === 'faculty'}
+          previous={previous}
+        />
       )}
       {fb.state === 'ok' && <SpeechClarity sessionId={id} first={meta.speechStats} />}
 

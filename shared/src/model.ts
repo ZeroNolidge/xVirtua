@@ -211,6 +211,10 @@ export interface CueResult {
   residentTurnIdx: number | null;
   addressed: boolean;
   quote: string | null;
+  /** The script never voiced this cue; the patient raised the worry themselves. */
+  raisedByPatient?: boolean;
+  /** Their own words raising it (when raisedByPatient). */
+  patientQuote?: string | null;
 }
 
 /** sessions/{id}/scores/{rubricVersion}. Written by the server only. */
@@ -235,6 +239,8 @@ export interface ScoreDoc {
   needsReview: boolean;
   /** Rewrites that added facts the resident didn't say (hidden from the resident). */
   rewriteFlags?: { where: string; rewrite: string; reasons: string[] }[];
+  /** Clear medical errors that would mislead the patient (not scored). */
+  accuracyFlags?: AccuracyFlag[];
   /** Overall score of the resident's previous scored conversation, for the trend. */
   previousOverall?: number | null;
   model: string;
@@ -253,22 +259,53 @@ export function bandFor(score: number): Band {
   return 'Just starting';
 }
 
-export type Trend = 'first' | 'up' | 'same' | 'down';
+export type Trend = 'first' | 'up' | 'up_more' | 'same' | 'down' | 'down_more';
+
+/** A change of this many points or more is no longer "a little". */
+export const TREND_BIG = 15;
 
 /** Compares with the resident's previous scored conversation (5-point dead zone). */
 export function trendFor(now: number, previous: number | null | undefined): Trend {
   if (previous == null) return 'first';
-  if (now - previous >= 5) return 'up';
-  if (previous - now >= 5) return 'down';
+  const d = now - previous;
+  if (d >= TREND_BIG) return 'up_more';
+  if (d >= 5) return 'up';
+  if (d <= -TREND_BIG) return 'down_more';
+  if (d <= -5) return 'down';
   return 'same';
 }
 
 export const TREND_TEXT: Record<Trend, string> = {
   first: 'your first one',
-  up: 'up from last time',
+  up: 'a little higher than last time',
+  up_more: 'up from last time',
   same: 'about the same as last time',
   down: 'a little lower than last time',
+  down_more: 'lower than last time',
 };
+
+/** The words to use for a patient, from their pronouns ("he/him": he, him, his). */
+export function pronounWords(pronouns: string | undefined): {
+  they: string;
+  them: string;
+  their: string;
+  themself: string;
+} {
+  const p = (pronouns ?? '').toLowerCase();
+  if (/\bshe\b|\bher\b/.test(p))
+    return { they: 'she', them: 'her', their: 'her', themself: 'herself' };
+  if (/\bhe\b|\bhim\b/.test(p))
+    return { they: 'he', them: 'him', their: 'his', themself: 'himself' };
+  return { they: 'they', them: 'them', their: 'their', themself: 'themself' };
+}
+
+/** Something the resident told the patient that is medically wrong (not scored). */
+export interface AccuracyFlag {
+  turnIdx: number;
+  quote: string;
+  /** One or two plain sentences: what's wrong and what's true. */
+  why: string;
+}
 
 /** One area of feedback as the resident sees it: no numbers. */
 export interface AreaFeedback {
@@ -295,9 +332,19 @@ export interface ResidentFeedback {
     };
     clarity: AreaFeedback;
     empathy: AreaFeedback;
-    cue: AreaFeedback & { cueResults: { cue: string; addressed: boolean; quote: string | null }[] };
+    cue: AreaFeedback & {
+      cueResults: {
+        cue: string;
+        addressed: boolean;
+        quote: string | null;
+        /** They brought this worry up themselves (the script never voiced it). */
+        raisedByPatient?: boolean;
+      }[];
+    };
   };
   /** Progress with this patient: completed or mastered, or what's still needed. */
   completion?: import('./completion.js').CompletionResult;
+  /** "Check the medicine": clear medical errors, not scored. Residents see at most 2. */
+  accuracyFlags?: AccuracyFlag[];
   createdAt: string;
 }

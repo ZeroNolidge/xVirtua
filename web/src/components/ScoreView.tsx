@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import {
-  METRICS,
+  type AccuracyFlag,
   type AreaFeedback,
   type Metric,
+  METRICS,
   type Moment,
+  type PatientStatus,
+  pronounWords,
   type ResidentFeedback,
 } from '@plainspeak/shared';
 import { levelsOf, METRIC_ABOUT, METRIC_LABEL, trendLine } from './metricLabels';
@@ -84,14 +87,43 @@ function Area({ name, a, extra }: { name: string; a: AreaFeedback; extra?: React
  * Residents see words and trends, never numbers. The overall word is the
  * page heading (SessionDone).
  */
+/** Residents see this many medical-accuracy notes; faculty see them all. */
+export const SHOWN_ACCURACY_FLAGS = 2;
+
+/** Clear medical errors the resident told the patient (not scored). */
+function CheckTheMedicine({ flags, all }: { flags: AccuracyFlag[]; all: boolean }) {
+  const shown = all ? flags : flags.slice(0, SHOWN_ACCURACY_FLAGS);
+  if (!shown.length) return null;
+  return (
+    <div className="card accuracy" role="note">
+      <h2>Check the medicine</h2>
+      <p className="small muted">Not part of your score. Worth a look before the next patient.</p>
+      <ul className="tight">
+        {shown.map((f, i) => (
+          <li key={i}>
+            <blockquote className="quote">“{f.quote}”</blockquote>
+            <div className="small">{f.why}</div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Completing the patient: a celebration, or what's still needed. */
 function CompletionCard({
   c,
   patientFirstName: name,
+  pronouns,
+  patientStatus,
 }: {
   c: NonNullable<ResidentFeedback['completion']>;
   patientFirstName: string;
+  pronouns?: string;
+  /** Their best with this patient so far (userProgress), if known. */
+  patientStatus?: PatientStatus | null;
 }) {
+  const p = pronounWords(pronouns);
   if (c.status && c.newlyReached)
     return (
       <div className="card completion done" role="status">
@@ -107,6 +139,15 @@ function CompletionCard({
       </div>
     );
   if (c.status) return null; // Done before: no need to say it again.
+  // Already completed or mastered on another day: no "to complete" list.
+  if (patientStatus === 'mastered' || patientStatus === 'completed')
+    return (
+      <p className="muted small">
+        You’ve already {patientStatus} {name}. This one didn’t reach{' '}
+        {patientStatus === 'mastered' ? 'Strong' : 'Solid'} in every area
+        {c.keyMoments.some((k) => !k.addressed) ? `, or ${p.their} main worry` : ''}.
+      </p>
+    );
   const missed = c.keyMoments.filter((k) => !k.addressed);
   return (
     <div className="card completion">
@@ -120,7 +161,8 @@ function CompletionCard({
             <li key={i}>Respond to this moment: “{k.cue}”.</li>
           ) : (
             <li key={i}>
-              {name} had something on their mind they didn’t get to share. Ask what worries them.
+              {name} had something on {p.their} mind {p.they} didn’t get to share. Ask what worries{' '}
+              {p.them}.
             </li>
           ),
         )}
@@ -133,13 +175,23 @@ function CompletionCard({
 export function ScoreView({
   feedback,
   patientFirstName,
+  pronouns,
+  patientStatus,
+  allAccuracyFlags,
   previous,
 }: {
   feedback: ResidentFeedback;
   patientFirstName: string;
   /** Their previous scored conversation's bands, for the dashed outline. */
   previous?: Levels | null;
+  /** The patient's pronouns ("he/him"), for the wording. */
+  pronouns?: string;
+  /** Their best with this patient so far (userProgress), if known. */
+  patientStatus?: PatientStatus | null;
+  /** Faculty: every medical-accuracy note, not just the first two. */
+  allAccuracyFlags?: boolean;
 }) {
+  const pw = pronounWords(pronouns);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<Metric | null>(null);
   const { areas } = feedback;
@@ -155,6 +207,12 @@ export function ScoreView({
         {areas.cue.cueResults.map((c, i) => (
           <li key={i}>
             <span aria-hidden="true">{c.addressed ? '✅' : '◻️'}</span> {patientFirstName}: {c.cue}
+            {c.raisedByPatient && (
+              <span className="muted small">
+                {' '}
+                ({pw.they} brought it up {pw.themself})
+              </span>
+            )}
             {c.quote && <span className="muted small"> — you said “{c.quote}”</span>}
           </li>
         ))}
@@ -168,8 +226,17 @@ export function ScoreView({
         </p>
       )}
 
+      {feedback.accuracyFlags && (
+        <CheckTheMedicine flags={feedback.accuracyFlags} all={allAccuracyFlags === true} />
+      )}
+
       {feedback.completion && (
-        <CompletionCard c={feedback.completion} patientFirstName={patientFirstName} />
+        <CompletionCard
+          c={feedback.completion}
+          patientFirstName={patientFirstName}
+          pronouns={pronouns}
+          patientStatus={patientStatus}
+        />
       )}
 
       {feedback.highlight && (

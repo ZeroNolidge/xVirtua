@@ -7,11 +7,14 @@ import { useBluetoothMic } from '../lib/micChoice';
 export function BluetoothNote({ first = 'the patient' }: { first: string | undefined }) {
   const bt = useBluetoothMic();
   if (!bt.present) return null;
+  const android = /android/i.test(navigator.userAgent);
   return (
     <div className="bluetooth-note">
       <p className="muted small">
-        Bluetooth headset: its microphone makes {first}’s voice narrow and choppy on Android. For
-        the best sound, use the phone’s speaker or wired earphones.
+        {android
+          ? `Bluetooth headset: its microphone makes ${first}’s voice narrow and choppy on Android. `
+          : `Bluetooth headset: its microphone can make ${first}’s voice narrow and choppy. `}
+        For the best sound, use the phone’s speaker or wired earphones.
       </p>
       <label className="check small">
         <input
@@ -20,8 +23,8 @@ export function BluetoothNote({ first = 'the patient' }: { first: string | undef
           onChange={(e) => bt.setPhoneMic(e.target.checked)}
         />
         <span>
-          Talk into the phone instead (test): you listen on the headset, and the phone’s own mic
-          picks you up.
+          Talk into the phone instead: you listen on the headset, and the phone’s own mic picks you
+          up.
         </span>
       </label>
     </div>

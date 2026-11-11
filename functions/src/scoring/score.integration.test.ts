@@ -148,7 +148,7 @@ describe('scoreSession', () => {
       new FakeBrain(),
     );
     const r = await scoreSession(db, resident, { sessionId: two.sessionId }, fakeScorer());
-    expect(r.feedback!.overall!.trend).toBe('up');
+    expect(r.feedback!.overall!.trend).toBe('up_more');
   });
 
   it('returns nothing to score when the resident never spoke', async () => {

@@ -101,6 +101,7 @@ export function toResidentFeedback(s: ScoreDoc, previousOverall: number | null):
         : { band: bandFor(s.overall), trend: trendFor(s.overall, previousOverall) },
     highlight: s.highlight,
     fixes: s.fixes,
+    ...(s.accuracyFlags?.length ? { accuracyFlags: s.accuracyFlags } : {}),
     areas: {
       jargon: {
         ...area(jargon),
@@ -113,6 +114,7 @@ export function toResidentFeedback(s: ScoreDoc, previousOverall: number | null):
         ...area(cue),
         cueResults: cue.cueResults.map((c) => ({
           cue: c.cue,
+          ...(c.raisedByPatient ? { raisedByPatient: true } : {}),
           addressed: c.addressed,
           quote: c.quote,
         })),

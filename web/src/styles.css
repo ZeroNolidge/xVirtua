@@ -1238,3 +1238,10 @@ body.appcheck-debug .sheet-backdrop {
 .bluetooth-note .check {
   margin-top: 6px;
 }
+
+.card.accuracy {
+  border-left: 4px solid var(--accent);
+}
+.card.accuracy li + li {
+  margin-top: 10px;
+}
