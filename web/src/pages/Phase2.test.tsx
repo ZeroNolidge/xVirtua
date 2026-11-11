@@ -198,7 +198,7 @@ describe('Briefing', () => {
     };
     const { unmount } = renderBriefing();
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Your connection is slow right now (about 0.8 Mbps, a 620 ms delay, a 3G signal). Ray’s voice and video may stutter. Wi‑Fi usually helps.',
+      'Your connection is slow right now (about 0.8 Mbps, a 620 ms delay, a 3G signal). Replies may be slow. Wi‑Fi usually helps.',
     );
     // Never blocks: the start button is still there.
     expect(screen.getByRole('button', { name: /start conversation/i })).toBeEnabled();

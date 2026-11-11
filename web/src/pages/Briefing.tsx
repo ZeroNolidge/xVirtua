@@ -157,7 +157,10 @@ export function Briefing() {
           className={connection.verdict === 'slow' ? 'notice' : 'muted small center-text'}
           role={connection.verdict === 'slow' ? 'status' : undefined}
         >
-          {connectionLine(connection)}
+          {connectionLine(connection, {
+            first: b.persona.name.split(' ')[0] ?? 'The patient',
+            typed: noMic,
+          })}
         </p>
       )}
       <p className="muted small center-text">

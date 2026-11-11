@@ -84,12 +84,21 @@ export async function checkConnection(
   };
 }
 
-/** What the briefing says about the connection; null while checking or when it can't tell. */
-export function connectionLine(r: ConnectionReport | null): string | null {
+/**
+ * What the briefing says about the connection; null while checking or when
+ * it can't tell. `typed`: no mic, so no voice or video to stutter.
+ */
+export function connectionLine(
+  r: ConnectionReport | null,
+  who: { first: string; typed?: boolean } = { first: 'The patient' },
+): string | null {
   if (!r) return null;
   if (r.verdict === 'good') return 'Your connection looks good.';
   const why = r.reasons.join(', ');
-  return `Your connection is slow right now (${why}). Ray’s voice and video may stutter. Wi‑Fi usually helps.`;
+  const effect = who.typed
+    ? 'Replies may be slow.'
+    : `${who.first}’s voice and video may stutter.`;
+  return `Your connection is slow right now (${why}). ${effect} Wi‑Fi usually helps.`;
 }
 
 /** Checks once when the screen opens. */

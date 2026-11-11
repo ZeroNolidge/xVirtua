@@ -6,6 +6,7 @@ vi.mock('../lib/firebase', () => ({ db: {}, functions: {} }));
 vi.mock('../lib/auth', () => ({ useAuth: () => ({ user: { uid: 'u1' } }) }));
 vi.mock('../lib/session', () => ({ sessionApi: { score: vi.fn() } }));
 vi.mock('../lib/errorReport', () => ({ reportError: vi.fn() }));
+vi.mock('../lib/patientProgress', () => ({ usePatientProgress: () => ({}) }));
 
 const ts = (ms: number) => ({ toMillis: () => ms, toDate: () => new Date(ms) });
 let meta: Record<string, unknown> = {};

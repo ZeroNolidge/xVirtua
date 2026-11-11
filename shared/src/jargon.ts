@@ -96,6 +96,29 @@ function formsOf(t: JargonTerm): string[][] {
 
 // ---------- matching ----------
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+/**
+ * The words as the resident typed them ("BP", "b.i.d."), found in the
+ * original text from `from` on: the normalized tokens, allowing dots inside
+ * short abbreviations and spaces, dashes or dots between words.
+ */
+function originalSpan(
+  text: string,
+  toks: string[],
+  from: number,
+): { text: string; end: number } | null {
+  const word = (t: string) =>
+    t.length <= 5 && /^[a-z]+$/.test(t)
+      ? t.split('').map(escapeRe).join('\\.?') + '\\.?'
+      : escapeRe(t).replace(/'/g, "['‘’]");
+  const re = new RegExp(toks.map(word).join('[\\s.\\-–—]+'), 'giu');
+  re.lastIndex = from;
+  const m = re.exec(text);
+  if (!m) return null;
+  return { text: m[0].replace(/\.$/, ''), end: m.index + m[0].length };
+}
+
 export interface JargonHit {
   termId: string;
   term: string;
@@ -160,6 +183,7 @@ export function createJargonMatcher(terms: JargonTerm[]): JargonMatcher {
     find(text, turnIdx = 0) {
       const tokens = tokenize(text);
       const hits: JargonHit[] = [];
+      let from = 0; // where in the original text the next hit can start
       for (let i = 0; i < tokens.length;) {
         const cands = byFirst.get(tokens[i]!);
         const m = cands?.find((f) => f.toks.every((tok, j) => tokens[i + j] === tok));
@@ -179,11 +203,13 @@ export function createJargonMatcher(terms: JargonTerm[]): JargonMatcher {
           );
           explained = near || after || before;
         }
+        const span = originalSpan(text, m.toks, from);
+        if (span) from = span.end;
         hits.push({
           termId: m.t.id,
           term: m.t.term,
           plain: m.t.plain,
-          surface: m.toks.join(' '),
+          surface: span?.text ?? m.toks.join(' '),
           turnIdx,
           tokenIdx: i,
           explained,

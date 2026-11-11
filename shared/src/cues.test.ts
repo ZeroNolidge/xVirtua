@@ -7,6 +7,7 @@ import {
   type CueState,
 } from './cues.js';
 import { createJargonMatcher, SEED_JARGON } from './jargon.js';
+import { SEED_SCENARIOS } from './seed/scenarios.js';
 import type { CueScriptEntry } from './model.js';
 
 const m = createJargonMatcher(SEED_JARGON);
@@ -159,5 +160,37 @@ describe('cues never repeat what the patient already said', () => {
       'Four months. Okay.',
     ]);
     expect(d.cue?.id).toBe('dad-stroke');
+  });
+});
+
+describe('the patients’ key worries fire when the resident names the drug', () => {
+  const m = createJargonMatcher(SEED_JARGON);
+  const script = (id: string) => SEED_SCENARIOS.find((sc) => sc.id === id)!.script.cueScript;
+  const fires = (id: string, cueId: string, said: string) =>
+    decideCue(
+      script(id).filter((c) => c.id === cueId),
+      initialCueState(),
+      said,
+      m,
+    ).cue?.id === cueId;
+  it('Ray’s job worry: lisinopril, an ACE inhibitor, "start you on", blood pressure medicine', () => {
+    expect(fires('htn-new-diagnosis', 'job-worry', 'I want to start lisinopril 10 mg daily.')).toBe(
+      true,
+    );
+    expect(fires('htn-new-diagnosis', 'job-worry', 'We use an ACE inhibitor for this.')).toBe(true);
+    expect(fires('htn-new-diagnosis', 'job-worry', "I'd like to start you on something.")).toBe(
+      true,
+    );
+    expect(fires('htn-new-diagnosis', 'job-worry', 'A blood pressure medicine helps.')).toBe(true);
+    expect(fires('htn-new-diagnosis', 'job-worry', 'Your pressure is a bit high.')).toBe(false);
+  });
+  it('the other patients: metformin, atorvastatin, sertraline and their plain names', () => {
+    expect(
+      fires('t2dm-new-diagnosis', 'insulin-fear', 'Let’s start you on a diabetes medicine.'),
+    ).toBe(true);
+    expect(fires('statin-start', 'cost', 'Atorvastatin is a cholesterol medicine.')).toBe(true);
+    expect(fires('new-med-side-effects', 'zombie-fear', 'Sertraline is an antidepressant.')).toBe(
+      true,
+    );
   });
 });

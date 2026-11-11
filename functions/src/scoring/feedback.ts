@@ -113,6 +113,7 @@ export function toResidentFeedback(s: ScoreDoc, previousOverall: number | null):
         ...area(cue),
         cueResults: cue.cueResults.map((c) => ({
           cue: c.cue,
+          ...(c.raisedByPatient ? { raisedByPatient: true } : {}),
           addressed: c.addressed,
           quote: c.quote,
         })),

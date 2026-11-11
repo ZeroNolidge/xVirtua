@@ -28,6 +28,7 @@ Scripted cues are moments where the patient signals something (confusion, worry,
 - Talking over the patient: only lines marked "cut off" mean the resident spoke while the patient was still talking. Count it against cue responsiveness when it cut off a question, a worry or an emotional moment and the resident carried on with their own agenda. A brief, responsive overlap (e.g. "I'm sorry—" when the patient is upset, or answering the question they were asking) is natural and fine. Lines marked "brief overlap" or "app timing" are never the resident's fault: don't mention them.
 - At most ONE note about talking over the patient in the whole report (one fix or one evidence item, not both). When you give it, name the worry or question that was cut off (e.g. "Ray was starting to tell you about his dad's stroke") and make the rewrite a way back, e.g. "Sorry, I jumped in. You were saying about your dad?"
 - Timing: response timing shown in the transcript already excludes any time the resident spent waiting on the app (the patient "thinking" or the voice loading). Never count that waiting as the resident's silence or delay, and don't penalize a thoughtful pause.
+- Key moments that did not fire: the prompt may list a key worry the script never got to voice. If the patient raised that worry THEMSELVES in the Transcript (in their own words), add a cue result for it with raisedByPatient true, patientTurnIdx the patient turn where they raised it, patientQuote their exact words from that turn, and addressed by whether the resident's next turn responded to it. A worry the patient raised and the resident passed over counts against this score like a missed cue. If the patient never raised it, do not add a result for it.
 Anchors: 90+ every cue caught and explored. 70s most cues caught, one missed or brushed off. 50s half missed or a clear steamroll. Below 40 most cues ignored.
 
 ## Evidence rules (strict)
@@ -117,13 +118,30 @@ export const SCORE_JSON_SCHEMA = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['cueId', 'patientTurnIdx', 'addressed', 'residentTurnIdx', 'quote'],
+            required: [
+              'cueId',
+              'patientTurnIdx',
+              'addressed',
+              'residentTurnIdx',
+              'quote',
+              'raisedByPatient',
+              'patientQuote',
+            ],
             properties: {
               cueId: { type: 'string' },
               patientTurnIdx: { type: 'integer' },
               addressed: { type: 'boolean' },
               residentTurnIdx: { type: ['integer', 'null'] },
               quote: { type: ['string', 'null'] },
+              raisedByPatient: {
+                type: 'boolean',
+                description:
+                  'True when the scripted cue never fired but the patient raised that worry in their own words.',
+              },
+              patientQuote: {
+                type: ['string', 'null'],
+                description: "The patient's exact words raising it (only when raisedByPatient).",
+              },
             },
           },
         },

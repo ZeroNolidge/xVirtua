@@ -86,6 +86,8 @@ export const claudeScoreSchema = z.object({
         addressed: z.boolean(),
         residentTurnIdx: z.number().int().nullable(),
         quote: z.string().nullable(),
+        raisedByPatient: z.boolean().optional(),
+        patientQuote: z.string().nullable().optional(),
       }),
     ),
     steamrolls: z.array(
@@ -165,6 +167,8 @@ export interface PromptInput {
     patientName: string;
   };
   cues: CueScriptEntry[];
+  /** The patient's key moments (cue ids): listed even when they never fired. */
+  keyCueIds?: string[];
   turns: Turn[];
   jargon: JargonResult;
 }
@@ -203,6 +207,18 @@ export function buildScoringPrompt(p: PromptInput): { system: string; user: stri
         })
         .join('\n')
     : '- (no scripted cues fired)';
+  const firedIds = new Set(fired.map((t) => t.cueId));
+  const unfiredKeys = (p.keyCueIds ?? [])
+    .filter((id) => !firedIds.has(id))
+    .map((id) => cueById.get(id))
+    .filter((c): c is CueScriptEntry => !!c);
+  const keyBlock = unfiredKeys.length
+    ? `
+# Key moments that did NOT fire (the script never voiced them; ${firstName} may have raised them anyway)
+Check the Transcript: if ${firstName} raised this worry in their own words, add a cue result for it (raisedByPatient true, with their exact words). Never quote the script line itself.
+${unfiredKeys.map((c) => `- ${c.id}: ${c.cue}. Expected response: ${c.expectedResidentResponse}`).join('\n')}
+`
+    : '';
   const jargonBlock = p.jargon.flagged.length
     ? p.jargon.flagged
         .map(
@@ -220,7 +236,7 @@ ${p.scenario.learningObjectives.map((o) => `- ${o}`).join('\n')}
 # ${firstName}'s script: cues that fired (what ${firstName} MIGHT say; this is NOT the transcript)
 These describe the scenario's plan. Never quote them and never treat them as words anyone said. Only the Transcript below is what was said.
 ${cueBlock}
-
+${keyBlock}
 # Jargon the app already flagged (scored separately; use it for fixes if it matters most)
 ${jargonBlock}
 
@@ -301,12 +317,20 @@ export function validateQuotes(c: ClaudeScore, turns: Turn[], patientFirstName =
     cue: {
       ...fixMetric(c.cue, 'cue'),
       cueResults: c.cue.cueResults.map((r, i) => {
-        if (!r.quote || r.residentTurnIdx === null) return { ...r, quote: null };
+        // The patient's own words raising a key worry must be in the transcript too.
+        let patientQuote: string | null = null;
+        if (r.raisedByPatient && r.patientQuote) {
+          const p = findQuote(r.patientQuote, r.patientTurnIdx, turns, 'patient');
+          if (p === null) bad.push(`cue.cueResults[${i}].patientQuote: "${r.patientQuote}"`);
+          else patientQuote = p.quote;
+        }
+        const base = { ...r, raisedByPatient: r.raisedByPatient === true, patientQuote };
+        if (!r.quote || r.residentTurnIdx === null) return { ...base, quote: null };
         const at = findQuote(r.quote, r.residentTurnIdx, turns, 'resident');
         if (at === null) bad.push(`cue.cueResults[${i}]: "${r.quote}"`);
         return at === null
-          ? { ...r, quote: null }
-          : { ...r, residentTurnIdx: at.idx, quote: at.quote };
+          ? { ...base, quote: null }
+          : { ...base, residentTurnIdx: at.idx, quote: at.quote };
       }),
       steamrolls: c.cue.steamrolls,
     },
@@ -401,6 +425,7 @@ export function assembleScore(args: {
     residentTurnIdx: r.residentTurnIdx,
     addressed: r.addressed,
     quote: r.quote,
+    ...(r.raisedByPatient ? { raisedByPatient: true, patientQuote: r.patientQuote ?? null } : {}),
   }));
   const metrics = {
     jargon,
@@ -644,6 +669,7 @@ export async function scoreSession(
         patientName: sc.briefing.persona.name,
       },
       cues: sc.script.cueScript,
+      keyCueIds: sc.script.keyCueIds ?? KEY_MOMENTS[s.scenarioId] ?? [],
       turns,
       jargon,
     });

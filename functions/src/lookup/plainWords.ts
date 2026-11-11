@@ -51,7 +51,7 @@ export function claudePlainWords(apiKey: string): AskPlainWords {
       model: LOOKUP_MODEL,
       max_tokens: 400,
       system:
-        'You help family medicine residents swap medical jargon for plain words patients understand (about a 6th-grade reading level). Be accurate and brief.',
+        'You help family medicine residents swap medical jargon for plain words patients understand (about a 6th-grade reading level). Be accurate and brief. Every plain alternative must mean the same thing as the medical term: never offer a swap that changes the meaning, adds a claim, or describes a different finding (for example, "thick heart muscle" for LVH, not "enlarged heart chamber").',
       messages: [{ role: 'user', content: `Medical word or phrase: "${term.replace(/"/g, '')}"` }],
       output_config: {
         format: { type: 'json_schema', schema: SCHEMA as unknown as Record<string, unknown> },

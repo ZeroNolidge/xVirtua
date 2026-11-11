@@ -130,7 +130,8 @@ CBC|blood count|complete blood count|test|
 hemoglobin|red blood cell level||test|x
 hematocrit|red blood cell level||test|
 white blood cell count|infection-fighting cells|wbc|test|
-CMP|routine blood chemistry test|comprehensive metabolic panel,bmp,basic metabolic panel|test|
+CMP|routine blood chemistry test|comprehensive metabolic panel|test|
+BMP|routine blood chemistry test|basic metabolic panel|test|
 creatinine|kidney function test||test|x
 eGFR|kidney filtering number|gfr,estimated glomerular filtration rate,glomerular filtration rate|test|x
 BUN|kidney blood test|blood urea nitrogen|test|
@@ -158,6 +159,9 @@ vital signs|your blood pressure, pulse and temperature|vitals|test|x
 titer|level|titers|test|
 culture|lab test to grow germs|cultures|test|x
 hypertension|high blood pressure|htn,hypertensive|condition|x
+essential hypertension|high blood pressure with no single cause|primary hypertension,essential htn|condition|x
+LVH|thick heart muscle|left ventricular hypertrophy|condition|x
+end-organ damage|damage to the heart, kidneys, brain and eyes|end organ damage,target organ damage,target-organ damage|condition|
 hypotension|low blood pressure|hypotensive|condition|
 orthostatic hypotension|dizziness when you stand up|orthostatic,orthostasis|condition|
 hyperlipidemia|high cholesterol||condition|

@@ -14,6 +14,9 @@ vi.mock('../lib/auth', () => ({
 vi.mock('../components/ProgressDashboard', () => ({ ProgressDashboard: () => null }));
 vi.mock('../lib/scenarios', () => ({ useScenarioList: () => [] }));
 vi.mock('../lib/patientProgress', () => ({ usePatientProgress: () => ({}) }));
+vi.mock('../lib/program', () => ({
+  useProgramName: (id: string) => (id === 'irmc' ? 'IRMC' : id),
+}));
 
 const ts = (ms: number) => ({ toMillis: () => ms, toDate: () => new Date(ms) });
 const day = 864e5;
@@ -74,5 +77,15 @@ describe('Your history', () => {
     expect(screen.getByText('Never spoke, still open')).toBeInTheDocument();
     expect(screen.queryByText('Never spoke, ended')).toBeNull();
     expect(screen.queryByText('Never spoke, too late')).toBeNull();
+  });
+
+  it('shows the program’s name, not its id', () => {
+    render(
+      <MemoryRouter>
+        <Progress />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/Resident · IRMC/)).toBeInTheDocument();
+    expect(screen.queryByText(/· irmc/)).toBeNull();
   });
 });
