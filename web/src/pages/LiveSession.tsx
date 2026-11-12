@@ -21,7 +21,7 @@ import {
   type TurnState,
 } from '../components/ConversationBits';
 import { useCaptions } from '../lib/useCaptions';
-import { useAvatar } from '../lib/useAvatar';
+import { FACE_WAIT_MS, useAvatar } from '../lib/useAvatar';
 import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
 import { BluetoothNote } from '../components/BluetoothNote';
@@ -702,8 +702,11 @@ export function LiveConversation({
           setThinking(true);
           setOpeningWait(true);
           // Hold his first words until his face is up (or has failed), so the
-          // voice and the face start together, never the voice alone first.
-          void facing.then(() => {
+          // voice and the face start together; a slow face joins later.
+          void Promise.race([
+            facing,
+            new Promise<null>((r) => setTimeout(() => r(null), FACE_WAIT_MS)),
+          ]).then(() => {
             if (!mine()) return;
             const r = new LiveReply(0, null);
             r.planned = opening.text;

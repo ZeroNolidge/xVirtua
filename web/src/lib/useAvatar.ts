@@ -8,8 +8,10 @@ import { sessionApi } from './session';
 import { PatientAvatar } from './avatar';
 import type { AvatarElements } from '../components/AvatarStage';
 
-/** How long to wait before each try to bring a dropped face back. */
+/** How long to wait before each try to bring a dropped (or never-connected) face back. */
 export const RECONNECT_WAITS_MS = [1000, 4000, 10000];
+/** The opening line waits at most this long for the face; it can join later. */
+export const FACE_WAIT_MS = 5000;
 
 /**
  * The patient's video face (test), when faculty turned it on. start() must
@@ -63,10 +65,7 @@ export function useAvatar(sessionId: string) {
     const wait = RECONNECT_WAITS_MS[retries.current++]!;
     retryTimer.current = window.setTimeout(() => {
       retryTimer.current = null;
-      if (!wanted.current) return;
-      void start(lastMood.current).then((a) => {
-        if (!a) reconnectLater();
-      });
+      if (wanted.current) void start(lastMood.current); // a failure schedules the next try
     }, wait);
   }
 
@@ -88,7 +87,12 @@ export function useAvatar(sessionId: string) {
       avatar.current = a;
     }
     const a = avatar.current;
-    return a.connect(tokenFor(mood)).then((ok) => (ok ? a : null));
+    return a.connect(tokenFor(mood)).then((ok) => {
+      // Couldn't connect (slow network, Simli timed out): keep trying in the
+      // background; the face joins the conversation when it's up.
+      if (!ok && wanted.current) reconnectLater();
+      return ok ? a : null;
+    });
   }
 
   const tokenFor = (mood?: Mood) => async () =>

@@ -295,6 +295,23 @@ describe('GPT-Live conversation', () => {
     }
   });
 
+  it('a face that takes too long doesn’t hold Ray’s first words past 5 s', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    faceHold = new Promise<null>(() => {}); // never connects
+    try {
+      await start();
+      await act(async () => cb.onStarted());
+      expect(said).toEqual([]);
+      await act(async () => {
+        vi.advanceTimersByTime(5100);
+      });
+      expect(said[0]).toEqual([null, 'So, my blood pressure is high?']);
+    } finally {
+      faceHold = null;
+      vi.useRealTimers();
+    }
+  });
+
   it('waits for the resident’s last words before asking Claude', async () => {
     await start();
     await act(async () => cb.onStarted());
