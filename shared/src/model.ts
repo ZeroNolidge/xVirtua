@@ -299,6 +299,23 @@ export function pronounWords(pronouns: string | undefined): {
   return { they: 'they', them: 'them', their: 'their', themself: 'themself' };
 }
 
+/** What the resident saw and heard from the video avatar (saved on the session). */
+export interface AvatarStats {
+  seconds: number;
+  delayMedianMs: number | null;
+  delayMaxMs: number | null;
+  delayCount: number;
+  audioStutters: number;
+  audioConcealedPct: number | null;
+  audioJitterMs: number | null;
+  packetsLost: number;
+  videoFreezes: number;
+  videoFreezeMs: number;
+  fps: number | null;
+  videoStalls: number;
+  videoStallMs: number;
+}
+
 /** Something the resident told the patient that is medically wrong (not scored). */
 export interface AccuracyFlag {
   turnIdx: number;

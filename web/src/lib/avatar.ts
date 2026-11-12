@@ -1,4 +1,5 @@
 import type { SimliClient } from 'simli-client';
+import { AvatarQuality, type AvatarQualitySummary } from './avatarQuality';
 
 /** Mints a Simli session for this conversation (server; the key never reaches the browser). */
 export type GetAvatarToken = () => Promise<string>;
@@ -33,6 +34,8 @@ export class PatientAvatar {
   private disposed = false;
   /** Simli is showing the face and playing the voice. */
   ready = false;
+  /** What the resident sees and hears: lip-sync delay, stutters, freezes. */
+  readonly quality = new AvatarQuality();
   onChange: ((ready: boolean) => void) | null = null;
   onFail: ((e: unknown) => void) | null = null;
 
@@ -104,6 +107,7 @@ export class PatientAvatar {
       }
       this.audio.muted = false;
       this.setReady(true);
+      this.quality.attach(this.video, this.audio);
       return true;
     } catch (e) {
       this.onFail?.(e);
@@ -130,7 +134,10 @@ export class PatientAvatar {
   private sendChunk({ pcm, peak }: AudioChunk) {
     const loud = peak > SILENCE_PEAK;
     if (loud) {
-      if (this.quiet > HANGOVER_CHUNKS) this.clear();
+      if (this.quiet > HANGOVER_CHUNKS) {
+        this.clear();
+        this.quality.speechStarted();
+      }
       this.quiet = 0;
     } else if (++this.quiet > HANGOVER_CHUNKS) return;
     try {
@@ -253,6 +260,7 @@ export class PatientAvatar {
     this.video.style.opacity = '';
     this.spare.video.style.opacity = '0';
     hangUp(old);
+    this.quality.attach(this.video, this.audio);
     return true;
   }
 
@@ -329,9 +337,16 @@ export class PatientAvatar {
     }${this.audio.paused ? ' (paused)' : ''}`;
   }
 
+  /** The numbers so far (pulls the latest WebRTC counters first). */
+  async qualitySummary(): Promise<AvatarQualitySummary> {
+    await this.quality.readStats();
+    return this.quality.summary();
+  }
+
   /** Leaving the screen. */
   async dispose() {
     this.disposed = true;
+    this.quality.stop();
     await this.stop();
     void this.ctx?.close().catch(() => undefined);
   }

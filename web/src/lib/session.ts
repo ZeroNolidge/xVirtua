@@ -1,4 +1,5 @@
 import { httpsCallable } from 'firebase/functions';
+import type { AvatarStats } from '@plainspeak/shared';
 import type {
   Mood,
   PatientChunk,
@@ -99,6 +100,8 @@ export const sessionApi = {
         stillWaitMs: number;
         relaxed: boolean;
       };
+      /** What the resident saw and heard from the video avatar. */
+      avatarStats?: AvatarStats;
     },
     { sessionId: string; status: 'ended' }
   >(functions, 'endSession'),

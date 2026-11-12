@@ -860,10 +860,12 @@ export function LiveConversation({
     release();
     try {
       const bodyStats = bodyRef.current.stats();
+      const avatarStats = faceEverReady ? await faceInstance()?.qualitySummary() : undefined;
       await sessionApi.end({
         sessionId,
         appWaitSec: Math.round(totalWaitMs.current / 1000),
         ...(bodyStats ? { bodyStats } : {}),
+        ...(avatarStats ? { avatarStats } : {}),
       });
     } catch (e) {
       console.warn('end failed', e);

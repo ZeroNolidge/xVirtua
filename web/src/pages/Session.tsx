@@ -358,6 +358,7 @@ export function Conversation({
     nextVideo: faceNextVideo,
     prepare: prepareFace,
     commit: commitFace,
+    instance: faceInstance,
   } = useAvatar(sessionId);
   // His body language: clips over the live face while he isn't talking.
   const body = useBodyLanguage(persona.name, faceStage, {
@@ -993,10 +994,12 @@ export function Conversation({
       new Promise((r) => setTimeout(r, 4000)),
     ]);
     try {
+      const avatarStats = faceEverReady ? await faceInstance()?.qualitySummary() : undefined;
       await sessionApi.end({
         sessionId,
         appWaitSec: Math.round(timing.current.totalAppWaitMs / 1000),
         ...(body.stats() ? { bodyStats: body.stats()! } : {}),
+        ...(avatarStats ? { avatarStats } : {}),
         ...(speech.current.words ? { speechStats: { ...speech.current } } : {}),
       });
     } catch (e) {

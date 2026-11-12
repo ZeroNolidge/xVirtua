@@ -319,6 +319,27 @@ describe('endSession', () => {
       endSession(db, otherResident, { sessionId }, async () => true),
     ).rejects.toMatchObject({ code: 'not-found' });
   });
+
+  it('keeps what the resident saw and heard from the video avatar (numbers only)', async () => {
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    const avatarStats = {
+      seconds: 185,
+      delayMedianMs: 920,
+      delayMaxMs: 1410,
+      delayCount: 7,
+      audioStutters: 6,
+      audioConcealedPct: 0.4,
+      audioJitterMs: 18,
+      packetsLost: 0,
+      videoFreezes: 2,
+      videoFreezeMs: 800,
+      fps: 24.6,
+      videoStalls: 3,
+      videoStallMs: 650,
+    };
+    await endSession(db, resident, { sessionId, avatarStats }, async () => false);
+    expect((await db.doc(`sessions/${sessionId}`).get()).get('avatarStats')).toEqual(avatarStats);
+  });
 });
 
 describe('callable null handling', () => {

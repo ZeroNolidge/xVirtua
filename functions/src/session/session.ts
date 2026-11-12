@@ -786,6 +786,36 @@ const endInput = z.object({
     })
     .refine((x) => x.clear <= x.words, 'clear > words')
     .nullish(),
+  /** What the resident saw and heard from the video avatar (numbers only). */
+  avatarStats: z
+    .object({
+      seconds: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(24 * 3600),
+      delayMedianMs: z.number().int().nonnegative().max(60_000).nullable(),
+      delayMaxMs: z.number().int().nonnegative().max(60_000).nullable(),
+      delayCount: z.number().int().nonnegative().max(10_000),
+      audioStutters: z.number().int().nonnegative().max(1_000_000),
+      audioConcealedPct: z.number().min(0).max(100).nullable(),
+      audioJitterMs: z.number().int().nonnegative().max(60_000).nullable(),
+      packetsLost: z.number().int().nonnegative().max(10_000_000),
+      videoFreezes: z.number().int().nonnegative().max(1_000_000),
+      videoFreezeMs: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(24 * 3600 * 1000),
+      fps: z.number().min(0).max(240).nullable(),
+      videoStalls: z.number().int().nonnegative().max(1_000_000),
+      videoStallMs: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(24 * 3600 * 1000),
+    })
+    .nullish(),
   audioExt: z.enum(['webm', 'm4a', 'mp4', 'ogg']).nullish(),
   /** Seconds the resident spent waiting on the app; left out of practice time. */
   appWaitSec: z
@@ -803,7 +833,10 @@ export async function endSession(
   audioExists: (path: string) => Promise<boolean>,
 ) {
   const me = requireMember(caller);
-  const { sessionId, audioExt, appWaitSec, bodyStats, speechStats } = parse(endInput, data);
+  const { sessionId, audioExt, appWaitSec, bodyStats, speechStats, avatarStats } = parse(
+    endInput,
+    data,
+  );
   const ref = db.doc(`sessions/${sessionId}`);
   const snap = await ref.get();
   const s = snap.data() as SessionDoc | undefined;
@@ -812,6 +845,7 @@ export async function endSession(
   const update: Record<string, unknown> = {};
   if (bodyStats) update.bodyStats = bodyStats;
   if (speechStats) update.speechStats = speechStats;
+  if (avatarStats) update.avatarStats = avatarStats;
   if (s.status === 'live') {
     const durationSec = Math.round((Date.now() - s.startedAt.toMillis()) / 1000);
     Object.assign(update, {
