@@ -20,6 +20,7 @@ import {
   rememberMicOpened,
   useNoMic,
 } from '../lib/micNotice';
+import { isEcho } from '../lib/liveReply';
 import { db } from '../lib/firebase';
 import { friendlyError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
@@ -488,10 +489,14 @@ export function Conversation({
   /** What the patient said last, to tell his echo from the resident just after he stops. */
   const lastPatientSaid = useRef('');
   /** Mic input this soon after the patient stops may still be his echo. */
+  // Right after the patient finishes, the mic may still pick up his tail from
+  // the speaker. That echo repeats his words; a short reply of the resident's
+  // own ("Exactly.", "Okay, so…") is a real turn, even one word.
   const echoAfterPatient = (t: string) =>
     timing.current.patientDoneAt !== null &&
     performance.now() - timing.current.patientDoneAt < ECHO_WINDOW_MS &&
-    !isResidentSpeech(t, lastPatientSaid.current);
+    !isResidentSpeech(t, lastPatientSaid.current) &&
+    isEcho(t, lastPatientSaid.current);
 
   const startListening = useCallback(() => {
     if (phaseRef.current === 'ending') return;

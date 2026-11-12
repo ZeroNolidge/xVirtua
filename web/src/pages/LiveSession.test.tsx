@@ -652,6 +652,40 @@ describe('GPT-Live conversation', () => {
     expect(vi.mocked(reportError).mock.calls.map((c) => c[0])).not.toContain('live.noSound');
   });
 
+  it('a one-word reply GPT-Live sits on: after a quiet stretch it gets a nudge to answer', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await start();
+      await act(async () => cb.onStarted());
+      // The opening line played and finished.
+      audible = true;
+      await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+      patientStops();
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      const before = nudges;
+      // The resident just says "Exactly." and goes quiet; GPT-Live asks for nothing.
+      micLoudAt = performance.now();
+      await act(async () => cb.onHeard('Exactly.'));
+      await act(async () => {
+        vi.advanceTimersByTime(3500);
+      });
+      expect(nudges).toBe(before + 1);
+      // Still nothing: it asks again, once per stretch, not every tick.
+      await act(async () => {
+        vi.advanceTimersByTime(1500);
+      });
+      expect(nudges).toBe(before + 1);
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(nudges).toBe(before + 2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows residents no model or test labels', () => {
     const { container } = render(
       <MemoryRouter>

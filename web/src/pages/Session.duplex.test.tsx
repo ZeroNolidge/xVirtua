@@ -261,4 +261,19 @@ describe('two-way voice', () => {
       await screen.findByText('Will I lose my license?', undefined, { timeout: 4000 }),
     ).toBeInTheDocument();
   });
+
+  it('a one-word reply right after the patient finishes is a turn, not his echo', async () => {
+    await start();
+    // "Exactly." isn't in what Ray just said: it goes out as the resident's turn.
+    await say('Exactly.');
+    await vi.waitFor(() => expect(calls).toHaveLength(1), { timeout: 5000 });
+    expect(calls[0]!.text).toBe('Exactly.');
+  });
+
+  it('his own words leaking back from the speaker right after he finishes are dropped', async () => {
+    await start();
+    await say('Blood pressure.');
+    await new Promise((r) => setTimeout(r, 300));
+    expect(calls).toHaveLength(0);
+  });
 });
