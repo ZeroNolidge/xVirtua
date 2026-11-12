@@ -14,6 +14,7 @@ import { db, functions, storage } from '../../lib/firebase';
 import { useAuth } from '../../lib/auth';
 import { friendlyError } from '../../lib/api';
 import { PatientAvatar } from '../../lib/avatar';
+import { describeQuality } from '../../lib/avatarQuality';
 import { BodyLanguage, type ClipManifest, type Mood } from '../../lib/bodyLanguage';
 import { HeadMatcher } from '../../lib/headMatch';
 import { StageRecorder } from '../../lib/stageRecorder';
@@ -58,6 +59,8 @@ export function FaceCheck() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
+  /** What the check saw and heard, in a sentence (lip-sync delay, stutters, freezes). */
+  const [quality, setQuality] = useState<string | null>(null);
   const cleanup = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -232,6 +235,9 @@ export function FaceCheck() {
       }
       stillHere();
       note('stats', { ...body.stats });
+      const quality = await avatar.qualitySummary();
+      note('quality', { ...quality });
+      setQuality(describeQuality(quality));
 
       setStatus('Uploading the recording…');
       window.clearInterval(sampler);
@@ -246,7 +252,7 @@ export function FaceCheck() {
         });
       await uploadString(
         ref(storage, `${folder}/${id}.json`),
-        JSON.stringify({ id, patient, voice, userAgent: navigator.userAgent, notes: log }),
+        JSON.stringify({ id, patient, voice, userAgent: navigator.userAgent, quality, notes: log }),
         'raw',
         { contentType: 'application/json' },
       );
@@ -313,6 +319,11 @@ export function FaceCheck() {
       {result && (
         <p role="status">
           Done. Saved as <strong>{result}</strong>. Tell Claude the face check is ready.
+        </p>
+      )}
+      {quality && (
+        <p className="small" role="status">
+          {quality}
         </p>
       )}
       <button className="btn btn-primary" disabled={running} onClick={() => void run()}>

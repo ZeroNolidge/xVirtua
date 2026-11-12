@@ -69,6 +69,11 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
         run: npx tsx scripts/live-calls.ts
 
+      - name: Video avatar quality (lip-sync delay, stutters, freezes)
+        continue-on-error: true
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
+        run: npx tsx scripts/avatar-quality.ts
       - name: Body-language clips (played and skipped)
         continue-on-error: true
         env:
