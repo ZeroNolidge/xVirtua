@@ -476,7 +476,7 @@ describe('GPT-Live test mode', () => {
     expect(r.token).toBe('tok_1');
     expect(calls[0]!.url).toBe('https://api.simli.ai/compose/token');
     expect(calls[0]!.init.headers['x-simli-api-key']).toBe('sk-simli');
-    expect(JSON.parse(calls[0]!.init.body)).toMatchObject({ faceId: face, handleSilence: false });
+    expect(JSON.parse(calls[0]!.init.body)).toMatchObject({ faceId: face, handleSilence: true });
     await expect(
       avatarSession(db, otherResident, { sessionId }, 'sk-simli', simli),
     ).rejects.toMatchObject({ code: 'not-found' });

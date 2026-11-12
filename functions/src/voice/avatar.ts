@@ -86,8 +86,10 @@ async function mintSimliToken(
     headers: { 'Content-Type': 'application/json', 'x-simli-api-key': apiKey },
     body: JSON.stringify({
       faceId,
-      // We stream the patient's voice, silence included.
-      handleSilence: false,
+      // Simli animates an idle face itself between the patient's lines; the
+      // app sends only speech (silence sent ahead of it queued the voice
+      // about a second late).
+      handleSilence: true,
       maxSessionLength,
       // Simli counts time the face isn't *speaking* as idle (not time with no
       // data), so this must outlast the resident's longest stretch of talking,
