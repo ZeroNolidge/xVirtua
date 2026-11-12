@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AudioChunk } from './avatar';
 
 // Fake Simli client: records what it was sent.
 const sent: Uint8Array[] = [];
@@ -34,7 +35,10 @@ vi.mock('simli-client', () => ({
 
 // Fake Web Audio: just enough to see what's connected to what.
 const links: [string, string][] = [];
-let worklet: { port: { onmessage: ((e: MessageEvent<ArrayBuffer>) => void) | null } };
+let worklet: { port: { onmessage: ((e: MessageEvent<AudioChunk>) => void) | null } };
+/** A chunk from the worklet: loud (speech) or quiet. */
+const chunk = (loud: boolean) =>
+  ({ data: { pcm: new Int16Array(3000).buffer, peak: loud ? 8000 : 10 } }) as MessageEvent<AudioChunk>;
 class Node {
   constructor(readonly name: string) {}
   connect(to: Node) {
@@ -102,11 +106,12 @@ describe('video avatar', () => {
     a.feedElement(document.createElement('audio'));
     expect(links).toContainEqual(['player', 'pcm']);
     expect(links).not.toContainEqual(['player', 'speakers']);
-    worklet.port.onmessage!({ data: new Int16Array(1600).buffer } as MessageEvent<ArrayBuffer>);
+    worklet.port.onmessage!(chunk(true));
     expect(sent).toHaveLength(1);
     // The resident cut in: Simli drops what it had queued.
+    const before = cleared;
     a.mute(true);
-    expect(cleared).toBe(1);
+    expect(cleared).toBe(before + 1);
     expect(audio.muted).toBe(true);
   });
 
@@ -129,11 +134,10 @@ describe('video avatar', () => {
     a.onChange = (r) => changes.push(r);
     await a.connect(async () => 'tok-guarded');
     a.feedElement(document.createElement('audio'));
-    const chunk = () =>
-      worklet.port.onmessage!({ data: new Int16Array(1600).buffer } as MessageEvent<ArrayBuffer>);
-    chunk();
+    const speak = () => worklet.port.onmessage!(chunk(true));
+    speak();
     expect(await a.switchFace(async () => 'tok-at-ease')).toBe(true);
-    chunk();
+    speak();
     // Never down in between, so our own player never took over the voice.
     expect(changes).toEqual([true]);
     expect(links).not.toContainEqual(['player', 'speakers']);
@@ -191,5 +195,34 @@ describe('video avatar', () => {
     expect(await a.connect(async () => 'tok')).toBe(false);
     expect(a.ready).toBe(false);
     expect(onFail).toHaveBeenCalled();
+  });
+
+  it('sends speech, a short tail of quiet, then nothing; speech starts again on a cleared buffer', async () => {
+    const { video, audio } = els();
+    const a = new PatientAvatar(video, audio);
+    await a.connect(async () => 'tok');
+    a.feedElement(document.createElement('audio'));
+    const say = (loud: boolean, n = 1) => {
+      for (let k = 0; k < n; k++) worklet.port.onmessage!(chunk(loud));
+    };
+    // A quiet start: nothing goes to Simli.
+    say(false, 5);
+    expect(sent).toHaveLength(0);
+    // He speaks: anything Simli had queued is dropped first, then the words go.
+    say(true, 3);
+    expect(cleared).toBe(1);
+    expect(sent).toHaveLength(3);
+    // A short tail of quiet is kept (word endings), then silence stops.
+    say(false, 6);
+    expect(sent).toHaveLength(3 + 2);
+    // Speaking again clears what was left, once.
+    say(true, 1);
+    expect(cleared).toBe(2);
+    expect(sent).toHaveLength(6);
+    // Quiet within a sentence (shorter than the tail) never clears or drops.
+    say(false, 1);
+    say(true, 1);
+    expect(cleared).toBe(2);
+    expect(sent).toHaveLength(8);
   });
 });

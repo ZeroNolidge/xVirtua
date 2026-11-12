@@ -3,6 +3,17 @@ import type { SimliClient } from 'simli-client';
 /** Mints a Simli session for this conversation (server; the key never reaches the browser). */
 export type GetAvatarToken = () => Promise<string>;
 
+/** One chunk from the pcm16 worklet: 16 kHz 16-bit samples and their peak level. */
+export interface AudioChunk {
+  pcm: ArrayBuffer;
+  peak: number;
+}
+
+/** Below this peak (16-bit units, about -40 dBFS) a chunk counts as silence. */
+export const SILENCE_PEAK = 330;
+/** Quiet chunks still sent after speech (about 0.4 s), so word endings aren't cut. */
+export const HANGOVER_CHUNKS = 2;
+
 /**
  * Test: the patient as a lip-synced video face (Simli). Only the patient's
  * voice is sent to Simli, never the resident's mic. Simli plays the voice
@@ -63,13 +74,9 @@ export class PatientAvatar {
       if (!this.node) {
         await this.ctx.audioWorklet.addModule('/pcm16-worklet.js');
         this.node = new AudioWorkletNode(this.ctx, 'pcm16');
-        this.node.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
+        this.node.port.onmessage = (e: MessageEvent<AudioChunk>) => {
           if (!this.ready) return;
-          try {
-            this.client?.sendAudioData(new Uint8Array(e.data));
-          } catch {
-            // Connection closing; the next session takes over.
-          }
+          this.sendChunk(e.data);
         };
         // Keeps the worklet running (it outputs nothing audible).
         const sink = this.ctx.createGain();
@@ -108,6 +115,28 @@ export class PatientAvatar {
       this.client = null;
       this.setReady(false);
       return false;
+    }
+  }
+
+  /** Quiet chunks in a row from the voice feed (large: nothing sent for a while). */
+  private quiet = HANGOVER_CHUNKS + 1;
+
+  /**
+   * Sends the patient's voice. Silence isn't sent (Simli animates an idle
+   * face itself): sending it queued the voice behind buffered silence, about
+   * a second of delay. A short tail after speech keeps word endings. When
+   * speech starts again, anything Simli still has queued is dropped first.
+   */
+  private sendChunk({ pcm, peak }: AudioChunk) {
+    const loud = peak > SILENCE_PEAK;
+    if (loud) {
+      if (this.quiet > HANGOVER_CHUNKS) this.clear();
+      this.quiet = 0;
+    } else if (++this.quiet > HANGOVER_CHUNKS) return;
+    try {
+      this.client?.sendAudioData(new Uint8Array(pcm));
+    } catch {
+      // Connection closing; the next session takes over.
     }
   }
 
@@ -182,11 +211,10 @@ export class PatientAvatar {
   private idleTimer: ReturnType<typeof setInterval> | undefined;
 
   /**
-   * Keeps his next face moving while it waits out of sight. Simli only draws
-   * new frames while it gets sound (handleSilence is off), so a waiting face
-   * froze on an old frame and showed it for about a second after the swap,
-   * then jumped (seen in a face check: 1-2% bigger). It gets silence until it
-   * takes over; then the voice feed's own stream (silence between lines) does.
+   * Keeps his next face moving while it waits out of sight. A waiting face
+   * once froze on an old frame and showed it for about a second after the
+   * swap, then jumped (seen in a face check: 1-2% bigger). It gets a little
+   * silence until it takes over, so its frames stay fresh.
    */
   private idle(client: SimliClient | null) {
     clearInterval(this.idleTimer);
