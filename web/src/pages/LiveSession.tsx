@@ -52,6 +52,12 @@ const KNOWN_EVENTS = new Set([
 
 /** Resident words this soon after a reply was asked for (before the patient speaks) finish that turn. */
 const LATE_WORDS_MS = 2500;
+/**
+ * The resident said something short ("Exactly.") and GPT-Live is still
+ * waiting for more: after this much quiet, a little silence tells it the
+ * turn is over (it waited 20 s once). Repeated at the same interval.
+ */
+const STALL_MS = 3000;
 /** The resident is done once no new words (and no mic sound) for this long... */
 /** A self-reply is done after this much quiet (he often pauses mid-thought). */
 const SELF_DONE_MS = 1600;
@@ -191,6 +197,8 @@ export function LiveConversation({
   /** What the resident said since the last reply was asked for. */
   const heardBuf = useRef('');
   const heardAt = useRef(0);
+  /** When GPT-Live was last nudged to answer a short turn it was sitting on. */
+  const stallNudgedAt = useRef(0);
   /** Words heard while the patient was talking (or just after) that may be his own echo. */
   const suspect = useRef<string[]>([]);
   /** The patient's current reply, and the one before it (for echo checks). */
@@ -375,6 +383,22 @@ export function LiveConversation({
       const audible = c.patientAudible();
       if (++tick % 3 === 0) setSpeaking(c.patientAudible(250));
       const r = reply.current;
+      // Words heard, nothing being answered, everyone quiet for a while:
+      // GPT-Live is waiting for more. Nudge it to take the turn.
+      if (
+        heardBuf.current.trim() &&
+        !answering.current &&
+        (!r || r.finished) &&
+        !audible &&
+        now - heardAt.current > STALL_MS &&
+        now - c.lastMicLoudAt > STALL_MS &&
+        now - stallNudgedAt.current > STALL_MS
+      ) {
+        stallNudgedAt.current = now;
+        census.current.counts['app.stallNudge'] =
+          (census.current.counts['app.stallNudge'] ?? 0) + 1;
+        c.nudge();
+      }
       if (r && r.firstAudibleAt === null && audible && r.pieces.length) {
         r.firstAudibleAt = now;
         setThinking(false);
