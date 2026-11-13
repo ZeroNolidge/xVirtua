@@ -1288,3 +1288,19 @@ body.appcheck-debug .sheet-backdrop {
 .attention {
   color: #b45309;
 }
+
+.reflection textarea {
+  width: 100%;
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+}
+.reflection-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}

@@ -1,5 +1,5 @@
 import { httpsCallable } from 'firebase/functions';
-import type { AvatarStats } from '@plainspeak/shared';
+import type { AvatarStats, ReflectionRating, TechIssue } from '@plainspeak/shared';
 import type {
   Mood,
   PatientChunk,
@@ -105,6 +105,17 @@ export const sessionApi = {
     },
     { sessionId: string; status: 'ended' }
   >(functions, 'endSession'),
+  /** The resident's own take on a conversation, given while the feedback is written. */
+  saveReflection: httpsCallable<
+    {
+      sessionId: string;
+      rating: ReflectionRating;
+      note?: string;
+      issues?: TechIssue[];
+      issueNote?: string;
+    },
+    { ok: true }
+  >(functions, 'saveReflection'),
   /** Live mode: speech clarity from the saved recording (after the conversation). */
   measureSpeechClarity: httpsCallable<{ sessionId: string }, { measured: boolean }>(
     functions,
