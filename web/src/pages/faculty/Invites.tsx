@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useEffect, useState, type FormEvent } from 'react';
 import { collection, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
 import { sendSignInLinkToEmail } from 'firebase/auth';
@@ -65,6 +66,11 @@ export function Invites() {
   return (
     <section>
       <h1>Invite people</h1>
+      <p>
+        <Link to="/faculty/residents" className="btn btn-secondary">
+          Residents’ progress
+        </Link>
+      </p>
       <form className="card" onSubmit={invite}>
         <label className="field">
           <span>Email</span>

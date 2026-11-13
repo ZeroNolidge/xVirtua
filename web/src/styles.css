@@ -1254,3 +1254,37 @@ body.appcheck-debug .sheet-backdrop {
   margin: 0;
   font-weight: 600;
 }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: flex-end;
+  margin: 8px 0 12px;
+}
+.residents {
+  width: 100%;
+  border-collapse: collapse;
+}
+.residents th,
+.residents td {
+  text-align: left;
+  padding: 8px 6px;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+.residents thead th {
+  border-top: 0;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.residents td:nth-child(2),
+.residents td:nth-child(3),
+.residents th:nth-child(2),
+.residents th:nth-child(3) {
+  text-align: right;
+}
+.attention {
+  color: #b45309;
+}

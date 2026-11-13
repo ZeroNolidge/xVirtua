@@ -288,6 +288,28 @@ describe('sessions, turns, scores', () => {
     await assertSucceeds(
       getDocs(query(collection(fs(a.facultyIrmc), 'sessions'), where('programId', '==', 'irmc'))),
     );
+    // Faculty looking at one resident: the program must be on the query too.
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(fs(a.facultyIrmc), 'sessions'),
+          where('uid', '==', 'resA'),
+          where('programId', '==', 'irmc'),
+        ),
+      ),
+    );
+    await assertFails(
+      getDocs(query(collection(fs(a.facultyIrmc), 'sessions'), where('uid', '==', 'resA'))),
+    );
+    await assertFails(
+      getDocs(
+        query(
+          collection(fs(a.facultyOther), 'sessions'),
+          where('uid', '==', 'resA'),
+          where('programId', '==', 'irmc'),
+        ),
+      ),
+    );
   });
 
   it('nobody can write sessions, turns or scores from the client', async () => {
