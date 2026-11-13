@@ -9,7 +9,7 @@ import {
   where,
   type Timestamp,
 } from 'firebase/firestore';
-import { RETENTION_NOTICE } from '@plainspeak/shared';
+import { RATING_LABEL, RETENTION_NOTICE } from '@plainspeak/shared';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
 import { ProgressDashboard } from '../components/ProgressDashboard';
@@ -64,7 +64,8 @@ export function useHistory(uid: string | undefined, programId?: string) {
 }
 
 /** One conversation in a history list (the resident's own, or seen by faculty). */
-export function HistoryRow({ r }: { r: Row }) {
+export function HistoryRow({ r, viewer = 'self' }: { r: Row; viewer?: 'self' | 'faculty' }) {
+  const self = r.reflection ? RATING_LABEL[r.reflection.rating] : null;
   return (
     <li>
       <Link to={`/session/${r.id}/done`} className="history-link">
@@ -72,6 +73,7 @@ export function HistoryRow({ r }: { r: Row }) {
         <span className="muted small">
           {r.startedAt?.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           {r.status === 'live' ? ' · open' : ''}
+          {self ? ` · ${viewer === 'self' ? 'you felt' : 'self'}: ${self}` : ''}
         </span>
       </Link>
       {r.feedbackBand && <span className="score-pill">{r.feedbackBand}</span>}

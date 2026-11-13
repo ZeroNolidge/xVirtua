@@ -10,7 +10,14 @@ import {
 } from '@plainspeak/shared';
 import { dayKey } from '../lib/quota.js';
 import { SEED_SCENARIOS } from '@plainspeak/shared/seed';
-import { endSession, patientTurn, saveHeard, saveLiveExchange, startSession } from './session.js';
+import {
+  endSession,
+  patientTurn,
+  saveHeard,
+  saveLiveExchange,
+  saveReflection,
+  startSession,
+} from './session.js';
 import { FakeBrain } from '../patient/fakeBrain.js';
 import type { Caller } from '../lib/callable.js';
 import { startLiveCall } from '../voice/live.js';
@@ -865,5 +872,42 @@ describe('GPT-Live steer mode', () => {
     expect((await measureSpeech(db, resident, { sessionId }, 'sk-x', audio, openai)).measured).toBe(
       false,
     );
+  });
+});
+
+describe('saveReflection', () => {
+  it('keeps the resident’s take on the session; technical issues become a report', async () => {
+    const { sessionId } = await startSession(db, resident, { scenarioId: htn.id });
+    await saveReflection(db, resident, {
+      sessionId,
+      rating: 'good',
+      note: 'Ask about his job sooner.',
+      issues: ['face', 'slow'],
+      issueNote: 'Froze after a few minutes',
+    });
+    const r = (await db.doc(`sessions/${sessionId}`).get()).get('reflection');
+    expect(r).toMatchObject({
+      rating: 'good',
+      note: 'Ask about his job sooner.',
+      issues: ['face', 'slow'],
+      issueNote: 'Froze after a few minutes',
+    });
+    const reports = await db
+      .collection('clientErrors')
+      .where('path', '==', `/session/${sessionId}`)
+      .get();
+    expect(reports.docs.map((d) => d.get('message'))).toEqual([
+      'The face froze or never showed; Long waits — Froze after a few minutes',
+    ]);
+    expect(reports.docs[0]!.get('kind')).toBe('resident.issue');
+    // No issues: no report. Someone else's session: not found.
+    const { sessionId: s2 } = await startSession(db, resident, { scenarioId: htn.id });
+    await saveReflection(db, resident, { sessionId: s2, rating: 'ok' });
+    expect(
+      (await db.collection('clientErrors').where('path', '==', `/session/${s2}`).get()).size,
+    ).toBe(0);
+    await expect(
+      saveReflection(db, otherResident, { sessionId, rating: 'rough' }),
+    ).rejects.toMatchObject({ code: 'not-found' });
   });
 });

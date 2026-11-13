@@ -27,6 +27,10 @@ import {
   MOODS,
   stepToward,
   type Mood,
+  REFLECTION_RATINGS,
+  TECH_ISSUES,
+  type Reflection,
+  type TechIssue,
 } from '@plainspeak/shared';
 import type { Caller } from '../lib/callable.js';
 import { parse } from '../lib/callable.js';
@@ -825,6 +829,52 @@ const endInput = z.object({
     .max(24 * 3600)
     .nullish(),
 });
+
+const reflectionInput = z.object({
+  sessionId: z.string().min(1).max(64),
+  rating: z.enum(REFLECTION_RATINGS),
+  note: z.string().trim().max(500).optional(),
+  issues: z
+    .array(z.enum(TECH_ISSUES.map((i) => i.id) as [TechIssue, ...TechIssue[]]))
+    .max(6)
+    .optional(),
+  issueNote: z.string().trim().max(500).optional(),
+});
+
+/**
+ * The resident's own take on a conversation (while the feedback is written):
+ * how it went, one thing they'd do differently, and anything that went wrong
+ * technically. Technical issues also become a client error report, so they
+ * show up next to that session's numbers in the diagnostics.
+ */
+export async function saveReflection(db: Firestore, caller: Caller | null, data: unknown) {
+  const me = requireMember(caller);
+  const { sessionId, rating, note, issues, issueNote } = parse(reflectionInput, data);
+  const ref = db.doc(`sessions/${sessionId}`);
+  const s = (await ref.get()).data() as SessionDoc | undefined;
+  if (!s || s.uid !== me.uid) throw new HttpsError('not-found', 'Session not found.');
+  const reflection: Reflection = {
+    rating,
+    ...(note ? { note } : {}),
+    ...(issues?.length ? { issues } : {}),
+    ...(issueNote ? { issueNote } : {}),
+    at: new Date().toISOString(),
+  };
+  await ref.update({ reflection });
+  if (issues?.length) {
+    const labels = issues.map((id) => TECH_ISSUES.find((i) => i.id === id)?.label ?? id);
+    await db.collection('clientErrors').add({
+      kind: 'resident.issue',
+      message: `${labels.join('; ')}${issueNote ? ` — ${issueNote}` : ''}`.slice(0, 500),
+      path: `/session/${sessionId}`,
+      uid: me.uid,
+      programId: me.programId,
+      voiceMode: s.voiceMode ?? 'standard',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+  return { ok: true as const };
+}
 
 export async function endSession(
   db: Firestore,

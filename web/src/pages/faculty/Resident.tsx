@@ -57,7 +57,7 @@ export function Resident() {
         ) : (
           <ul className="list">
             {rows.map((r) => (
-              <HistoryRow key={r.id} r={r} />
+              <HistoryRow key={r.id} r={r} viewer="faculty" />
             ))}
           </ul>
         )}

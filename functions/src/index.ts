@@ -174,6 +174,9 @@ export const saveLiveExchange = callable({ secrets: [ANTHROPIC_API_KEY] }, (req)
   return session.saveLiveExchange(db(), callerOf(req), req.data, director);
 });
 
+export const saveReflection = callable({}, (req) =>
+  session.saveReflection(db(), callerOf(req), req.data),
+);
 export const endSession = callable({}, (req) =>
   session.endSession(db(), callerOf(req), req.data, async (path) => {
     const [exists] = await getStorage().bucket().file(path).exists();
