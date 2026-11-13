@@ -17,6 +17,7 @@ import { friendlyError, isConnectionError } from '../lib/api';
 import { reportError } from '../lib/errorReport';
 import { sessionApi } from '../lib/session';
 import { ScoreView } from '../components/ScoreView';
+import { ReflectionCard } from '../components/ReflectionCard';
 import { levelsOf } from '../components/metricLabels';
 import type { Levels } from '../components/SkillShape';
 import { useAuth } from '../lib/auth';
@@ -142,6 +143,8 @@ export function SessionDone() {
   const [fb, setFb] = useSavedFeedback(id);
   const [showTranscript, setShowTranscript] = useState(false);
   const asked = useRef(false);
+  /** The reflection card: shown once scoring starts, until Done or Skip. */
+  const [reflect, setReflect] = useState<'ask' | 'thanks' | null>(null);
 
   const residentTurns = bubbles?.filter((b) => b.who === 'resident').length ?? 0;
   const resumable = meta.status === 'live' && canContinue(meta as SessionRow);
@@ -150,6 +153,7 @@ export function SessionDone() {
   async function requestFeedback() {
     asked.current = true;
     setFb({ state: 'working' });
+    if (!meta.reflection) setReflect('ask');
     // A dropped signal loses the answer, not the work: the server keeps the
     // feedback, so asking again soon just fetches it.
     for (let attempt = 0; ; attempt++) {
@@ -252,6 +256,26 @@ export function SessionDone() {
             Get feedback on what you said
           </button>
         </div>
+      )}
+
+      {reflect === 'ask' && (
+        <ReflectionCard
+          first={first}
+          onSave={async (r) => {
+            try {
+              await sessionApi.saveReflection({ sessionId: id, ...r });
+            } catch (e) {
+              reportError('reflection', e);
+            }
+            setReflect('thanks');
+          }}
+          onSkip={() => setReflect(null)}
+        />
+      )}
+      {reflect === 'thanks' && (
+        <p className="muted small" role="status">
+          Thanks. Your note is saved with this conversation.
+        </p>
       )}
 
       {fb.state === 'working' && (

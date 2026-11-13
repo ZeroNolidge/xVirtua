@@ -1,5 +1,5 @@
 import type { Timestamp } from 'firebase/firestore';
-import { SESSION_LIMITS } from '@plainspeak/shared';
+import { SESSION_LIMITS, type Reflection } from '@plainspeak/shared';
 
 export interface SessionRow {
   uid: string;
@@ -15,6 +15,8 @@ export interface SessionRow {
   appWaitSec?: number;
   audioPath?: string | null;
   voiceMode?: 'standard' | 'live';
+  /** Their own take, given while the feedback was written. */
+  reflection?: Reflection;
 }
 
 /** Whether a saved conversation can still take turns (mirrors the server's limits). */

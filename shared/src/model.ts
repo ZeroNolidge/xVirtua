@@ -299,6 +299,34 @@ export function pronounWords(pronouns: string | undefined): {
   return { they: 'they', them: 'them', their: 'their', themself: 'themself' };
 }
 
+/** The resident's own take on a conversation, given while the feedback is written. */
+export const REFLECTION_RATINGS = ['rough', 'ok', 'good', 'great'] as const;
+export type ReflectionRating = (typeof REFLECTION_RATINGS)[number];
+export const RATING_LABEL: Record<ReflectionRating, string> = {
+  rough: 'Rough',
+  ok: 'OK',
+  good: 'Good',
+  great: 'Great',
+};
+/** Things that can go wrong technically, as the resident would name them. */
+export const TECH_ISSUES = [
+  { id: 'no-sound', label: 'Couldn’t hear the patient' },
+  { id: 'cut-off', label: 'The patient cut me off or didn’t hear me' },
+  { id: 'slow', label: 'Long waits' },
+  { id: 'face', label: 'The face froze or never showed' },
+  { id: 'wrong-output', label: 'Sound went to the wrong place' },
+  { id: 'other', label: 'Something else' },
+] as const;
+export type TechIssue = (typeof TECH_ISSUES)[number]['id'];
+export interface Reflection {
+  rating: ReflectionRating;
+  /** "One thing I'd do differently." */
+  note?: string;
+  issues?: TechIssue[];
+  issueNote?: string;
+  at: string;
+}
+
 /** What the resident saw and heard from the video avatar (saved on the session). */
 export interface AvatarStats {
   seconds: number;
