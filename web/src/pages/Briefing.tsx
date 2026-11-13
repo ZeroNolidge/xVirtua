@@ -15,6 +15,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { TAG_LABEL } from './faculty/voiceTags';
 import { useScenario, type ScenarioRow } from '../lib/scenarios';
+import { PatientVoiceAndFace } from './faculty/PatientVoiceAndFace';
 import { api, friendlyError } from '../lib/api';
 import { Difficulty } from '../components/Difficulty';
 import { GettingReady } from '../components/GettingReady';
@@ -171,7 +172,13 @@ export function Briefing() {
           : 'Find a quiet spot. You’ll talk out loud.'}
       </p>
 
-      {isFaculty && <FacultyReview summary={detail.summary} script={detail.script} />}
+      {isFaculty && (
+        <FacultyReview
+          summary={detail.summary}
+          script={detail.script}
+          pronouns={detail.briefing.persona.pronouns}
+        />
+      )}
     </section>
   );
 }
@@ -250,9 +257,11 @@ function PatientVoice({ summary }: { summary: ScenarioRow }) {
 function FacultyReview({
   summary,
   script,
+  pronouns,
 }: {
   summary: ScenarioRow;
   script: ScenarioScript | null;
+  pronouns: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -277,6 +286,7 @@ function FacultyReview({
         <strong>Status:</strong> {STATUS_TEXT[summary.status]}
       </p>
       <PatientVoice summary={summary} />
+      <PatientVoiceAndFace summary={summary} pronouns={pronouns} />
 
       {script ? (
         <>

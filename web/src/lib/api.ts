@@ -1,3 +1,4 @@
+import type { ScenarioAvatar } from '@plainspeak/shared';
 import { httpsCallable } from 'firebase/functions';
 import type { LiveVoice, Role, ScenarioStatus } from '@plainspeak/shared';
 import { functions } from './firebase';
@@ -18,6 +19,19 @@ export const api = {
     { scenarioId: string; status: ScenarioStatus },
     { scenarioId: string; status: ScenarioStatus }
   >(functions, 'setScenarioStatus'),
+  setScenarioTtsVoice: httpsCallable<
+    { scenarioId: string; voice: string | null },
+    { scenarioId: string; voice: string | null }
+  >(functions, 'setScenarioTtsVoice'),
+  setScenarioAvatar: httpsCallable<
+    { scenarioId: string; faces: Record<string, string>; background?: string },
+    { scenarioId: string; avatar: ScenarioAvatar | null }
+  >(functions, 'setScenarioAvatar'),
+  listTtsVoices: httpsCallable<
+    { pronouns: string },
+    { voices: { id: string; name: string; description: string }[] }
+  >(functions, 'listTtsVoices'),
+  ttsSample: httpsCallable<{ voice: string }, { mp3: string }>(functions, 'ttsSample'),
   setScenarioVoice: httpsCallable<
     { scenarioId: string; voice: LiveVoice | null },
     { scenarioId: string; voice: LiveVoice | null }

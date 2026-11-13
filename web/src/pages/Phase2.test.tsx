@@ -14,7 +14,23 @@ vi.mock('firebase/firestore', () => ({
   getDoc: vi.fn(async () => ({ data: () => ({ liveVoiceTags: { stone: 'male' } }) })),
 }));
 vi.mock('../lib/api', () => ({
-  api: { setScenarioStatus: vi.fn(), setScenarioVoice: vi.fn(async () => ({ data: {} })) },
+  api: {
+    setScenarioStatus: vi.fn(),
+    setScenarioVoice: vi.fn(async () => ({ data: {} })),
+    setScenarioTtsVoice: vi.fn(async () => ({ data: {} })),
+    setScenarioAvatar: vi.fn(async (i: { faces: Record<string, string> }) => ({
+      data: { avatar: Object.values(i.faces).some(Boolean) ? { faces: i.faces } : null },
+    })),
+    listTtsVoices: vi.fn(async () => ({
+      data: {
+        voices: [
+          { id: '11111111-1111-4111-8111-111111111111', name: 'Walt', description: 'Warm, older' },
+          { id: '22222222-2222-4222-8222-222222222222', name: 'Hank', description: 'Gruff' },
+        ],
+      },
+    })),
+    ttsSample: vi.fn(async () => ({ data: { mp3: '' } })),
+  },
   friendlyError: () => 'x',
 }));
 vi.mock('../lib/session', () => ({
@@ -226,6 +242,43 @@ describe('Briefing', () => {
     expect(status).toHaveTextContent('Preparing the room…');
     expect(status.querySelector('.spinner')).not.toBeNull();
     expect(screen.getByRole('button', { name: /starting/i })).toBeDisabled();
+  });
+
+  it('lets faculty give this patient their own standard voice and Simli faces', async () => {
+    role.current = 'faculty';
+    renderBriefing();
+    const { api } = await import('../lib/api');
+    const voice = await screen.findByLabelText('Standard voice');
+    expect(await screen.findByRole('option', { name: /Walt — Warm, older/ })).toBeInTheDocument();
+    fireEvent.change(voice, { target: { value: '22222222-2222-4222-8222-222222222222' } });
+    await vi.waitFor(() =>
+      expect(api.setScenarioTtsVoice).toHaveBeenCalledWith({
+        scenarioId: seed.id,
+        voice: '22222222-2222-4222-8222-222222222222',
+      }),
+    );
+    fireEvent.change(screen.getByLabelText(/Guarded \(start\)/), {
+      target: { value: 'aaaaaaaa-0000-4000-8000-000000000001' },
+    });
+    fireEvent.change(screen.getByLabelText(/^Room/), {
+      target: { value: 'aaaaaaaa-0000-4000-8000-000000000003' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save faces' }));
+    await vi.waitFor(() =>
+      expect(api.setScenarioAvatar).toHaveBeenCalledWith({
+        scenarioId: seed.id,
+        faces: {
+          guarded: 'aaaaaaaa-0000-4000-8000-000000000001',
+          at_ease: '',
+          happy: '',
+          upset: '',
+        },
+        background: 'aaaaaaaa-0000-4000-8000-000000000003',
+      }),
+    );
+    expect(
+      await screen.findByText(/Saved\. New conversations use these faces/),
+    ).toBeInTheDocument();
   });
 
   it('shows faculty the review panel with hidden concern, cues and publish', () => {

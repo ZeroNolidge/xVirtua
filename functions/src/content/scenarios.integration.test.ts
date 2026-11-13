@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { setScenarioStatus, setScenarioVoice } from './scenarios.js';
+import {
+  setScenarioAvatar,
+  setScenarioStatus,
+  setScenarioTtsVoice,
+  setScenarioVoice,
+} from './scenarios.js';
 import type { Caller } from '../lib/callable.js';
 
 const PROJECT_ID = 'demo-plainspeak';
@@ -69,6 +74,42 @@ describe('setScenarioVoice', () => {
     ).rejects.toBeTruthy();
     await expect(
       setScenarioVoice(db, faculty, { scenarioId: 'htn', voice: 'alloy' }),
+    ).rejects.toBeTruthy();
+  });
+});
+
+describe('a patient’s own standard voice and faces', () => {
+  const face = (n: string) => `0000000${n}-0000-4000-8000-000000000000`;
+  it('faculty pick (or clear) the standard voice; others can’t', async () => {
+    await setScenarioTtsVoice(db, faculty, { scenarioId: 'htn', voice: face('1') });
+    expect((await db.doc('scenarios/htn').get()).get('ttsVoice')).toBe(face('1'));
+    await setScenarioTtsVoice(db, faculty, { scenarioId: 'htn', voice: null });
+    expect((await db.doc('scenarios/htn').get()).get('ttsVoice')).toBeNull();
+    await expect(
+      setScenarioTtsVoice(db, otherFaculty, { scenarioId: 'htn', voice: face('1') }),
+    ).rejects.toMatchObject({ code: 'not-found' });
+    await expect(
+      setScenarioTtsVoice(db, faculty, { scenarioId: 'htn', voice: 'not-an-id' }),
+    ).rejects.toBeTruthy();
+  });
+
+  it('faces by mood with the room; guarded is required; all empty clears them', async () => {
+    await setScenarioAvatar(db, faculty, {
+      scenarioId: 'htn',
+      faces: { guarded: face('a'), at_ease: face('b'), happy: '', upset: '' },
+      background: face('c'),
+    });
+    expect((await db.doc('scenarios/htn').get()).get('avatar')).toEqual({
+      faces: { guarded: face('a'), at_ease: face('b') },
+      background: face('c'),
+    });
+    await expect(
+      setScenarioAvatar(db, faculty, { scenarioId: 'htn', faces: { at_ease: face('b') } }),
+    ).rejects.toMatchObject({ code: 'invalid-argument' });
+    await setScenarioAvatar(db, faculty, { scenarioId: 'htn', faces: {} });
+    expect((await db.doc('scenarios/htn').get()).get('avatar')).toBeNull();
+    await expect(
+      setScenarioAvatar(db, resident, { scenarioId: 'htn', faces: { guarded: face('a') } }),
     ).rejects.toBeTruthy();
   });
 });

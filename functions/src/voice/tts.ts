@@ -82,7 +82,9 @@ export async function handleTts(
     let voiceId = s.voiceId as string | undefined;
     if (!voiceId) {
       const sc = await loadScenario(db, s.scenarioId, s.scenarioVersion);
-      voiceId = await pickVoice(key, sc?.briefing.persona.pronouns ?? 'they', s.scenarioId);
+      voiceId =
+        sc?.doc.ttsVoice ??
+        (await pickVoice(key, sc?.briefing.persona.pronouns ?? 'they', s.scenarioId));
       await ref.update({ voiceId });
     }
     const audio = await synthesize(key, voiceId, text, turn.delivery as Delivery);

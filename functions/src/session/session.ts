@@ -424,7 +424,8 @@ export async function patientTurn(
         const voice = opts.voice;
         voiceReady = consumeQuota(db, me.uid, 'voice')
           .then(async () => {
-            voiceId ??= await voice.voiceId(sc.briefing.persona.pronouns, s.scenarioId);
+            voiceId ??=
+              sc.doc.ttsVoice ?? (await voice.voiceId(sc.briefing.persona.pronouns, s.scenarioId));
             return voiceId;
           })
           .catch((e: unknown) => {
