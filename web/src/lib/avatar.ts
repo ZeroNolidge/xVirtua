@@ -70,7 +70,7 @@ export class PatientAvatar {
   }
 
   /** Starts a Simli session. Resolves true once the face is on screen. */
-  async connect(getToken: GetAvatarToken, timeoutMs = 10_000): Promise<boolean> {
+  async connect(getToken: GetAvatarToken, timeoutMs = 15_000): Promise<boolean> {
     if (this.disposed || !this.ctx) return false;
     try {
       await this.ctx.resume();
