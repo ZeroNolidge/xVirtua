@@ -475,6 +475,39 @@ describe('GPT-Live test mode', () => {
     ).rejects.toMatchObject({ code: 'not-found' });
   });
 
+  it('a patient’s own faces (set by faculty) come before the program’s, by mood, with their room', async () => {
+    await seedScenario('active', plain);
+    const own = {
+      guarded: 'aaaaaaaa-0000-4000-8000-000000000001',
+      happy: 'aaaaaaaa-0000-4000-8000-000000000002',
+    };
+    const room = 'aaaaaaaa-0000-4000-8000-000000000003';
+    await db.doc('programs/irmc').set(
+      {
+        avatarOn: true,
+        avatarFaces: {
+          he: 'bf13113a-355a-4d97-8b90-4edccd1da7b2',
+          she: 'bf13113a-355a-4d97-8b90-4edccd1da7b3',
+        },
+      },
+      { merge: true },
+    );
+    await db
+      .doc(`scenarios/${plain.id}`)
+      .set({ avatar: { faces: own, background: room } }, { merge: true });
+    const { sessionId } = await startSession(db, resident, { scenarioId: plain.id });
+    const bodies: Record<string, unknown>[] = [];
+    const simli = (async (_url: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ session_token: 'tok', warnings: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await avatarSession(db, resident, { sessionId }, 'sk-simli', simli);
+    await avatarSession(db, resident, { sessionId, mood: 'happy' }, 'sk-simli', simli);
+    await avatarSession(db, resident, { sessionId, mood: 'at_ease' }, 'sk-simli', simli); // no at_ease face: guarded
+    expect(bodies.map((b) => b.faceId)).toEqual([own.guarded, own.happy, own.guarded]);
+    expect(bodies.every((b) => b.background_id === room)).toBe(true);
+  });
+
   it('mints a video avatar session only when faculty turned it on, with the face for the patient', async () => {
     await seedScenario('active', plain);
     const face = 'bf13113a-355a-4d97-8b90-4edccd1da7b2';

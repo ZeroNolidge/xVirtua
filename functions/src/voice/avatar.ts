@@ -53,10 +53,14 @@ export async function avatarSession(
   const faces = (program.avatarFaces ?? {}) as Record<string, unknown>;
   // A ready-made video character has a face for each mood; anyone else gets
   // the program's face for their pronouns.
+  // Their own faces (set by faculty), else the built-in character's, else the program's.
+  const own = sc.doc.avatar?.faces.guarded ? sc.doc.avatar : null;
   const character = videoCharacterFor(sc.briefing.persona.name);
-  const faceId = character
-    ? ((mood && character.faces[mood]) ?? character.faces.guarded)
-    : String(faces[voiceGroupOf(sc.briefing.persona.pronouns)] ?? '');
+  const faceId = own
+    ? ((mood && own.faces[mood]) ?? own.faces.guarded!)
+    : character
+      ? ((mood && character.faces[mood]) ?? character.faces.guarded)
+      : String(faces[voiceGroupOf(sc.briefing.persona.pronouns)] ?? '');
   if (!FACE_ID.test(faceId))
     throw new HttpsError('failed-precondition', 'No avatar face is chosen for this patient.');
 
@@ -66,7 +70,7 @@ export async function avatarSession(
     apiKey,
     doFetch,
     SESSION_LIMITS.maxMinutes * 60,
-    character?.background,
+    own ? (own.background ?? undefined) : character?.background,
   );
   await ref.update({ avatarSessions: FieldValue.arrayUnion({ at: Date.now(), faceId }) });
   return { token };

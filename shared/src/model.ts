@@ -164,6 +164,16 @@ export interface ScenarioDoc {
   tags: string[];
   /** GPT-Live voice for this patient, chosen by faculty (else the pronoun default). */
   liveVoice?: LiveVoice | null;
+  /** Standard (Cartesia) voice id for this patient, chosen by faculty (else a stable pick). */
+  ttsVoice?: string | null;
+  /** This patient's own Simli faces and room, chosen by faculty (else the built-in ones). */
+  avatar?: ScenarioAvatar | null;
+}
+
+/** A patient's Simli faces by mood (guarded is the start) and their room. */
+export interface ScenarioAvatar {
+  faces: Partial<Record<'upset' | 'guarded' | 'at_ease' | 'happy', string>>;
+  background?: string | null;
 }
 
 export interface ScenarioSeed {
