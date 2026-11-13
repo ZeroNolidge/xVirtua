@@ -163,4 +163,49 @@ describe('avatar quality', () => {
       'Lip-sync delay 0.9 s median, 1.4 s worst (7 lines). Audio: 6 stutters, jitter 18 ms. Video: 2 freezes (0.8 s), 24.6 fps, 3 gaps (0.7 s). Over 3 min.',
     );
   });
+
+  it('a face swap brings new streams whose counters restart: the totals add up, never go negative', async () => {
+    const q = meter();
+    const mk = (a: string, v: string, k: number) => ({
+      audio: { srcObject: { getAudioTracks: () => [{ id: a }] } } as unknown as HTMLAudioElement,
+      video: { ...fakeVideo(), srcObject: { getVideoTracks: () => [{ id: v }] } } as unknown as HTMLVideoElement,
+      pc: {
+        async getStats() {
+          const rows = [
+            { type: 'inbound-rtp', kind: 'audio', trackIdentifier: a, concealmentEvents: 10 * k, concealedSamples: 0, totalSamplesReceived: 1000, packetsLost: 5 * k, jitter: 0.01 },
+            { type: 'inbound-rtp', kind: 'video', trackIdentifier: v, freezeCount: 4 * k, totalFreezesDuration: 1 * k },
+          ];
+          return { forEach: (f: (r: unknown) => void) => rows.forEach(f) };
+        },
+      } as unknown as RTCPeerConnection,
+    });
+    // First face: counters at 10 / 5 / 4 on the base reading, then unchanged.
+    const first = mk('a3', 'v3', 1);
+    watchConnection(first.pc);
+    q.attach(first.video, first.audio);
+    await q.readStats();
+    await q.readStats();
+    // Swap to the next face: a new stream starting from smaller counters.
+    const second = mk('a4', 'v4', 1);
+    let reads = 0;
+    second.pc.getStats = async () => {
+      reads++;
+      const k = reads; // 1 on the base reading, then 2: one more of everything
+      const rows = [
+        { type: 'inbound-rtp', kind: 'audio', trackIdentifier: 'a4', concealmentEvents: k, concealedSamples: 0, totalSamplesReceived: 1000, packetsLost: k, jitter: 0.01 },
+        { type: 'inbound-rtp', kind: 'video', trackIdentifier: 'v4', freezeCount: k, totalFreezesDuration: 0.25 * k },
+      ];
+      return { forEach: (f: (r: unknown) => void) => rows.forEach(f) } as unknown as RTCStatsReport;
+    };
+    watchConnection(second.pc);
+    q.attach(second.video, second.audio);
+    await q.readStats();
+    await q.readStats();
+    const s = q.summary();
+    expect(s.audioStutters).toBe(1);
+    expect(s.packetsLost).toBe(1);
+    expect(s.videoFreezes).toBe(1);
+    expect(s.videoFreezeMs).toBe(250);
+    q.stop();
+  });
 });
