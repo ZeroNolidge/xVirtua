@@ -17,7 +17,10 @@ vi.mock('../lib/api', () => ({
   api: { setScenarioStatus: vi.fn(), setScenarioVoice: vi.fn(async () => ({ data: {} })) },
   friendlyError: () => 'x',
 }));
-vi.mock('../lib/session', () => ({ sessionApi: {}, prewarmConversation: vi.fn() }));
+vi.mock('../lib/session', () => ({
+  sessionApi: { start: () => new Promise(() => {}) }, // the room takes a while
+  prewarmConversation: vi.fn(),
+}));
 const lookupOnServer = vi.fn(async (_term: string) => null);
 vi.mock('../lib/jargon', async (orig) => ({
   ...(await orig<typeof import('../lib/jargon')>()),
@@ -214,6 +217,15 @@ describe('Briefing', () => {
     renderBriefing();
     expect(screen.getByText('Your connection looks good.')).toBeInTheDocument();
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('after Start: a spinner and “Preparing the room…” while the room is set up', async () => {
+    renderBriefing();
+    fireEvent.click(screen.getByRole('button', { name: /start conversation/i }));
+    const status = await screen.findByRole('status', { name: '' });
+    expect(status).toHaveTextContent('Preparing the room…');
+    expect(status.querySelector('.spinner')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /starting/i })).toBeDisabled();
   });
 
   it('shows faculty the review panel with hidden concern, cues and publish', () => {

@@ -17,6 +17,7 @@ import { TAG_LABEL } from './faculty/voiceTags';
 import { useScenario, type ScenarioRow } from '../lib/scenarios';
 import { api, friendlyError } from '../lib/api';
 import { Difficulty } from '../components/Difficulty';
+import { GettingReady } from '../components/GettingReady';
 import { Loading } from './StatusScreens';
 import { prewarmConversation, sessionApi } from '../lib/session';
 import { MODEL_LABELS } from '../lib/models';
@@ -149,8 +150,9 @@ export function Briefing() {
           {startError}
         </p>
       )}
+      {starting && <GettingReady first={b.persona.name.split(' ')[0] ?? 'the patient'} />}
       <button className="btn" disabled={starting} onClick={() => void startConversation()}>
-        {starting ? 'Getting the room ready…' : 'Start conversation'}
+        {starting ? 'Starting…' : 'Start conversation'}
       </button>
       {connection && (
         <p

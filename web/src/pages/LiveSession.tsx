@@ -24,6 +24,7 @@ import { useCaptions } from '../lib/useCaptions';
 import { useAvatar } from '../lib/useAvatar';
 import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
+import { GettingReady } from '../components/GettingReady';
 import { BluetoothNote } from '../components/BluetoothNote';
 import { openMic } from '../lib/micChoice';
 import { Transcript, type Bubble } from './Session';
@@ -960,6 +961,10 @@ export function LiveConversation({
         poster={body.poster}
       />
 
+      {phase === 'connecting' && <GettingReady first={first ?? 'the patient'} from={1} />}
+      {phase === 'live' && openingWait && !slowStart && (
+        <GettingReady first={first ?? 'the patient'} from={2} />
+      )}
       {slowStart && openingWait && !notice && (
         <p className="notice" role="status">
           Taking a moment… you can say hello to start.

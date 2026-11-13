@@ -57,6 +57,7 @@ import { useCaptions } from '../lib/useCaptions';
 import { useAvatar } from '../lib/useAvatar';
 import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
+import { GettingReady } from '../components/GettingReady';
 import { BluetoothNote } from '../components/BluetoothNote';
 import { openMic } from '../lib/micChoice';
 import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
@@ -1129,12 +1130,14 @@ export function Conversation({
         </div>
       ) : null}
 
+      {phase === 'connecting' && <GettingReady first={first ?? 'the patient'} from={1} />}
+
       {(phase !== 'ready' || resumeFrom) &&
         (showWords || phase === 'ready' || phase === 'ending' ? (
           <Transcript
             bubbles={bubbles}
             partial={partial}
-            thinking={(phase === 'thinking' && showThinking) || phase === 'connecting'}
+            thinking={phase === 'thinking' && showThinking}
             patientFirstName={first}
             queued={queued}
           />
