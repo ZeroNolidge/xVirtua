@@ -54,7 +54,7 @@ import {
   type TurnState,
 } from '../components/ConversationBits';
 import { useCaptions } from '../lib/useCaptions';
-import { useAvatar } from '../lib/useAvatar';
+import { FACE_WAIT_MS, useAvatar } from '../lib/useAvatar';
 import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
 import { GettingReady } from '../components/GettingReady';
@@ -362,6 +362,15 @@ export function Conversation({
     commit: commitFace,
     instance: faceInstance,
   } = useAvatar(sessionId);
+  // The face came up (late, or again after a drop): it plays the voice from now on.
+  useEffect(() => {
+    const a = faceInstance();
+    const r = renderer.current;
+    if (!faceReady || !a || !r) return;
+    a.feedElement(r.element);
+    r.follower = a;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [faceReady]);
   // His body language: clips over the live face while he isn't talking.
   const body = useBodyLanguage(persona.name, faceStage, {
     enabled: faceEnabled,
@@ -925,8 +934,11 @@ export function Conversation({
       }
 
     if (mic.current) await startVoice(mic.current);
-    // Wait for the face (it times out by itself) so the opening line has it.
-    const a = await facing;
+    // Wait a little for the face so the opening line has it; a slow one joins later.
+    const a = await Promise.race([
+      facing,
+      new Promise<null>((r) => setTimeout(() => r(null), FACE_WAIT_MS)),
+    ]);
     if (gone.current) return;
     if (a && renderer.current) {
       a.feedElement(renderer.current.element);

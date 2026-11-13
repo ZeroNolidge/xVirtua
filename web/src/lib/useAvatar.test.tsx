@@ -133,4 +133,19 @@ describe('the video face comes back when it drops', () => {
     await act(async () => {});
     expect(tokens).toHaveBeenLastCalledWith({ sessionId: 's1', mood: 'at_ease' });
   });
+
+  it('a first connection that fails (Simli timed out) is tried again, and the face joins late', async () => {
+    connectOk = false;
+    const h = await startFace();
+    expect(h.result.current.ready).toBe(false);
+    expect(connects).toBe(1);
+    connectOk = true;
+    await act(async () => {
+      vi.advanceTimersByTime(RECONNECT_WAITS_MS[0]!);
+    });
+    await act(async () => {});
+    expect(connects).toBe(2);
+    expect(h.result.current.ready).toBe(true);
+    expect(h.result.current.everReady).toBe(true);
+  });
 });
