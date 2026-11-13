@@ -33,7 +33,7 @@ import { ClaudeBrain, type PatientBrain } from './patient/brain.js';
 import { FakeBrain } from './patient/fakeBrain.js';
 import { ClaudeDirector, FakeDirector, type Director } from './patient/director.js';
 import { handleTts } from './voice/tts.js';
-import { pickVoice, synthesize } from './voice/cartesia.js';
+import { pickVoice, synthesize, voicesFor } from './voice/cartesia.js';
 import type { VoiceService } from './voice/streamVoice.js';
 import { getSttToken as mintSttToken } from './voice/stt.js';
 import { startLiveCall as connectLive } from './voice/live.js';
@@ -125,6 +125,40 @@ export const setScenarioStatus = callable({}, (req) =>
 );
 export const setScenarioVoice = callable({}, (req) =>
   scenarios.setScenarioVoice(db(), callerOf(req), req.data),
+);
+export const setScenarioTtsVoice = callable({}, (req) =>
+  scenarios.setScenarioTtsVoice(db(), callerOf(req), req.data),
+);
+export const setScenarioAvatar = callable({}, (req) =>
+  scenarios.setScenarioAvatar(db(), callerOf(req), req.data),
+);
+/** Faculty: the standard voices to choose from for a patient's pronouns. */
+export const listTtsVoices = callable({ secrets: [CARTESIA_API_KEY] }, async (req) => {
+  const c = callerOf(req);
+  if (c?.claims.role !== 'faculty') throw new HttpsError('permission-denied', 'Faculty only.');
+  const key = keyOf(CARTESIA_API_KEY);
+  if (!key) throw new HttpsError('unavailable', 'The standard voice isn’t set up.');
+  const pronouns = typeof req.data?.pronouns === 'string' ? req.data.pronouns.slice(0, 40) : 'they';
+  return { voices: await voicesFor(key, pronouns) };
+});
+/** Faculty: hear a standard voice say one line. */
+export const ttsSample = callable(
+  { secrets: [CARTESIA_API_KEY], timeoutSeconds: 30 },
+  async (req) => {
+    const c = callerOf(req);
+    if (c?.claims.role !== 'faculty') throw new HttpsError('permission-denied', 'Faculty only.');
+    const key = keyOf(CARTESIA_API_KEY);
+    if (!key) throw new HttpsError('unavailable', 'The standard voice isn’t set up.');
+    const voice = typeof req.data?.voice === 'string' ? req.data.voice : '';
+    if (!/^[0-9a-f-]{36}$/i.test(voice)) throw new HttpsError('invalid-argument', 'No such voice.');
+    const mp3 = await synthesize(
+      key,
+      voice,
+      'So, my blood pressure is high? What does that mean for me?',
+      { emotion: 'worried', volume: 'normal', rate: 'normal', pauseBeforeMs: 0 },
+    );
+    return { mp3: Buffer.from(mp3).toString('base64') };
+  },
 );
 
 // ----- live conversation -----

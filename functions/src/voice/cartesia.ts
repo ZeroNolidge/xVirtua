@@ -23,7 +23,12 @@ const headers = (key: string) => ({
 });
 
 type Gender = 'masculine' | 'feminine' | 'gender_neutral';
-const voiceCache = new Map<Gender, string[]>();
+export interface VoiceInfo {
+  id: string;
+  name: string;
+  description: string;
+}
+const voiceCache = new Map<Gender, VoiceInfo[]>();
 
 export function genderFor(pronouns: string): Gender {
   const p = pronouns.toLowerCase();
@@ -32,21 +37,32 @@ export function genderFor(pronouns: string): Gender {
   return 'gender_neutral';
 }
 
-async function listVoices(key: string, gender: Gender): Promise<string[]> {
+async function listVoices(key: string, gender: Gender): Promise<VoiceInfo[]> {
   const cached = voiceCache.get(gender);
   if (cached) return cached;
   const res = await fetch(`${BASE}/voices/?limit=100&gender=${gender}`, { headers: headers(key) });
   if (!res.ok) throw new Error(`Cartesia voices ${res.status}`);
-  const body = (await res.json()) as { data?: { id: string; language?: string }[] };
-  const ids = (body.data ?? []).filter((v) => !v.language || v.language === 'en').map((v) => v.id);
-  if (ids.length) voiceCache.set(gender, ids);
-  return ids;
+  const body = (await res.json()) as {
+    data?: { id: string; name?: string; description?: string; language?: string }[];
+  };
+  const voices = (body.data ?? [])
+    .filter((v) => !v.language || v.language === 'en')
+    .map((v) => ({ id: v.id, name: v.name ?? v.id, description: v.description ?? '' }));
+  if (voices.length) voiceCache.set(gender, voices);
+  return voices;
+}
+
+/** The standard voices faculty can pick for a patient (by the patient's pronouns). */
+export async function voicesFor(key: string, pronouns: string, limit = 12): Promise<VoiceInfo[]> {
+  let voices = await listVoices(key, genderFor(pronouns));
+  if (!voices.length) voices = await listVoices(key, 'gender_neutral');
+  return voices.slice(0, limit);
 }
 
 /** Stable voice per scenario, so a patient always sounds the same. */
 export async function pickVoice(key: string, pronouns: string, seed: string): Promise<string> {
-  let ids = await listVoices(key, genderFor(pronouns));
-  if (!ids.length) ids = await listVoices(key, 'gender_neutral');
+  let ids = (await listVoices(key, genderFor(pronouns))).map((v) => v.id);
+  if (!ids.length) ids = (await listVoices(key, 'gender_neutral')).map((v) => v.id);
   if (!ids.length) throw new Error('No Cartesia voices available');
   let h = 0;
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
