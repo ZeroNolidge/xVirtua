@@ -69,21 +69,32 @@ function useConversation(id: string) {
 }
 
 /** Their scored conversation before this one: its bands, for the graph's dashed outline. */
-function usePreviousLevels(id: string, uid: string | undefined) {
+function usePreviousLevels(id: string, uid: string | undefined, programId?: string) {
   const [levels, setLevels] = useState<Levels | null>(null);
   useEffect(() => {
     if (!uid) return;
     let cancelled = false;
     (async () => {
+      // Faculty: whose conversation this is comes from the session itself.
+      const owner = programId ? (await getDoc(doc(db, 'sessions', id))).get('uid') : uid;
+      if (typeof owner !== 'string') return;
       const snap = await getDocs(
-        query(
-          collection(db, 'sessions'),
-          where('uid', '==', uid),
-          orderBy('startedAt', 'desc'),
-          limit(20),
-        ),
+        programId
+          ? query(
+              collection(db, 'sessions'),
+              where('uid', '==', owner),
+              where('programId', '==', programId),
+            )
+          : query(
+              collection(db, 'sessions'),
+              where('uid', '==', owner),
+              orderBy('startedAt', 'desc'),
+              limit(20),
+            ),
       );
-      const rows = snap.docs;
+      const rows = [...snap.docs].sort(
+        (a, b) => (b.get('startedAt')?.toMillis?.() ?? 0) - (a.get('startedAt')?.toMillis?.() ?? 0),
+      );
       const here = rows.findIndex((d) => d.id === id);
       const prev = rows.slice(here + 1).find((d) => d.data().feedbackBand);
       if (here < 0 || !prev) return;
@@ -94,7 +105,7 @@ function usePreviousLevels(id: string, uid: string | undefined) {
     return () => {
       cancelled = true;
     };
-  }, [id, uid]);
+  }, [id, uid, programId]);
   return levels;
 }
 
@@ -122,7 +133,11 @@ export function SessionDone() {
   const nav = useNavigate();
   const { bubbles, meta } = useConversation(id);
   const { user, claims } = useAuth();
-  const previous = usePreviousLevels(id, user?.uid);
+  const previous = usePreviousLevels(
+    id,
+    user?.uid,
+    claims?.role === 'faculty' ? claims.programId : undefined,
+  );
   const progress = usePatientProgress(user?.uid);
   const [fb, setFb] = useSavedFeedback(id);
   const [showTranscript, setShowTranscript] = useState(false);

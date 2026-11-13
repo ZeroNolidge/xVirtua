@@ -27,29 +27,56 @@ interface Row extends Partial<SessionRow> {
   feedbackBand?: string | null;
 }
 
-/** The resident's past conversations, newest first. */
-function useHistory(uid: string | undefined) {
+/**
+ * The resident's past conversations, newest first. `programId`: faculty
+ * looking at a resident (the rules need the program on the query).
+ */
+export function useHistory(uid: string | undefined, programId?: string) {
   const [rows, setRows] = useState<Row[] | null>(null);
   useEffect(() => {
     if (!uid) return;
-    const q = query(
-      collection(db, 'sessions'),
-      where('uid', '==', uid),
-      orderBy('startedAt', 'desc'),
-      limit(30),
-    );
+    const q = programId
+      ? query(
+          collection(db, 'sessions'),
+          where('uid', '==', uid),
+          where('programId', '==', programId),
+        )
+      : query(
+          collection(db, 'sessions'),
+          where('uid', '==', uid),
+          orderBy('startedAt', 'desc'),
+          limit(30),
+        );
     return onSnapshot(
       q,
       (snap) =>
         setRows(
           snap.docs
             .map((d) => ({ id: d.id, ...(d.data() as Omit<Row, 'id'>) }))
-            .filter((r) => !neverStarted(r)),
+            .filter((r) => !neverStarted(r))
+            .sort((a, b) => (b.startedAt?.toMillis() ?? 0) - (a.startedAt?.toMillis() ?? 0))
+            .slice(0, 30),
         ),
       () => setRows([]),
     );
-  }, [uid]);
+  }, [uid, programId]);
   return rows;
+}
+
+/** One conversation in a history list (the resident's own, or seen by faculty). */
+export function HistoryRow({ r }: { r: Row }) {
+  return (
+    <li>
+      <Link to={`/session/${r.id}/done`} className="history-link">
+        <span>{r.scenarioTitle ?? 'Practice conversation'}</span>
+        <span className="muted small">
+          {r.startedAt?.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          {r.status === 'live' ? ' · open' : ''}
+        </span>
+      </Link>
+      {r.feedbackBand && <span className="score-pill">{r.feedbackBand}</span>}
+    </li>
+  );
 }
 
 export function Progress() {
@@ -59,7 +86,7 @@ export function Progress() {
   return (
     <section>
       <h1>Your progress</h1>
-      <PatientsDone />
+      <PatientsDone uid={user?.uid} />
       <ProgressDashboard uid={user?.uid} />
       <div className="card">
         <h2>Your history</h2>
@@ -70,18 +97,7 @@ export function Progress() {
         ) : (
           <ul className="list">
             {rows.map((r) => (
-              <li key={r.id}>
-                <Link to={`/session/${r.id}/done`} className="history-link">
-                  <span>{r.scenarioTitle ?? 'Practice conversation'}</span>
-                  <span className="muted small">
-                    {r.startedAt
-                      ?.toDate()
-                      .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    {r.status === 'live' ? ' · open' : ''}
-                  </span>
-                </Link>
-                {r.feedbackBand && <span className="score-pill">{r.feedbackBand}</span>}
-              </li>
+              <HistoryRow key={r.id} r={r} />
             ))}
           </ul>
         )}
@@ -109,11 +125,11 @@ export function Progress() {
   );
 }
 
-/** How many patients they've completed, and each one's status. */
-function PatientsDone() {
-  const { claims, user } = useAuth();
+/** How many patients they've completed, and each one's status (theirs, or a resident faculty look at). */
+export function PatientsDone({ uid }: { uid: string | undefined }) {
+  const { claims } = useAuth();
   const rows = useScenarioList(claims)?.filter((s) => s.status === 'active');
-  const progress = usePatientProgress(user?.uid);
+  const progress = usePatientProgress(uid);
   if (!rows?.length || !progress) return null;
   const done = rows.filter((s) => ['completed', 'mastered'].includes(progress[s.id]?.status ?? ''));
   const mastered = rows.filter((s) => progress[s.id]?.status === 'mastered');

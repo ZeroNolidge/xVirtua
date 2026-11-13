@@ -703,6 +703,17 @@ describe('GPT-Live conversation', () => {
     }
   });
 
+  it('a spinner with “Getting Ray ready…” while connecting, then “Adding the final touches…” until his first words', async () => {
+    await start();
+    expect(screen.getByText('Getting Ray ready…')).toBeInTheDocument();
+    await act(async () => cb.onStarted());
+    expect(screen.getByText('Adding the final touches…')).toBeInTheDocument();
+    audible = true;
+    await act(async () => cb.onSpoken('So, my blood pressure is high?', 0));
+    await sleep(120);
+    expect(screen.queryByText(/final touches|getting Ray ready/i)).toBeNull();
+  });
+
   it('shows residents no model or test labels', () => {
     const { container } = render(
       <MemoryRouter>
