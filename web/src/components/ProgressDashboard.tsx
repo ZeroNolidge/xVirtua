@@ -41,24 +41,40 @@ interface Scored extends Session {
   levels: Levels;
 }
 
-/** Their conversations (newest 100), with each scored one's bands per area. */
-function useScoredHistory(uid: string | undefined) {
+/**
+ * Their conversations (newest 100), with each scored one's bands per area.
+ * `programId`: faculty looking at a resident; the rules need the program on
+ * the query, and that query is sorted here instead (no extra index).
+ */
+function useScoredHistory(uid: string | undefined, programId?: string) {
   const [all, setAll] = useState<Session[] | null>(null);
   const [areas, setAreas] = useState<Record<string, Levels>>({});
   useEffect(() => {
     if (!uid) return;
-    const q = query(
-      collection(db, 'sessions'),
-      where('uid', '==', uid),
-      orderBy('startedAt', 'desc'),
-      limit(100),
-    );
+    const q = programId
+      ? query(
+          collection(db, 'sessions'),
+          where('uid', '==', uid),
+          where('programId', '==', programId),
+        )
+      : query(
+          collection(db, 'sessions'),
+          where('uid', '==', uid),
+          orderBy('startedAt', 'desc'),
+          limit(100),
+        );
     return onSnapshot(
       q,
-      (snap) => setAll(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Session, 'id'>) }))),
+      (snap) =>
+        setAll(
+          snap.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Session, 'id'>) }))
+            .sort((a, b) => (b.startedAt?.toMillis() ?? 0) - (a.startedAt?.toMillis() ?? 0))
+            .slice(0, 100),
+        ),
       () => setAll([]),
     );
-  }, [uid]);
+  }, [uid, programId]);
   useEffect(() => {
     if (!all) return;
     const missing = all.filter((s) => s.feedbackBand && !areas[s.id]);
@@ -98,8 +114,15 @@ function average(rows: Scored[]): Levels {
  * The resident's progress: practice totals for a time range, their skills
  * then vs now (the circle graph: tap an area for its trend), and the trend.
  */
-export function ProgressDashboard({ uid }: { uid: string | undefined }) {
-  const { all, areas } = useScoredHistory(uid);
+export function ProgressDashboard({
+  uid,
+  programId,
+}: {
+  uid: string | undefined;
+  /** Faculty looking at a resident of their program. */
+  programId?: string;
+}) {
+  const { all, areas } = useScoredHistory(uid, programId);
   const [range, setRange] = useState<Range>('all');
   const [from, setFrom] = useState('');
   const [picked, setPicked] = useState<Metric | null>(null);
