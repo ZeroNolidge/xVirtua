@@ -1245,3 +1245,12 @@ body.appcheck-debug .sheet-backdrop {
 .card.accuracy li + li {
   margin-top: 10px;
 }
+
+.getting-ready {
+  margin: 16px 0;
+  padding: 24px 16px;
+}
+.getting-ready-step {
+  margin: 0;
+  font-weight: 600;
+}

@@ -108,10 +108,13 @@ export class AvatarQuality {
   private stalls = 0;
   private stallMs = 0;
 
-  /** Latest WebRTC counters (cumulative), by stream. */
-  private audioStats: AudioCounters = { concealmentEvents: 0, concealedSamples: 0, totalSamples: 0, jitterMs: [], packetsLost: 0 };
-  private videoStats: VideoCounters = { freezeCount: 0, totalFreezesDuration: 0 };
-  private statsBase: { audio: AudioCounters; video: VideoCounters } | null = null;
+  /**
+   * WebRTC counters are cumulative per stream, and a face swap brings a new
+   * stream: each track keeps its first reading (the base) and its latest,
+   * and the summary adds up the differences over every track seen.
+   */
+  private audioTracks = new Map<string, { base: AudioCounters; latest: AudioCounters }>();
+  private videoTracks = new Map<string, { base: VideoCounters; latest: VideoCounters }>();
 
   private statsTimer: number | null = null;
 
@@ -216,44 +219,64 @@ export class AvatarQuality {
         if (s.type !== 'inbound-rtp') return;
         const kind = s.kind as string;
         const track = s.trackIdentifier as string | undefined;
-        if (kind === 'audio' && track === audioId) {
-          const a = this.audioStats;
-          a.concealmentEvents = Number(s.concealmentEvents ?? 0);
-          a.concealedSamples = Number(s.concealedSamples ?? 0);
-          a.totalSamples = Number(s.totalSamplesReceived ?? 0);
-          a.packetsLost = Number(s.packetsLost ?? 0);
-          if (typeof s.jitter === 'number') a.jitterMs.push(s.jitter * 1000);
-        } else if (kind === 'video' && track === videoId) {
-          this.videoStats.freezeCount = Number(s.freezeCount ?? 0);
-          this.videoStats.totalFreezesDuration = Number(s.totalFreezesDuration ?? 0);
+        if (kind === 'audio' && track && track === audioId) {
+          const latest: AudioCounters = {
+            concealmentEvents: Number(s.concealmentEvents ?? 0),
+            concealedSamples: Number(s.concealedSamples ?? 0),
+            totalSamples: Number(s.totalSamplesReceived ?? 0),
+            jitterMs: typeof s.jitter === 'number' ? [s.jitter * 1000] : [],
+            packetsLost: Number(s.packetsLost ?? 0),
+          };
+          const t = this.audioTracks.get(track);
+          if (!t) this.audioTracks.set(track, { base: latest, latest });
+          else t.latest = { ...latest, jitterMs: [...t.latest.jitterMs, ...latest.jitterMs] };
+        } else if (kind === 'video' && track && track === videoId) {
+          const latest: VideoCounters = {
+            freezeCount: Number(s.freezeCount ?? 0),
+            totalFreezesDuration: Number(s.totalFreezesDuration ?? 0),
+          };
+          const t = this.videoTracks.get(track);
+          if (!t) this.videoTracks.set(track, { base: latest, latest });
+          else t.latest = latest;
         }
       });
     }
-    // Counters are cumulative per connection: measure from the first reading.
-    this.statsBase ??= {
-      audio: { ...this.audioStats, jitterMs: [] },
-      video: { ...this.videoStats },
-    };
   }
 
   summary(): AvatarQualitySummary {
     const seconds = this.startedAt === null ? 0 : Math.round((this.now() - this.startedAt) / 1000);
-    const base = this.statsBase ?? { audio: { ...this.audioStats, jitterMs: [] }, video: { ...this.videoStats } };
-    const a = this.audioStats;
-    const totalSamples = a.totalSamples - base.audio.totalSamples;
-    const concealed = a.concealedSamples - base.audio.concealedSamples;
-    const jitter = a.jitterMs.length ? a.jitterMs.reduce((x, y) => x + y, 0) / a.jitterMs.length : null;
+    let stutters = 0;
+    let concealed = 0;
+    let total = 0;
+    let lost = 0;
+    const jitter: number[] = [];
+    for (const { base, latest } of this.audioTracks.values()) {
+      stutters += latest.concealmentEvents - base.concealmentEvents;
+      concealed += latest.concealedSamples - base.concealedSamples;
+      total += latest.totalSamples - base.totalSamples;
+      lost += latest.packetsLost - base.packetsLost;
+      jitter.push(...latest.jitterMs);
+    }
+    let freezes = 0;
+    let freezeSec = 0;
+    for (const { base, latest } of this.videoTracks.values()) {
+      freezes += latest.freezeCount - base.freezeCount;
+      freezeSec += latest.totalFreezesDuration - base.totalFreezesDuration;
+    }
+    const med = median(this.delays);
     return {
       seconds,
-      delayMedianMs: median(this.delays) === null ? null : Math.round(median(this.delays)!),
+      delayMedianMs: med === null ? null : Math.round(med),
       delayMaxMs: this.delays.length ? Math.round(Math.max(...this.delays)) : null,
       delayCount: this.delays.length,
-      audioStutters: a.concealmentEvents - base.audio.concealmentEvents,
-      audioConcealedPct: totalSamples > 0 ? Math.round((concealed / totalSamples) * 1000) / 10 : null,
-      audioJitterMs: jitter === null ? null : Math.round(jitter),
-      packetsLost: a.packetsLost - base.audio.packetsLost,
-      videoFreezes: this.videoStats.freezeCount - base.video.freezeCount,
-      videoFreezeMs: Math.round((this.videoStats.totalFreezesDuration - base.video.totalFreezesDuration) * 1000),
+      audioStutters: stutters,
+      audioConcealedPct: total > 0 ? Math.round((concealed / total) * 1000) / 10 : null,
+      audioJitterMs: jitter.length
+        ? Math.round(jitter.reduce((x, y) => x + y, 0) / jitter.length)
+        : null,
+      packetsLost: lost,
+      videoFreezes: freezes,
+      videoFreezeMs: Math.round(freezeSec * 1000),
       fps: seconds > 0 ? Math.round((this.frames / seconds) * 10) / 10 : null,
       videoStalls: this.stalls,
       videoStallMs: Math.round(this.stallMs),
