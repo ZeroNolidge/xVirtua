@@ -231,7 +231,10 @@ function PatientVoice({ summary }: { summary: ScenarioRow }) {
 
   return (
     <label className="field">
-      <span>Patient voice (GPT-Live)</span>
+      <span>
+        Live voice (GPT-Live){' '}
+        <span className="muted">— used when a conversation runs in live voice mode</span>
+      </span>
       <select
         value={summary.liveVoice ?? ''}
         disabled={saving}

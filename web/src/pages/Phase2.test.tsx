@@ -248,8 +248,9 @@ describe('Briefing', () => {
     role.current = 'faculty';
     renderBriefing();
     const { api } = await import('../lib/api');
-    const voice = await screen.findByLabelText('Standard voice');
+    const voice = await screen.findByLabelText(/Standard voice \(text-to-speech\)/);
     expect(await screen.findByRole('option', { name: /Walt — Warm, older/ })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Live voice \(GPT-Live\)/)).toBeInTheDocument();
     fireEvent.change(voice, { target: { value: '22222222-2222-4222-8222-222222222222' } });
     await vi.waitFor(() =>
       expect(api.setScenarioTtsVoice).toHaveBeenCalledWith({
@@ -293,7 +294,7 @@ describe('Briefing', () => {
   it('lets faculty pick this patient’s GPT-Live voice, showing their voice tags', async () => {
     role.current = 'faculty';
     renderBriefing();
-    const pick = screen.getByLabelText(/patient voice \(gpt-live\)/i);
+    const pick = screen.getByLabelText(/live voice \(gpt-live\)/i);
     expect(await screen.findByRole('option', { name: 'stone (Male)' })).toBeInTheDocument();
     fireEvent.change(pick, { target: { value: 'stone' } });
     const { api } = await import('../lib/api');

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { ScenarioAvatar } from '@plainspeak/shared';
 import { api, friendlyError } from '../../lib/api';
+import { plainVoiceDescription } from '../../lib/voiceDescription';
 import type { ScenarioRow } from '../../lib/scenarios';
 
 const MOODS: { key: keyof ScenarioAvatar['faces']; label: string; hint: string }[] = [
@@ -81,7 +82,10 @@ function StandardVoice({ summary, pronouns }: { summary: ScenarioRow; pronouns: 
   return (
     <>
       <label className="field">
-        <span>Standard voice</span>
+        <span>
+          Standard voice (text-to-speech){' '}
+          <span className="muted">— used when a conversation runs in standard mode</span>
+        </span>
         <select
           value={chosen}
           disabled={busy !== null || !voices}
@@ -90,8 +94,9 @@ function StandardVoice({ summary, pronouns }: { summary: ScenarioRow; pronouns: 
           <option value="">A stable pick for the patient’s pronouns</option>
           {voices?.map((v) => (
             <option key={v.id} value={v.id}>
-              {v.name}
-              {v.description ? ` — ${v.description.slice(0, 60)}` : ''}
+              {v.name.split(' - ')[0]}
+              {plainVoiceDescription(v.description, v.name.split(' - ')[0]) &&
+                ` — ${plainVoiceDescription(v.description, v.name.split(' - ')[0])}`}
             </option>
           ))}
         </select>
