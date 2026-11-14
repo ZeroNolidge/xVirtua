@@ -167,8 +167,8 @@ export function Residents() {
         <Link to="/faculty/invites" className="btn btn-secondary">
           Invite people
         </Link>
-        <Link to="/faculty/face-check" className="btn btn-secondary">
-          Face check
+        <Link to="/faculty/admin" className="btn btn-secondary">
+          Admin
         </Link>
       </p>
 
