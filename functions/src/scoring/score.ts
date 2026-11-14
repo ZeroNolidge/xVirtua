@@ -108,10 +108,29 @@ export type ClaudeScore = z.infer<typeof claudeScoreSchema>;
 /** Sends the scoring prompt and returns Claude's raw JSON. */
 export type Scorer = (system: string, user: string) => Promise<{ raw: string; model: string }>;
 
-export function claudeScorer(apiKey: string): Scorer {
-  const client = new Anthropic({ apiKey, maxRetries: 2, timeout: 110_000 });
-  return async (system, user) => {
-    const res = await client.beta.messages.create({
+/** The API refuses a JSON schema whose compiled grammar is too big: then we ask for JSON by prompt alone. */
+export const isSchemaTooLarge = (e: unknown) =>
+  e instanceof Anthropic.BadRequestError &&
+  /grammar is too large/i.test(`${e.message} ${JSON.stringify(e.error ?? '')}`);
+
+/** The JSON object in a reply that wasn't shaped by a schema: fences or words around it are dropped. */
+export const stripFences = (raw: string) => {
+  const a = raw.indexOf('{');
+  const b = raw.lastIndexOf('}');
+  return a >= 0 && b > a ? raw.slice(a, b + 1) : raw.trim();
+};
+
+/** Without the API's schema enforcement, the schema goes into the prompt instead. */
+export const SCHEMA_IN_PROMPT = `\n\n## Output format\nReply with one JSON object and nothing else: no prose, no code fence. It must match this JSON Schema exactly: every "required" key present (use null only where the schema allows null), no extra keys.\n${JSON.stringify(SCORE_JSON_SCHEMA)}`;
+
+type ScoringClient = Pick<Anthropic, 'beta'>;
+
+export function claudeScorer(
+  apiKey: string,
+  client: ScoringClient = new Anthropic({ apiKey, maxRetries: 2, timeout: 110_000 }),
+): Scorer {
+  const ask = (system: string, user: string, withSchema: boolean) =>
+    client.beta.messages.create({
       model: SCORING_MODEL,
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
@@ -121,18 +140,31 @@ export function claudeScorer(apiKey: string): Scorer {
       messages: [{ role: 'user', content: user }],
       output_config: {
         effort: 'medium',
-        format: {
-          type: 'json_schema',
-          schema: SCORE_JSON_SCHEMA as unknown as Record<string, unknown>,
-        },
+        ...(withSchema
+          ? {
+              format: {
+                type: 'json_schema' as const,
+                schema: SCORE_JSON_SCHEMA as unknown as Record<string, unknown>,
+              },
+            }
+          : {}),
       },
     });
+  return async (system, user) => {
+    let res;
+    try {
+      res = await ask(system, user, true);
+    } catch (e) {
+      if (!isSchemaTooLarge(e)) throw e;
+      console.warn('scoring schema too large for the API; asking for JSON by prompt');
+      res = await ask(system + SCHEMA_IN_PROMPT, user, false);
+    }
     if (res.stop_reason === 'refusal') throw new Error('Scoring declined');
     const raw = res.content
       .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
       .map((b) => b.text)
       .join('');
-    return { raw, model: res.model };
+    return { raw: stripFences(raw), model: res.model };
   };
 }
 
