@@ -39,6 +39,12 @@ jobs:
           gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING' \
             --project "$PROJECT_ID" --freshness=1d --limit=40 \
             --format='table[no-heading](timestamp,resource.labels.service_name,severity,textPayload,jsonPayload.message)' || true
+      - name: Scorer logs, any severity (last 24h)
+        continue-on-error: true
+        run: |
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="scoresession" AND (textPayload:* OR jsonPayload.message:*)' \
+            --project "$PROJECT_ID" --freshness=1d --limit=60 \
+            --format='table[no-heading](timestamp,severity,textPayload,jsonPayload.message)' || true
       - name: Recent function errors with full details (last 24h)
         continue-on-error: true
         run: |
