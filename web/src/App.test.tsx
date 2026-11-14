@@ -80,6 +80,17 @@ describe('auth gate', () => {
     state.role = 'faculty';
     renderAt('/faculty');
     expect(screen.getByRole('link', { name: 'Faculty' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^residents$/i })).toBeInTheDocument();
+  });
+
+  it('the Faculty tab opens the residents’ progress, with invites one tap away', async () => {
+    state.status = 'ready';
+    state.role = 'faculty';
+    renderAt('/faculty/invites');
     expect(await screen.findByRole('heading', { name: /invite people/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /residents’ progress/i })).toHaveAttribute(
+      'href',
+      '/faculty',
+    );
   });
 });

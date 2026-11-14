@@ -65,12 +65,12 @@ export function Invites() {
 
   return (
     <section>
-      <h1>Invite people</h1>
       <p>
-        <Link to="/faculty/residents" className="btn btn-secondary">
-          Residents’ progress
+        <Link to="/faculty" className="small">
+          ← Residents’ progress
         </Link>
       </p>
+      <h1>Invite people</h1>
       <form className="card" onSubmit={invite}>
         <label className="field">
           <span>Email</span>
