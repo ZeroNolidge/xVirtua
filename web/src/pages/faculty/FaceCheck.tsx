@@ -7,6 +7,7 @@ import {
   LIVE_VOICES,
   MOODS,
   VIDEO_CHARACTERS,
+  pronounWords,
   type LiveVoice,
   type Program,
 } from '@plainspeak/shared';
@@ -53,6 +54,7 @@ export function FaceCheck() {
   const stage = useRef<AvatarElements | null>(null);
   const [slug, setSlug] = useState(Object.keys(VIDEO_CHARACTERS)[0] ?? '');
   const patient = VIDEO_CHARACTERS[slug]?.name ?? slug;
+  const p = pronounWords(VIDEO_CHARACTERS[slug]?.pronouns);
   const [voice, setVoice] = useState<LiveVoice>('stone');
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -125,7 +127,7 @@ export function FaceCheck() {
       await avatar.dispose();
     };
     try {
-      setStatus('Loading his clips and voice…');
+      setStatus(`Loading ${p.their} clips and voice…`);
       const base = `/avatars/${slug}`;
       const r = await fetch(`${base}/manifest.json`);
       if (!r.ok || !r.headers.get('content-type')?.includes('json'))
@@ -156,7 +158,7 @@ export function FaceCheck() {
       };
       await body.load();
 
-      setStatus('Connecting his face…');
+      setStatus(`Connecting ${p.their} face…`);
       const t = performance.now();
       const up = await avatar.connect(
         async () => (await faceToken({ patient: slug, mood: 'guarded' })).data.token,
@@ -277,9 +279,10 @@ export function FaceCheck() {
       </p>
       <h1>Face check</h1>
       <p className="muted">
-        A one-minute test of a patient’s video face: he says a recorded line, then each
-        body-language clip plays, then he relaxes and does it again on his at-ease face. The
-        recording and timing notes are saved for review. Uses about a minute of the video avatar.
+        A one-minute test of a patient’s video face: {p.they} says a recorded line, then each
+        body-language clip plays, then {p.they} relaxes and does it again on {p.their} at-ease face.
+        The recording and timing notes are saved for review. Uses about a minute of the video
+        avatar.
       </p>
       <label className="field">
         <span>Patient</span>
@@ -292,7 +295,7 @@ export function FaceCheck() {
         </select>
       </label>
       <label className="field">
-        <span>Voice for his line</span>
+        <span>Voice for {p.their} line</span>
         <select
           value={voice}
           disabled={running}
