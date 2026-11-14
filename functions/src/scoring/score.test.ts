@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createJargonMatcher, scoreJargon, SEED_JARGON } from '@plainspeak/shared';
 import {
   assembleScore,
@@ -592,5 +592,56 @@ describe('medical accuracy notes (not scored)', () => {
     const { doc, feedback } = flagsFor(nov5, []);
     expect(doc.accuracyFlags).toBeUndefined();
     expect(feedback.accuracyFlags).toBeUndefined();
+  });
+});
+
+describe('scorer request', () => {
+  it('when the API rejects the JSON schema as too large, asks again for JSON by prompt and unfences it', async () => {
+    const { claudeScorer, isSchemaTooLarge } = await import('./score.js');
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const tooLarge = new Anthropic.BadRequestError(
+      400,
+      {
+        type: 'error',
+        error: {
+          type: 'invalid_request_error',
+          message: 'The compiled grammar is too large, which would cause performance issues.',
+        },
+      },
+      undefined,
+      new Headers(),
+    );
+    expect(isSchemaTooLarge(tooLarge)).toBe(true);
+    expect(isSchemaTooLarge(new Error('The compiled grammar is too large'))).toBe(false);
+    const calls: Record<string, unknown>[] = [];
+    const create = vi.fn(async (req: Record<string, unknown>) => {
+      calls.push(req);
+      if (calls.length === 1) throw tooLarge;
+      return {
+        model: 'm',
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: '```json\n{"ok":true}\n```' }],
+      };
+    });
+    const scorer = claudeScorer('key', {
+      beta: { messages: { create } },
+    } as unknown as Parameters<typeof claudeScorer>[1]);
+    const r = await scorer('sys', 'user');
+    expect(r).toEqual({ raw: '{"ok":true}', model: 'm' });
+    expect(calls).toHaveLength(2);
+    expect((calls[0]!.output_config as { format?: unknown }).format).toBeDefined();
+    expect((calls[1]!.output_config as { format?: unknown }).format).toBeUndefined();
+  });
+
+  it('other API errors are not retried without the schema', async () => {
+    const { claudeScorer } = await import('./score.js');
+    const create = vi.fn(async () => {
+      throw new Error('overloaded');
+    });
+    const scorer = claudeScorer('key', {
+      beta: { messages: { create } },
+    } as unknown as Parameters<typeof claudeScorer>[1]);
+    await expect(scorer('sys', 'user')).rejects.toThrow('overloaded');
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });
