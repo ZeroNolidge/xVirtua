@@ -20,6 +20,8 @@ export function stepToward(from: Mood, to: Mood): Mood {
 
 export interface VideoCharacter {
   name: string;
+  /** 'he/him', 'she/her' or 'they/them': for the words around their face. */
+  pronouns: string;
   /** Simli face for each mood (guarded is the start; others are optional). */
   faces: { guarded: string } & Partial<Record<Mood, string>>;
   /**
@@ -40,6 +42,7 @@ export const characterSlug = (name: string) =>
 export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
   'ray-kowalski': {
     name: 'Ray Kowalski',
+    pronouns: 'he/him',
     faces: {
       guarded: '04342b6e-bd80-4125-a926-761c68025194',
       at_ease: '8abb4a89-e5b6-42e2-ba92-717de4593d6b',
@@ -50,6 +53,7 @@ export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
   },
   'linda-shaffer': {
     name: 'Linda Shaffer',
+    pronouns: 'she/her',
     faces: {
       guarded: '7cc2fd4a-8472-445d-bac9-b2674d2eff31',
       upset: '2fc453f8-fac3-4519-aae5-45f44ff4658e',
