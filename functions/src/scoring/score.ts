@@ -30,6 +30,7 @@ import {
   type ScoreDoc,
   type ScoringWeights,
   type UnderstandingCheck,
+  countFillers,
 } from '@plainspeak/shared';
 import { parse, type Caller } from '../lib/callable.js';
 import { consumeQuota } from '../lib/quota.js';
@@ -53,6 +54,8 @@ export interface Turn {
   heardText?: string;
   understandingCheck?: UnderstandingCheck;
   words?: number;
+  /** How the resident's words arrived; only spoken turns count filler words. */
+  source?: 'voice' | 'typed';
 }
 
 // ---------- Claude output ----------
@@ -105,10 +108,29 @@ export type ClaudeScore = z.infer<typeof claudeScoreSchema>;
 /** Sends the scoring prompt and returns Claude's raw JSON. */
 export type Scorer = (system: string, user: string) => Promise<{ raw: string; model: string }>;
 
-export function claudeScorer(apiKey: string): Scorer {
-  const client = new Anthropic({ apiKey, maxRetries: 2, timeout: 110_000 });
-  return async (system, user) => {
-    const res = await client.beta.messages.create({
+/** The API refuses a JSON schema whose compiled grammar is too big: then we ask for JSON by prompt alone. */
+export const isSchemaTooLarge = (e: unknown) =>
+  e instanceof Anthropic.BadRequestError &&
+  /grammar is too large/i.test(`${e.message} ${JSON.stringify(e.error ?? '')}`);
+
+/** The JSON object in a reply that wasn't shaped by a schema: fences or words around it are dropped. */
+export const stripFences = (raw: string) => {
+  const a = raw.indexOf('{');
+  const b = raw.lastIndexOf('}');
+  return a >= 0 && b > a ? raw.slice(a, b + 1) : raw.trim();
+};
+
+/** Without the API's schema enforcement, the schema goes into the prompt instead. */
+export const SCHEMA_IN_PROMPT = `\n\n## Output format\nReply with one JSON object and nothing else: no prose, no code fence. It must match this JSON Schema exactly: every "required" key present (use null only where the schema allows null), no extra keys.\n${JSON.stringify(SCORE_JSON_SCHEMA)}`;
+
+type ScoringClient = Pick<Anthropic, 'beta'>;
+
+export function claudeScorer(
+  apiKey: string,
+  client: ScoringClient = new Anthropic({ apiKey, maxRetries: 2, timeout: 110_000 }),
+): Scorer {
+  const ask = (system: string, user: string, withSchema: boolean) =>
+    client.beta.messages.create({
       model: SCORING_MODEL,
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
@@ -118,18 +140,31 @@ export function claudeScorer(apiKey: string): Scorer {
       messages: [{ role: 'user', content: user }],
       output_config: {
         effort: 'medium',
-        format: {
-          type: 'json_schema',
-          schema: SCORE_JSON_SCHEMA as unknown as Record<string, unknown>,
-        },
+        ...(withSchema
+          ? {
+              format: {
+                type: 'json_schema' as const,
+                schema: SCORE_JSON_SCHEMA as unknown as Record<string, unknown>,
+              },
+            }
+          : {}),
       },
     });
+  return async (system, user) => {
+    let res;
+    try {
+      res = await ask(system, user, true);
+    } catch (e) {
+      if (!isSchemaTooLarge(e)) throw e;
+      console.warn('scoring schema too large for the API; asking for JSON by prompt');
+      res = await ask(system + SCHEMA_IN_PROMPT, user, false);
+    }
     if (res.stop_reason === 'refusal') throw new Error('Scoring declined');
     const raw = res.content
       .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
       .map((b) => b.text)
       .join('');
-    return { raw, model: res.model };
+    return { raw: stripFences(raw), model: res.model };
   };
 }
 
@@ -484,11 +519,18 @@ export function assembleScore(args: {
     highlight,
     fixes,
     ...(c.accuracyFlags?.length ? { accuracyFlags: c.accuracyFlags } : {}),
+    ...fillersOf(turns),
     understandingCheck: bestUnderstandingCheck(turns),
     needsReview: args.needsReview,
     model: args.model,
     promptHash: args.promptHash,
   };
+}
+
+/** Filler words in the resident's spoken turns; nothing when every turn was typed. */
+export function fillersOf(turns: Turn[]): Pick<ScoreDoc, 'fillers'> {
+  const spoken = turns.filter((t) => t.speaker === 'resident' && t.source !== 'typed');
+  return spoken.length ? { fillers: countFillers(spoken.map((t) => t.text)) } : {};
 }
 
 /** Runs Claude, validates quotes, retries once with the problems listed. */
@@ -564,13 +606,15 @@ const matcher = createJargonMatcher(SEED_JARGON);
 const STUCK_SCORING_MS = 5 * 60_000;
 
 /** The resident's previous scored conversation's overall score, for the trend. */
-async function previousOverall(
+/** The resident's previous scored conversation: its overall score, and its filler rate if spoken. */
+async function previousScore(
   db: Firestore,
   uid: string,
   sessionId: string,
   startedAt: Timestamp | undefined,
-) {
-  if (!startedAt) return null;
+): Promise<{ overall: number | null; fillersPer100: number | null }> {
+  const none = { overall: null, fillersPer100: null };
+  if (!startedAt) return none;
   const prev = await db
     .collection('sessions')
     .where('uid', '==', uid)
@@ -582,9 +626,11 @@ async function previousOverall(
     if ((d.get('startedAt') as Timestamp).toMillis() >= startedAt.toMillis()) continue;
     const sc = await d.ref.collection('scores').orderBy('createdAt', 'desc').limit(1).get();
     const o = sc.docs[0]?.get('overall');
-    if (typeof o === 'number') return o;
+    if (typeof o !== 'number') continue;
+    const per100 = sc.docs[0]?.get('fillers.per100');
+    return { overall: o, fillersPer100: typeof per100 === 'number' ? per100 : null };
   }
-  return null;
+  return none;
 }
 
 export interface ScoreResult {
@@ -723,13 +769,14 @@ export async function scoreSession(
     // Rewrites must not add facts; then make sure the two fixes cover two areas.
     const checked = checkRewrites(assembled, residentTurns.map((t) => t.text).join(' \n '));
     const limited = withContext(limitInterruptions(checked, turns), turns);
-    const prev = await previousOverall(db, s.uid, sessionId, s.startedAt);
+    const prev = await previousScore(db, s.uid, sessionId, s.startedAt);
     const full: ScoreDoc = {
       ...limited,
-      previousOverall: prev,
+      previousOverall: prev.overall,
+      previousFillersPer100: prev.fillersPer100,
       createdAt: new Date().toISOString(),
     };
-    const feedback = toResidentFeedback(full, prev);
+    const feedback = toResidentFeedback(full, prev.overall);
 
     // Their progress with this patient: completed or mastered, or what's left.
     const keyIds = sc.script.keyCueIds ?? KEY_MOMENTS[s.scenarioId] ?? [];

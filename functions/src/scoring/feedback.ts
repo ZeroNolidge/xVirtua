@@ -1,4 +1,6 @@
 import {
+  fillerLevel,
+  fillerTrend,
   bandFor,
   METRICS,
   trendFor,
@@ -102,6 +104,15 @@ export function toResidentFeedback(s: ScoreDoc, previousOverall: number | null):
     highlight: s.highlight,
     fixes: s.fixes,
     ...(s.accuracyFlags?.length ? { accuracyFlags: s.accuracyFlags } : {}),
+    ...(s.fillers
+      ? {
+          fillers: {
+            ...s.fillers,
+            level: fillerLevel(s.fillers.per100),
+            trend: fillerTrend(s.fillers.per100, s.previousFillersPer100),
+          },
+        }
+      : {}),
     areas: {
       jargon: {
         ...area(jargon),

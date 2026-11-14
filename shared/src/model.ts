@@ -1,3 +1,4 @@
+import type { FillerLevel, FillerStats, FillerTrend } from './fillers.js';
 /** Firestore document shapes. See PLAN.md §2. */
 
 export type Role = 'resident' | 'faculty';
@@ -253,6 +254,10 @@ export interface ScoreDoc {
   accuracyFlags?: AccuracyFlag[];
   /** Overall score of the resident's previous scored conversation, for the trend. */
   previousOverall?: number | null;
+  /** Filler words in spoken turns (not scored); absent when nothing was spoken. */
+  fillers?: FillerStats;
+  /** Fillers per 100 words in their previous spoken conversation, for the trend. */
+  previousFillersPer100?: number | null;
   model: string;
   promptHash: string;
   createdAt: string;
@@ -397,6 +402,8 @@ export interface ResidentFeedback {
       }[];
     };
   };
+  /** Filler words in what they said out loud (not scored): the goal is fewer each time. */
+  fillers?: FillerStats & { level: FillerLevel; trend: FillerTrend };
   /** Progress with this patient: completed or mastered, or what's still needed. */
   completion?: import('./completion.js').CompletionResult;
   /** "Check the medicine": clear medical errors, not scored. Residents see at most 2. */

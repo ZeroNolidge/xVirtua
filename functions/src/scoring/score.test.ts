@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createJargonMatcher, scoreJargon, SEED_JARGON } from '@plainspeak/shared';
 import {
   assembleScore,
@@ -217,6 +217,8 @@ describe('scoring prompt and result', () => {
     expect(doc.metrics.jargon.flagged.map((f) => f.term)).toContain('hypertension');
     expect(doc.overall).toBe(Math.round((jargon.score + 80 + 80 + 80) / 4));
     expect(doc.understandingCheck).toBe('teachback');
+    // Spoken turns (none here are marked typed): fillers counted, none said.
+    expect(doc.fillers).toMatchObject({ count: 0, per100: 0 });
     expect(doc.metrics.cue.cueResults[0]).toMatchObject({
       cue: 'Hints he is worried about his job',
       addressed: true,
@@ -592,5 +594,103 @@ describe('medical accuracy notes (not scored)', () => {
     const { doc, feedback } = flagsFor(nov5, []);
     expect(doc.accuracyFlags).toBeUndefined();
     expect(feedback.accuracyFlags).toBeUndefined();
+  });
+});
+
+describe('filler words', () => {
+  it('counts fillers in spoken turns only, and the feedback adds the level and trend', async () => {
+    const { fillersOf } = await import('./score.js');
+    const spoken: Turn[] = [
+      { idx: 0, speaker: 'patient', text: 'Hi.' },
+      { idx: 1, speaker: 'resident', text: 'So, um, your pressure is, uh, high.', source: 'voice' },
+      { idx: 3, speaker: 'resident', text: 'Um, typed later.', source: 'typed' },
+    ];
+    expect(fillersOf(spoken).fillers).toMatchObject({
+      count: 2,
+      words: 7,
+      byWord: { um: 1, uh: 1 },
+    });
+    expect(fillersOf(spoken.map((t) => ({ ...t, source: 'typed' as const })))).toEqual({});
+
+    const base = assembleScore({
+      claude: good,
+      jargon: scoreJargon(
+        turns.filter((t) => t.speaker === 'resident').map((t) => ({ idx: t.idx, text: t.text })),
+        createJargonMatcher(SEED_JARGON),
+      ),
+      turns,
+      cues: [],
+      weights: { jargon: 0.25, clarity: 0.25, empathy: 0.25, cue: 0.25 },
+      needsReview: false,
+      model: 'm',
+      promptHash: 'h',
+    });
+    const fb = toResidentFeedback(
+      {
+        ...base,
+        fillers: { count: 6, words: 120, per100: 5, byWord: { um: 6 } },
+        previousFillersPer100: 7.5,
+        createdAt: 'now',
+      },
+      null,
+    );
+    expect(fb.fillers).toMatchObject({ count: 6, per100: 5, level: 'many', trend: 'fewer' });
+    const typed = toResidentFeedback({ ...base, fillers: undefined, createdAt: 'now' }, null);
+    expect(typed.fillers).toBeUndefined();
+  });
+});
+
+describe('scorer request', () => {
+  it('when the API rejects the JSON schema as too large, asks again for JSON by prompt and unfences it', async () => {
+    const { claudeScorer, isSchemaTooLarge } = await import('./score.js');
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const tooLarge = new Anthropic.BadRequestError(
+      400,
+      {
+        type: 'error',
+        error: {
+          type: 'invalid_request_error',
+          message: 'The compiled grammar is too large, which would cause performance issues.',
+        },
+      },
+      undefined,
+      new Headers(),
+    );
+    expect(isSchemaTooLarge(tooLarge)).toBe(true);
+    expect(isSchemaTooLarge(new Error('The compiled grammar is too large'))).toBe(false);
+    const calls: Record<string, unknown>[] = [];
+    const create = vi.fn(async (req: Record<string, unknown>) => {
+      calls.push(req);
+      if (calls.length === 1) throw tooLarge;
+      return {
+        model: 'm',
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'Here it is:\n```json\n{"ok":true}\n```' }],
+      };
+    });
+    const scorer = claudeScorer('key', {
+      beta: { messages: { create } },
+    } as unknown as Parameters<typeof claudeScorer>[1]);
+    const r = await scorer('sys', 'user');
+    expect(r).toEqual({ raw: '{"ok":true}', model: 'm' });
+    expect(calls).toHaveLength(2);
+    expect((calls[0]!.output_config as { format?: unknown }).format).toBeDefined();
+    expect((calls[1]!.output_config as { format?: unknown }).format).toBeUndefined();
+    // The shape still has to be right: the schema rides in the prompt instead.
+    expect(String(calls[1]!.system)).toContain('jargonTryThisInstead');
+    expect(String(calls[1]!.system)).toMatch(/one JSON object and nothing else/);
+    expect(String(calls[0]!.system)).toBe('sys');
+  });
+
+  it('other API errors are not retried without the schema', async () => {
+    const { claudeScorer } = await import('./score.js');
+    const create = vi.fn(async () => {
+      throw new Error('overloaded');
+    });
+    const scorer = claudeScorer('key', {
+      beta: { messages: { create } },
+    } as unknown as Parameters<typeof claudeScorer>[1]);
+    await expect(scorer('sys', 'user')).rejects.toThrow('overloaded');
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });
