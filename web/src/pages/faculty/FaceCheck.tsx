@@ -275,7 +275,7 @@ export function FaceCheck() {
   return (
     <main className="page">
       <p>
-        <Link to="/faculty">← Faculty</Link>
+        <Link to="/faculty/admin">← Admin</Link>
       </p>
       <h1>Face check</h1>
       <p className="muted">
