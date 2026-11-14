@@ -741,7 +741,8 @@ export function LiveConversation({
       onEvent: (type, ev) => {
         const n = (census.current.counts[type] ?? 0) + 1;
         census.current.counts[type] = n;
-        if (!KNOWN_EVENTS.has(type) && n <= 2)
+        // Errors are kept too: a hushed one (a best-effort nudge) is otherwise never seen.
+        if ((!KNOWN_EVENTS.has(type) || type === 'error') && n <= 2)
           census.current.samples.push(JSON.stringify(ev).slice(0, 300));
       },
       onError: (m) => {
