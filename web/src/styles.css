@@ -1255,6 +1255,12 @@ body.appcheck-debug .sheet-backdrop {
   font-weight: 600;
 }
 
+.faculty-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -118,8 +118,10 @@ describe('faculty residents dashboard', () => {
     expect(sam[1]).toBe('1');
     expect(sam[0]).toContain('No conversation for 30 days');
     // Order: Lee (yesterday), Sam (30 days), new@x.org (never).
-    const names = screen.getAllByRole('link').map((l) => l.textContent);
-    expect(names.slice(0, 3)).toEqual(['Dr. Lee', 'Sam', 'new@x.org']);
+    const names = within(screen.getByRole('table'))
+      .getAllByRole('link')
+      .map((l) => l.textContent);
+    expect(names).toEqual(['Dr. Lee', 'Sam', 'new@x.org']);
     expect(cells(row('new@x.org'))[0]).toContain('No conversations yet');
   });
 

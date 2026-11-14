@@ -32,7 +32,7 @@ export function Resident() {
     return (
       <section>
         <h1>Resident not found</h1>
-        <Link to="/faculty/residents" className="btn">
+        <Link to="/faculty" className="btn">
           Back to residents
         </Link>
       </section>
@@ -40,7 +40,7 @@ export function Resident() {
   return (
     <section>
       <p>
-        <Link to="/faculty/residents" className="small">
+        <Link to="/faculty" className="small">
           ← All residents
         </Link>
       </p>

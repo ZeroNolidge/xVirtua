@@ -92,16 +92,17 @@ function SignedInApp() {
             <Route path="/progress" element={<Progress />} />
             <Route
               path="/faculty"
+              element={isFaculty ? <Residents /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="/faculty/invites"
               element={isFaculty ? <Invites /> : <Navigate to="/" replace />}
             />
             <Route
               path="/faculty/face-check"
               element={isFaculty ? <FaceCheck /> : <Navigate to="/" replace />}
             />
-            <Route
-              path="/faculty/residents"
-              element={isFaculty ? <Residents /> : <Navigate to="/" replace />}
-            />
+            <Route path="/faculty/residents" element={<Navigate to="/faculty" replace />} />
             <Route
               path="/faculty/residents/:uid"
               element={isFaculty ? <Resident /> : <Navigate to="/" replace />}
