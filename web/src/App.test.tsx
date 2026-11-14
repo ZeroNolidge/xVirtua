@@ -83,6 +83,17 @@ describe('auth gate', () => {
     expect(await screen.findByRole('heading', { name: /^residents$/i })).toBeInTheDocument();
   });
 
+  it('program settings live under Admin, for faculty only', async () => {
+    state.status = 'ready';
+    state.role = 'faculty';
+    renderAt('/faculty/admin');
+    expect(await screen.findByRole('heading', { name: /^admin$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /run a face check/i })).toHaveAttribute(
+      'href',
+      '/faculty/face-check',
+    );
+  });
+
   it('the Faculty tab opens the residents’ progress, with invites one tap away', async () => {
     state.status = 'ready';
     state.role = 'faculty';
