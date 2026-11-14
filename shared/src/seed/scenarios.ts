@@ -368,7 +368,7 @@ export const SEED_SCENARIOS: ScenarioSeed[] = [
     briefing: {
       title: 'New medicine with side effects',
       difficulty: 3,
-      persona: { name: 'Kayla Burns', age: 31, pronouns: 'she/her' },
+      persona: { name: 'Tessa Burns', age: 31, pronouns: 'she/her' },
       reasonForVisit: 'Follow-up for anxiety; you plan to start sertraline.',
       residentTask:
         'Explain starting sertraline for anxiety: how it helps, that it takes a few weeks, common side effects and what to do about them, not stopping suddenly, and when to call.',
