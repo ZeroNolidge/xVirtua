@@ -86,6 +86,11 @@ jobs:
           GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
         run: npx tsx scripts/avatar-faces.ts
 
+      - name: Residents page data (users and sessions by program)
+        if: always()
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ inputs.project_id }}
+        run: npx tsx scripts/residents-data.ts
       - name: App Check tokens seen by the app
         continue-on-error: true
         env:
