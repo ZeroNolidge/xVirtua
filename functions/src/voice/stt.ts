@@ -17,7 +17,7 @@ export const MAX_STT_PROMPT = 1000;
  * medical words well without the list.
  */
 export function sttPrompt(): string {
-  return 'A doctor talking with a patient in a family medicine clinic. Transcribe only what is actually said.';
+  return 'A doctor talking with a patient in a family medicine clinic. Transcribe only what is actually said, keeping filler words like um, uh and er exactly as spoken.';
 }
 
 const input = z.object({ sessionId: z.string().min(1).max(64) });

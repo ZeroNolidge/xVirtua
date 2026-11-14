@@ -2,6 +2,8 @@ import { useState } from 'react';
 import {
   type AccuracyFlag,
   type AreaFeedback,
+  FILLER_LEVEL_TEXT,
+  FILLER_TREND_TEXT,
   type Metric,
   METRICS,
   type Moment,
@@ -77,6 +79,35 @@ function Area({ name, a, extra }: { name: string; a: AreaFeedback; extra?: React
           <p>“{a.tryThisInstead.rewrite}”</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Filler words in what they said out loud: a count, not a score, with the goal of fewer each time. */
+function FillerCard({ f }: { f: NonNullable<ResidentFeedback['fillers']> }) {
+  const used = Object.entries(f.byWord)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([w, n]) => `“${w}” ×${n}`)
+    .join(', ');
+  return (
+    <div className="card fillers">
+      <h2>Filler words</h2>
+      <p>
+        <strong>
+          {f.count === 0
+            ? 'No filler words'
+            : `${f.count} filler ${f.count === 1 ? 'word' : 'words'} in ${f.words} spoken words`}
+        </strong>
+        {f.count > 0 && (
+          <span className="muted small">
+            {' '}
+            (about {f.per100 < 1 ? 'less than 1' : Math.round(f.per100)} per 100): {used}
+          </span>
+        )}
+      </p>
+      <p className="small">{FILLER_LEVEL_TEXT[f.level]}</p>
+      <p className="small muted">{FILLER_TREND_TEXT[f.trend]} The goal: fewer each time.</p>
     </div>
   );
 }
@@ -258,6 +289,8 @@ export function ScoreView({
           ))}
         </div>
       )}
+
+      {feedback.fillers && <FillerCard f={feedback.fillers} />}
 
       <div className="card">
         <h2>Your skills this time</h2>

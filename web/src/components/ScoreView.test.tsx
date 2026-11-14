@@ -251,3 +251,30 @@ describe('score screen', () => {
     expect(screen.queryByText('Check the medicine')).toBeNull();
   });
 });
+
+describe('filler words', () => {
+  it('shows the count, the top fillers, and the goal of fewer; nothing for a typed conversation', () => {
+    const { rerender } = render(
+      <ScoreView
+        feedback={{
+          ...feedback,
+          fillers: {
+            count: 9,
+            words: 300,
+            per100: 3,
+            byWord: { um: 6, uh: 3 },
+            level: 'some',
+            trend: 'fewer',
+          },
+        }}
+        patientFirstName="Ray"
+      />,
+    );
+    expect(screen.getByText('9 filler words in 300 spoken words')).toBeInTheDocument();
+    expect(screen.getByText(/“um” ×6, “uh” ×3/)).toBeInTheDocument();
+    expect(screen.getByText(/Fewer than last time/)).toBeInTheDocument();
+    expect(screen.getByText(/fewer each time/)).toBeInTheDocument();
+    rerender(<ScoreView feedback={feedback} patientFirstName="Ray" />);
+    expect(screen.queryByText(/Filler words/)).toBeNull();
+  });
+});

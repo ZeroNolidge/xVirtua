@@ -12,6 +12,8 @@ describe('OpenAI transcription config', () => {
     const p = sttPrompt();
     expect(p.length).toBeLessThanOrEqual(MAX_STT_PROMPT);
     expect(p).not.toMatch(/hypertension|triglycerides|glucose/);
+    // Fillers are counted with the feedback, so the transcript must keep them.
+    expect(p).toMatch(/um, uh/);
     expect(clientSecretBody().session.audio.input.transcription.prompt).toBe(p);
   });
 });
