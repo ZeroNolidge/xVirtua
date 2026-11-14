@@ -110,12 +110,15 @@ export const isSchemaTooLarge = (e: unknown) =>
   e instanceof Anthropic.BadRequestError &&
   /grammar is too large/i.test(`${e.message} ${JSON.stringify(e.error ?? '')}`);
 
-/** Fenced ```json … ``` around the JSON (only when no schema forced the shape). */
-export const stripFences = (raw: string) =>
-  raw
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/, '');
+/** The JSON object in a reply that wasn't shaped by a schema: fences or words around it are dropped. */
+export const stripFences = (raw: string) => {
+  const a = raw.indexOf('{');
+  const b = raw.lastIndexOf('}');
+  return a >= 0 && b > a ? raw.slice(a, b + 1) : raw.trim();
+};
+
+/** Without the API's schema enforcement, the schema goes into the prompt instead. */
+export const SCHEMA_IN_PROMPT = `\n\n## Output format\nReply with one JSON object and nothing else: no prose, no code fence. It must match this JSON Schema exactly: every "required" key present (use null only where the schema allows null), no extra keys.\n${JSON.stringify(SCORE_JSON_SCHEMA)}`;
 
 type ScoringClient = Pick<Anthropic, 'beta'>;
 
@@ -151,7 +154,7 @@ export function claudeScorer(
     } catch (e) {
       if (!isSchemaTooLarge(e)) throw e;
       console.warn('scoring schema too large for the API; asking for JSON by prompt');
-      res = await ask(system, user, false);
+      res = await ask(system + SCHEMA_IN_PROMPT, user, false);
     }
     if (res.stop_reason === 'refusal') throw new Error('Scoring declined');
     const raw = res.content

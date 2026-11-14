@@ -620,7 +620,7 @@ describe('scorer request', () => {
       return {
         model: 'm',
         stop_reason: 'end_turn',
-        content: [{ type: 'text', text: '```json\n{"ok":true}\n```' }],
+        content: [{ type: 'text', text: 'Here it is:\n```json\n{"ok":true}\n```' }],
       };
     });
     const scorer = claudeScorer('key', {
@@ -631,6 +631,10 @@ describe('scorer request', () => {
     expect(calls).toHaveLength(2);
     expect((calls[0]!.output_config as { format?: unknown }).format).toBeDefined();
     expect((calls[1]!.output_config as { format?: unknown }).format).toBeUndefined();
+    // The shape still has to be right: the schema rides in the prompt instead.
+    expect(String(calls[1]!.system)).toContain('jargonTryThisInstead');
+    expect(String(calls[1]!.system)).toMatch(/one JSON object and nothing else/);
+    expect(String(calls[0]!.system)).toBe('sys');
   });
 
   it('other API errors are not retried without the schema', async () => {
