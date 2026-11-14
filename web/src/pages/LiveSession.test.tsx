@@ -658,6 +658,29 @@ describe('GPT-Live conversation', () => {
     }
   });
 
+  it('keeps the text of a GPT-Live error in the 30-second event report, even a hushed one', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await start();
+      await act(async () => cb.onStarted());
+      const { reportError } = await import('../lib/errorReport');
+      vi.mocked(reportError).mockClear();
+      await act(async () => {
+        cb.onEvent?.('error', {
+          type: 'error',
+          error: { message: 'Unknown event type', client_event_id: 'ps_nudge_1' },
+        });
+        vi.advanceTimersByTime(30_500);
+      });
+      const report = vi.mocked(reportError).mock.calls.find((c) => c[0] === 'live.events')!;
+      expect(report).toBeDefined();
+      expect(String((report[1] as Error).message)).toMatch(/"error":1/);
+      expect(String((report[1] as Error).stack)).toMatch(/Unknown event type/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a paused volume meter is no proof of silence: no “Can’t hear Ray?” then', async () => {
     meterOn = false;
     await start();
