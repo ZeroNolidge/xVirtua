@@ -163,6 +163,14 @@ export function Residents() {
       <p className="muted">
         Each resident’s practice in the range. Tap a name for their progress and feedback.
       </p>
+      <p className="faculty-links">
+        <Link to="/faculty/invites" className="btn btn-secondary">
+          Invite people
+        </Link>
+        <Link to="/faculty/face-check" className="btn btn-secondary">
+          Face check
+        </Link>
+      </p>
 
       <div className="chips" role="group" aria-label="Time range">
         {(
