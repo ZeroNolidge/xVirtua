@@ -63,6 +63,16 @@ export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
     // Her own room, empty (scripts/avatar-tools/plate.py), behind every face.
     background: '1eca0d69-fa28-488f-b8f4-51b73c469b8f',
   },
+  'tessa-burns': {
+    name: 'Tessa Burns',
+    pronouns: 'she/her',
+    // Happy face and her room still to come (Simli builds).
+    faces: {
+      guarded: '6aa57fb5-e9d9-4908-9ff8-f4c42335b740',
+      upset: '68e83202-ff20-41f0-b185-965d7b941c29',
+      at_ease: '1e86c791-9e4c-4a2d-bd0f-4840e69469ad',
+    },
+  },
 };
 
 /** The video character for this patient, if there is one. */
