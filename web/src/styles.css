@@ -571,6 +571,13 @@ p {
   max-width: 528px;
   margin: 0 auto;
 }
+.sound-quiet {
+  flex-basis: 100%;
+}
+.sound-quiet p {
+  margin: 0 0 8px;
+}
+
 .session-buttons {
   display: flex;
   gap: 8px;
