@@ -303,6 +303,8 @@ describe('Briefing', () => {
     );
     // In the same card as the standard voice and the faces, with its own sample button.
     expect(screen.getByRole('heading', { name: 'Voices and face' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Hear the live voice' })).toBeEnabled();
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Hear the live voice' })).toBeEnabled(),
+    );
   });
 });
