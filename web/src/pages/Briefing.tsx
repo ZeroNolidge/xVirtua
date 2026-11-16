@@ -1,19 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  LIVE_VOICES,
   type CueTrigger,
-  type LiveVoice,
   type PatientModel,
-  type Program,
   type ScenarioScript,
   type ScenarioStatus,
   type VoiceMode,
 } from '@plainspeak/shared';
 import { useAuth } from '../lib/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { TAG_LABEL } from './faculty/voiceTags';
 import { useScenario, type ScenarioRow } from '../lib/scenarios';
 import { PatientVoiceAndFace } from './faculty/PatientVoiceAndFace';
 import { api, friendlyError } from '../lib/api';
@@ -204,59 +198,6 @@ const STATUS_TEXT: Record<ScenarioStatus, string> = {
   archived: 'Archived: hidden from everyone.',
 };
 
-/** Faculty: the GPT-Live voice for this patient (shows the tags from Settings). */
-function PatientVoice({ summary }: { summary: ScenarioRow }) {
-  const { claims } = useAuth();
-  const [tags, setTags] = useState<Program['liveVoiceTags']>({});
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!claims) return;
-    void getDoc(doc(db, 'programs', claims.programId)).then((s) =>
-      setTags((s.data() as Program | undefined)?.liveVoiceTags ?? {}),
-    );
-  }, [claims]);
-
-  async function choose(v: string) {
-    setSaving(true);
-    setError(null);
-    try {
-      await api.setScenarioVoice({ scenarioId: summary.id, voice: v ? (v as LiveVoice) : null });
-    } catch (e) {
-      setError(friendlyError(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <label className="field">
-      <span>
-        Live voice (GPT-Live){' '}
-        <span className="muted">— used when a conversation runs in live voice mode</span>
-      </span>
-      <select
-        value={summary.liveVoice ?? ''}
-        disabled={saving}
-        onChange={(e) => void choose(e.target.value)}
-      >
-        <option value="">Program default for the patient’s pronouns</option>
-        {LIVE_VOICES.map((v) => (
-          <option key={v} value={v}>
-            {v}
-            {tags?.[v] ? ` (${TAG_LABEL[tags[v]!]})` : ''}
-          </option>
-        ))}
-      </select>
-      {error && (
-        <span className="error" role="alert">
-          {error}
-        </span>
-      )}
-    </label>
-  );
-}
-
 function FacultyReview({
   summary,
   script,
@@ -288,7 +229,6 @@ function FacultyReview({
       <p>
         <strong>Status:</strong> {STATUS_TEXT[summary.status]}
       </p>
-      <PatientVoice summary={summary} />
       <PatientVoiceAndFace summary={summary} pronouns={pronouns} />
 
       {script ? (
