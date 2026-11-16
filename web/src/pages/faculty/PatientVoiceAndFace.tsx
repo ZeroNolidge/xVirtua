@@ -1,6 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import type { ScenarioAvatar } from '@plainspeak/shared';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { LIVE_VOICES, type LiveVoice, type Program, type ScenarioAvatar } from '@plainspeak/shared';
 import { api, friendlyError } from '../../lib/api';
+import { db, functions } from '../../lib/firebase';
+import { useAuth } from '../../lib/auth';
+import { TAG_LABEL } from './voiceTags';
 import { plainVoiceDescription } from '../../lib/voiceDescription';
 import type { ScenarioRow } from '../../lib/scenarios';
 
@@ -11,10 +16,16 @@ const MOODS: { key: keyof ScenarioAvatar['faces']; label: string; hint: string }
   { key: 'upset', label: 'Upset', hint: 'When it goes badly (optional).' },
 ];
 
+const voiceSample = httpsCallable<{ voice: LiveVoice }, { voice: string; wav: string }>(
+  functions,
+  'voiceSample',
+);
+
 /**
- * Faculty: this patient's own standard voice and Simli faces. Without them,
- * the app uses a stable pick for the voice, and the built-in faces (Ray,
- * Linda) or the program's generic face.
+ * Faculty: this patient's own voices (live and standard) and Simli faces.
+ * Without them, the app uses the program's voice for the patient's pronouns,
+ * a stable pick for the standard voice, and the built-in faces (Ray, Linda)
+ * or the program's generic face.
  */
 export function PatientVoiceAndFace({
   summary,
@@ -25,10 +36,98 @@ export function PatientVoiceAndFace({
 }) {
   return (
     <div className="card">
-      <h2>Voice and face</h2>
+      <h2>Voices and face</h2>
+      <LiveVoicePick summary={summary} />
       <StandardVoice summary={summary} pronouns={pronouns} />
       <Faces summary={summary} />
     </div>
+  );
+}
+
+/** The GPT-Live voice for this patient (with faculty's tags from Settings), and a recorded sample. */
+function LiveVoicePick({ summary }: { summary: ScenarioRow }) {
+  const { claims } = useAuth();
+  const [tags, setTags] = useState<Program['liveVoiceTags']>({});
+  const [chosen, setChosen] = useState<LiveVoice | ''>(summary.liveVoice ?? '');
+  const [busy, setBusy] = useState<'save' | 'play' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    if (!claims) return;
+    void getDoc(doc(db, 'programs', claims.programId)).then((s) =>
+      setTags((s.data() as Program | undefined)?.liveVoiceTags ?? {}),
+    );
+  }, [claims]);
+  useEffect(() => () => audio.current?.pause(), []);
+
+  async function choose(v: string) {
+    setChosen(v as LiveVoice | '');
+    setBusy('save');
+    setError(null);
+    try {
+      await api.setScenarioVoice({ scenarioId: summary.id, voice: v ? (v as LiveVoice) : null });
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function play() {
+    if (!chosen) return;
+    setBusy('play');
+    setError(null);
+    audio.current?.pause();
+    // Created inside the tap so phones allow it to play.
+    const a = new Audio();
+    audio.current = a;
+    try {
+      const { data } = await voiceSample({ voice: chosen });
+      const bytes = Uint8Array.from(atob(data.wav), (ch) => ch.charCodeAt(0));
+      a.src = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+      await a.play();
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <>
+      <label className="field">
+        <span>
+          Live voice (GPT-Live){' '}
+          <span className="muted">— used when a conversation runs in live voice mode</span>
+        </span>
+        <select
+          value={chosen}
+          disabled={busy !== null}
+          onChange={(e) => void choose(e.target.value)}
+        >
+          <option value="">Program default for the patient’s pronouns</option>
+          {LIVE_VOICES.map((v) => (
+            <option key={v} value={v}>
+              {v}
+              {tags?.[v] ? ` (${TAG_LABEL[tags[v]!]})` : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="btn btn-secondary"
+        disabled={!chosen || busy !== null}
+        onClick={() => void play()}
+      >
+        {busy === 'play' ? 'Loading…' : 'Hear the live voice'}
+      </button>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -107,7 +206,7 @@ function StandardVoice({ summary, pronouns }: { summary: ScenarioRow; pronouns: 
         disabled={!chosen || busy !== null}
         onClick={() => void play()}
       >
-        {busy === 'play' ? 'Loading…' : 'Play a sample'}
+        {busy === 'play' ? 'Loading…' : 'Hear the standard voice'}
       </button>
       {error && (
         <p className="error" role="alert">
