@@ -66,11 +66,11 @@ export const VIDEO_CHARACTERS: Record<string, VideoCharacter> = {
   'tessa-burns': {
     name: 'Tessa Burns',
     pronouns: 'she/her',
-    // Happy face still to come (Simli build).
     faces: {
       guarded: '6aa57fb5-e9d9-4908-9ff8-f4c42335b740',
       upset: '68e83202-ff20-41f0-b185-965d7b941c29',
       at_ease: '1e86c791-9e4c-4a2d-bd0f-4840e69469ad',
+      happy: 'ff667831-c331-420e-9e34-19a75d455a0c',
     },
     // Her own room, empty (the plate made from her portrait), behind every face.
     background: '75a8b62a-d274-4bef-a5eb-6370de7e4e42',
