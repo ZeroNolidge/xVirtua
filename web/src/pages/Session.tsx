@@ -59,6 +59,7 @@ import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
 import { GettingReady } from '../components/GettingReady';
 import { BluetoothNote } from '../components/BluetoothNote';
+import { SoundQuiet } from '../components/SoundQuiet';
 import { openMic } from '../lib/micChoice';
 import { useCallGuard, type PauseReason } from '../lib/useCallGuard';
 
@@ -1221,6 +1222,7 @@ export function Conversation({
               </button>
             )}
             {!typed && <CaptionsToggle on={captions} onToggle={toggleCaptions} />}
+            {!typed && <SoundQuiet sessionId={sessionId} first={first} />}
             {!typed && (
               <button
                 className="btn btn-text btn-inline"
