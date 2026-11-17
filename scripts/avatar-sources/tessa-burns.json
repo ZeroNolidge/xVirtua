@@ -1,7 +1,18 @@
 {
-  "guarded.jpg": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/Xb0lbXnAAjDaxw9b85vK/gpt-image-2-edit-1_1794677983932_e9d52600.png",
-  "upset.jpg": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/Xb0lbXnAAjDaxw9b85vK/gpt-image-2-edit-1_1794678226413_b1c8efa5.png",
-  "at-ease.jpg": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/Xb0lbXnAAjDaxw9b85vK/gpt-image-2-edit-1_1794678231228_dc778c67.png",
-  "happy.jpg": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/Xb0lbXnAAjDaxw9b85vK/gpt-image-2-edit-1_1794678232511_ed7d0118.png",
-  "room.png": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/Xb0lbXnAAjDaxw9b85vK/gpt-image-2-edit-1_1794678233813_8af76ef0.png"
+  "guarded.jpg": "https://cdn.openart.ai/openart-uploads/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/tessa-simli-guarded_1794776318611_590b15ec.png",
+  "upset.jpg": "https://cdn.openart.ai/openart-uploads/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/tessa-simli-upset_1794776319416_c4e18fac.png",
+  "at-ease.jpg": "https://cdn.openart.ai/openart-uploads/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/tessa-simli-at-ease_1794776320079_77e0ab33.png",
+  "happy.jpg": "https://cdn.openart.ai/openart-uploads/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/tessa-simli-happy_1794912651891_a0be997c.png",
+  "room.png": "https://cdn.openart.ai/openart-ai/production/2026-11/create-image/Xb0lbXnAAjDaxw9b85vK/gpt-image-2-edit-1_1794678233813_8af76ef0.png",
+  "guarded-look-away.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/eb76ad492d7890890e5072bbc661005a-2e506fb6-2e76-4194-9ee4-f6201d915a66_c2pa_1794776438034_3839f006.mp4",
+  "guarded-frown.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/cf133db5bc973b36eed0b4dd8639498c-eebc19c5-10dc-474b-8e9f-cdf41e8eb6c9_c2pa_1794776442044_14e37225.mp4",
+  "guarded-avoid-eye-contact.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/028ec289060f8bc85a272dfd8606f8f3-1ebc9c8d-3003-4895-aa78-39d33879ed7d_c2pa_1794776447954_2ee9f8a9.mp4",
+  "guarded-fidget.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/c6240e771b961b5976f96a2c683b313f-f9771fff-e950-4d29-ab82-ce4889de6ec1_c2pa_1794776446191_e49d7335.mp4",
+  "guarded-nod-along.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/b6283c8005b5aae769079f3d6ee358d2-dbfaf587-8311-4e7c-97ec-aa5bbe267d6f_c2pa_1794776767833_c81dbeb8.mp4",
+  "upset-avoid-eye-contact.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/ab80c170328f45fc0d703e87ae640cf8-9ad07a4d-c28b-4a4e-8207-f51c1512ebba_c2pa_1794776773618_ebf07a77.mp4",
+  "upset-look-away.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/fcd31e7f184c816d9b703f110cd79f6a-e262f34b-a3bc-4041-a24c-0e879b23fb9d_c2pa_1794776778810_ce5fe2f0.mp4",
+  "at-ease-nod.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/abd105ddb212f492197f25fadb61c507-fc1399cf-47d4-4163-9baa-e655164fe0ab_c2pa_1794883873847_f7eff7b5.mp4",
+  "at-ease-smile.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/c5ddde07d8dfe2765f45ffa2413972b9-4bd32d9d-3512-42e9-b5e4-609a9e721940_c2pa_1794883867240_3bc0e667.mp4",
+  "happy-nod.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/a0cf48fcbf6714ed312ab3453811e70a-743db149-1ce8-46cf-973f-e568902cad1d_c2pa_1794912759717_bc2e2a7c.mp4",
+  "happy-smile.mp4": "https://cdn.openart.ai/openart-ai/production/2026-11/create-video/Xb0lbXnAAjDaxw9b85vK/082f634909b94141d15ddfb39b105dfd-81d80140-45d6-47f8-b935-0f4a23d1bc0e_c2pa_1794912751434_218570b7.mp4"
 }
