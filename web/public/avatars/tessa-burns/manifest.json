@@ -1,0 +1,59 @@
+{
+  "start": "guarded",
+  "moods": {
+    "guarded": {
+      "poster": "guarded.jpg",
+      "clips": {
+        "look_away": "guarded-look-away.mp4",
+        "frown": "guarded-frown.mp4",
+        "avoid_eye_contact": "guarded-avoid-eye-contact.mp4",
+        "fidget": "guarded-fidget.mp4",
+        "nod": "guarded-nod-along.mp4"
+      }
+    },
+    "upset": {
+      "poster": "upset.jpg",
+      "clips": {
+        "avoid_eye_contact": "upset-avoid-eye-contact.mp4",
+        "look_away": "upset-look-away.mp4"
+      }
+    },
+    "at_ease": {
+      "poster": "at-ease.jpg",
+      "clips": {
+        "nod": "at-ease-nod.mp4",
+        "smile": "at-ease-smile.mp4"
+      }
+    },
+    "happy": {
+      "poster": "happy.jpg",
+      "clips": {
+        "nod": "happy-nod.mp4",
+        "smile": "happy-smile.mp4"
+      }
+    }
+  },
+  "cueWords": {
+    "guarded": [
+      ["\\b(sister|zombie|numb|flat|not (your|her)self|personality)\\b", "avoid_eye_contact"],
+      [
+        "\\b(side effects?|nausea|stomach|sleep\\w*|sexual|sex|libido|weight|pills?|every day|daily)\\b",
+        "fidget"
+      ],
+      ["\\b(sorry|weak|my fault|stupid|dumb|embarrass\\w*|ashamed|husband|nerves)\\b", "look_away"],
+      ["^\\s*(mm-?hm+|uh-?huh|okay|ok|yeah|right)\\b", "nod"]
+    ],
+    "upset": [
+      ["\\b(kids?|children|mom|mother|good mom|zombie|numb)\\b", "avoid_eye_contact"],
+      ["\\b(sorry|weak|my fault|embarrass\\w*|ashamed|husband)\\b", "look_away"]
+    ]
+  },
+  "transitions": {
+    "guarded>upset": "guarded-to-upset.mp4",
+    "upset>guarded": "upset-to-guarded.mp4",
+    "guarded>at_ease": "guarded-to-at-ease.mp4",
+    "at_ease>guarded": "at-ease-to-guarded.mp4",
+    "at_ease>happy": "at-ease-to-happy.mp4",
+    "happy>at_ease": "happy-to-at-ease.mp4"
+  }
+}

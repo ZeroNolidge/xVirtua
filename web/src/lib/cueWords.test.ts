@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { cueForWords, type CueRules } from './cueWords';
 import ray from '../../public/avatars/ray-kowalski/manifest.json';
 import linda from '../../public/avatars/linda-shaffer/manifest.json';
+import tessa from '../../public/avatars/tessa-burns/manifest.json';
 
 const rayGuarded = ray.cueWords.guarded as CueRules;
 const lindaGuarded = linda.cueWords.guarded as CueRules;
+const tessaGuarded = tessa.cueWords.guarded as CueRules;
 
 describe('body language from the patient’s words', () => {
   it('guarded Ray: his own worries show (from his manifest)', () => {
@@ -26,6 +28,19 @@ describe('body language from the patient’s words', () => {
     );
     expect(cueForWords('Mm-hm. Okay.', 'guarded', lindaGuarded)).toBe('nod');
     expect(cueForWords('So the number is high?', 'guarded', lindaGuarded)).toBeNull();
+  });
+  it('guarded Tessa: her sister on the medicine, a daily pill, her husband’s judgment', () => {
+    expect(cueForWords('My sister was like a zombie on it.', 'guarded', tessaGuarded)).toBe(
+      'avoid_eye_contact',
+    );
+    expect(cueForWords('I’ve never taken pills every day.', 'guarded', tessaGuarded)).toBe(
+      'fidget',
+    );
+    expect(cueForWords('My husband thinks it’s for weak people.', 'guarded', tessaGuarded)).toBe(
+      'look_away',
+    );
+    expect(cueForWords('Okay.', 'guarded', tessaGuarded)).toBe('nod');
+    expect(cueForWords('So you think I need this?', 'guarded', tessaGuarded)).toBeNull();
   });
   it('without his own words, only the general ones apply', () => {
     expect(cueForWords('Will this mess with my CDL?', 'guarded')).toBeNull();
