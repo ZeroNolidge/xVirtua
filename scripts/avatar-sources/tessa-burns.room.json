@@ -3,20 +3,29 @@
   "moods": {
     "guarded": {
       "files": ["guarded"],
-      "at": [0, 0, 1.0]
+      "at": [0, 0, 1.0],
+      "tint": [3.1, 0.0, 1.2],
+      "tint_still": [0.2, 0.0, 0.0]
     },
     "upset": {
       "files": ["upset"],
-      "at": [0, 0, 1.0]
+      "at": [0, 0, 1.0],
+      "tint": [1.3, 0.2, 0.5],
+      "tint_still": [0.2, 0.0, 0.0]
     },
     "at_ease": {
       "files": ["at-ease"],
-      "at": [0, 0, 1.0]
+      "at": [0, 0, 1.0],
+      "tint": [0.7, 0.1, 0.1],
+      "tint_still": [0.2, 0.0, 0.0]
     },
     "happy": {
       "files": ["happy"],
-      "at": [0, 0, 1.0]
+      "at": [0, 0, 1.0],
+      "tint": [1.3, 0.1, 0.6],
+      "tint_still": [0.2, 0.0, 0.0]
     }
   },
-  "_at": "[dx, dy, scale] of the patient on the room; 0,0,1 until measured. Tints (see linda-shaffer.room.json) are measured from a face check recording."
+  "_tint": "Colour shift (OpenCV Lab: lightness, red-green, yellow-blue) so the patient matches the live face. Measured in her first face check (2026-11-17): live face just before a clip minus the clip 0.5-1.3 s in, median per mood. Her stills already match (tint_still ~0).",
+  "_at": "[dx%, dy%, scale] of the patient on the room; measured with avatar-tools/measure.py in the same face check: all within 0.25% and scale 1.00 (upset 0.99), so left at 0,0,1."
 }
