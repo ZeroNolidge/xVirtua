@@ -36,6 +36,10 @@ const NEAR_END_MS = 800;
 const FADE_MS = 800;
 /** How often a playing clip re-checks where his live head is. */
 const FOLLOW_MS = 250;
+/** How much of each new position reading the clip takes on (the rest is smoothing). */
+const FOLLOW_GAIN = 0.3;
+/** A head move smaller than this (% of the picture) between readings is noise: the clip stays put. */
+const FOLLOW_DEAD_PCT = 0.15;
 /** A clip's first frame normally draws within a frame or two; never wait longer than this. */
 const FIRST_FRAME_WAIT_MS = 250;
 /** A mood change waits for the next face to connect, or this long regardless. */
@@ -212,20 +216,21 @@ export class BodyLanguage {
     // fades out. Only the patient comes from the clip (the soft oval), so the
     // wall never moves. A mood change glides instead (below).
     if (!moodChange) {
-      let at = o;
+      // The size is fixed for the whole clip: the head-size estimate jitters
+      // by about 1% between readings (face checks: p90 1.5% per reading), and
+      // re-zooming the clip to each one read as the picture pumping in and
+      // out. Only the position follows, smoothed and with a dead band.
+      const scale = o?.scale ?? 1;
+      let at = o ? { x: o.x, y: o.y } : null;
       this.follow = setInterval(() => {
         const now = this.heads.offset(this.live(), rest);
         if (!now) return;
-        // Smoothed, so measuring noise doesn't make it shimmer.
+        if (at && Math.hypot(now.x - at.x, now.y - at.y) * 100 < FOLLOW_DEAD_PCT) return;
         at = at
-          ? {
-              x: at.x + (now.x - at.x) * 0.5,
-              y: at.y + (now.y - at.y) * 0.5,
-              scale: at.scale + (now.scale - at.scale) * 0.5,
-            }
-          : now;
+          ? { x: at.x + (now.x - at.x) * FOLLOW_GAIN, y: at.y + (now.y - at.y) * FOLLOW_GAIN }
+          : { x: now.x, y: now.y };
         el.style.transition = `opacity ${FADE_MS / 1000}s ease, transform ${FOLLOW_MS / 1000}s linear`;
-        el.style.transform = `translate(${(at.x * 100).toFixed(2)}%, ${(at.y * 100).toFixed(2)}%) scale(${at.scale.toFixed(4)})`;
+        el.style.transform = `translate(${(at.x * 100).toFixed(2)}%, ${(at.y * 100).toFixed(2)}%) scale(${scale.toFixed(4)})`;
       }, FOLLOW_MS);
     }
     // A mood change starts where his old live head is and glides to where his
