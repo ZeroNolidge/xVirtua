@@ -1,0 +1,22 @@
+{
+  "room": "tessa-burns-room.png",
+  "moods": {
+    "guarded": {
+      "files": ["guarded"],
+      "at": [0, 0, 1.0]
+    },
+    "upset": {
+      "files": ["upset"],
+      "at": [0, 0, 1.0]
+    },
+    "at_ease": {
+      "files": ["at-ease"],
+      "at": [0, 0, 1.0]
+    },
+    "happy": {
+      "files": ["happy"],
+      "at": [0, 0, 1.0]
+    }
+  },
+  "_at": "[dx, dy, scale] of the patient on the room; 0,0,1 until measured. Tints (see linda-shaffer.room.json) are measured from a face check recording."
+}

@@ -36,7 +36,13 @@ jobs:
             [[ "$FIX" =~ ^[a-z0-9=:.,_-]+,$ ]] || { echo "::error::bad filter"; exit 1; }
           fi
           mkdir -p "$OUT" "$RUNNER_TEMP/raw"
+          # The patient's empty room (their Simli background), kept beside the sources for rebase.
+          if jq -e '."room.png"' "$SRC" >/dev/null; then
+            curl -sSfL "$(jq -r '."room.png"' "$SRC")" -o "$RUNNER_TEMP/raw/room.src"
+            ffmpeg -loglevel error -y -i "$RUNNER_TEMP/raw/room.src" -vf scale=768:768 "scripts/avatar-sources/$PATIENT-room.png"
+          fi
           for name in $(jq -r 'keys[]' "$SRC"); do
+            [ "$name" = "room.png" ] && continue
             [[ "$name" =~ ^[a-z0-9-]+\.(jpg|mp4)$ ]] || { echo "::error::bad file name $name"; exit 1; }
             url=$(jq -r --arg n "$name" '.[$n]' "$SRC")
             # Optional per-clip speed-up (quicker flashes of emotion), from <patient>.speed.json.
@@ -78,7 +84,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "web/public/avatars/$PATIENT"
+          git add "web/public/avatars/$PATIENT" "scripts/avatar-sources/$PATIENT-room.png" 2>/dev/null || git add "web/public/avatars/$PATIENT"
           git diff --cached --quiet && { echo "Nothing new"; exit 0; }
           git commit -m "Avatar assets for $PATIENT"
           git push origin "HEAD:${GITHUB_REF_NAME}"
