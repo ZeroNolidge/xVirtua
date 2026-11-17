@@ -24,6 +24,7 @@ import { useCaptions } from '../lib/useCaptions';
 import { FACE_WAIT_MS, useAvatar } from '../lib/useAvatar';
 import { useBodyLanguage } from '../lib/useBodyLanguage';
 import { AvatarStage } from '../components/AvatarStage';
+import { SoundQuiet } from '../components/SoundQuiet';
 import { GettingReady } from '../components/GettingReady';
 import { BluetoothNote } from '../components/BluetoothNote';
 import { openMic } from '../lib/micChoice';
@@ -1068,6 +1069,7 @@ export function LiveConversation({
               Plain words
             </button>
             <CaptionsToggle on={captions} onToggle={toggleCaptions} />
+            <SoundQuiet sessionId={sessionId} first={first} />
             <button
               className="btn btn-text btn-inline"
               onClick={() => fallBack('Switched to the standard voice.')}
