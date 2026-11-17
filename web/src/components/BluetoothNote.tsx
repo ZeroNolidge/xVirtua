@@ -15,6 +15,8 @@ export function BluetoothNote({ first = 'the patient' }: { first: string | undef
           ? `Bluetooth headset: its microphone makes ${first}’s voice narrow and choppy on Android. `
           : `Bluetooth headset: its microphone can make ${first}’s voice narrow and choppy. `}
         For the best sound, use the phone’s speaker or wired earphones.
+        {android &&
+          ' If the voice comes out faint, Android is playing it through the earpiece: tap “Sound quiet?” during the conversation.'}
       </p>
       <label className="check small">
         <input
