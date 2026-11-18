@@ -105,6 +105,39 @@ describe('body language clips', () => {
     expect(onMood).not.toHaveBeenCalled();
   });
 
+  it('a clip follows his head sideways but never re-zooms: the size is fixed for the whole clip', async () => {
+    // The matcher's readings: the head drifts right while its size estimate jitters.
+    const readings = [
+      { x: 0.01, y: 0, scale: 1.0 },
+      { x: 0.012, y: 0, scale: 1.015 },
+      { x: 0.02, y: 0, scale: 0.99 },
+      { x: 0.03, y: 0.002, scale: 1.02 },
+    ];
+    // The first reading is the still-moment check: "can't tell" lets the clip start at once.
+    let i = -1;
+    vi.spyOn(
+      (b as unknown as { heads: { offset: () => unknown } }).heads,
+      'offset',
+    ).mockImplementation(() => (i++ < 0 ? null : readings[Math.min(i - 1, readings.length - 1)]));
+    const played = b.cue(['frown']);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(el.classList.contains('on')).toBe(true);
+    const scales = new Set<string>();
+    const xs: number[] = [];
+    for (let k = 0; k < 4; k++) {
+      await new Promise((r) => setTimeout(r, 260));
+      const m = /translate\(([-\d.]+)%, [-\d.]+%\) scale\(([\d.]+)\)/.exec(el.style.transform);
+      if (m) {
+        xs.push(+m[1]!);
+        scales.add(m[2]!);
+      }
+    }
+    expect(scales.size).toBe(1); // one size, whatever the estimate did
+    expect(xs.at(-1)!).toBeGreaterThan(xs[0]!); // but it did follow the drift
+    el.finish();
+    await played;
+  });
+
   it('a mood change glides to where his new face sits, over the whole clip', async () => {
     b.relax();
     await new Promise((r) => setTimeout(r, 5));
